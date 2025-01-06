@@ -31,7 +31,6 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     const x = e.clientX;
     const y = e.clientY;
 
-    // Only set isDragging to false if the cursor actually left the element's bounds
     if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
       setIsDragging(false);
     }
@@ -74,7 +73,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-4 border-b border-gray-200">
-        <h3 className="text-sm font-medium text-gray-900">{title}</h3>
+        <h3 className="text-sm font-bold text-gray-900 text-center">{title}</h3>
       </div>
       <div className="p-4">
         <div className="flex justify-center items-center w-full">

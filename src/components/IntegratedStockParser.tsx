@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { FileUploadGrid } from "./FileUploadGrid";
 import { StockTable } from "./StockTable";
 import { RecommendationsTable } from "./RecommendationsTable";
@@ -30,26 +25,31 @@ const IntegratedStockParser: React.FC = () => {
     {
       id: "stock",
       label: "Stock Overview",
-      content: parsedData.integrated.length > 0 ? (
-        <StockTable data={parsedData.integrated} />
-      ) : null,
+      content:
+        parsedData.integrated.length > 0 ? (
+          <StockTable data={parsedData.integrated} />
+        ) : null,
     },
     {
       id: "recommendations",
       label: "Stock Recommendations",
-      content: recommendations.length > 0 ? (
-        <RecommendationsTable recommendations={recommendations} />
-      ) : null,
+      content:
+        recommendations.length > 0 ? (
+          <RecommendationsTable recommendations={recommendations} />
+        ) : null,
     },
   ];
 
-  const showTabs = parsedData.integrated.length > 0 || recommendations.length > 0;
+  const showTabs =
+    parsedData.integrated.length > 0 || recommendations.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <Card>
         <CardHeader>
-          <CardTitle>Integrated Stock Parser</CardTitle>
+          <CardTitle className="text-center font-bold">
+            Inventory Management
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
