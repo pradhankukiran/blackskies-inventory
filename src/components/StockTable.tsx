@@ -20,6 +20,7 @@ const COLUMNS = [
   { key: "Internal Stock Quantity", label: "Internal Stock" },
   { key: "ZFS Quantity", label: "ZFS Stock" },
   { key: "ZFS Pending Shipment", label: "ZFS Pending" },
+  { key: "ZFS Total", label: "ZFS Total" },
 ] as const;
 
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {
@@ -28,8 +29,14 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
     key: "SKU",
     direction: "asc",
   });
+
+  const dataWithTotal = sortedItems.map((item) => ({
+    ...item,
+    "ZFS Total": item["ZFS Quantity"] + item["ZFS Pending Shipment"],
+  }));
+
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
-    sortedItems,
+    dataWithTotal,
     ITEMS_PER_PAGE
   );
 
@@ -54,8 +61,8 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   return (
     <div className="space-y-4">
       <div className="flex justify-end mb-4">
-        <ExportButton 
-          data={data} 
+        <ExportButton
+          data={dataWithTotal}
           label="Export Stock Overview"
           filename="stock-data"
         />

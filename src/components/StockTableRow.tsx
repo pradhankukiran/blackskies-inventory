@@ -2,7 +2,7 @@ import React from "react";
 import { IntegratedStockData } from "@/types/stock";
 
 interface StockTableRowProps {
-  row: IntegratedStockData;
+  row: IntegratedStockData & { "ZFS Total": number };
 }
 
 export const StockTableRow: React.FC<StockTableRowProps> = React.memo(
@@ -22,6 +22,9 @@ export const StockTableRow: React.FC<StockTableRowProps> = React.memo(
         </td>
         <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
           {row["ZFS Pending Shipment"]}
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+          {row["ZFS Total"]}
         </td>
       </tr>
     );
