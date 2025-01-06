@@ -27,12 +27,20 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+
+    // Only set isDragging to false if the cursor actually left the element's bounds
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setIsDragging(false);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(true);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -71,13 +79,11 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       <div className="p-4">
         <div className="flex justify-center items-center w-full">
           <label
-            className={`flex flex-col items-center justify-center w-full h-32 border-2 ${
+            className={`flex flex-col items-center justify-center w-full h-32 border-2 rounded-lg cursor-pointer transition-all duration-300 ease-in-out ${
               isDragging
-                ? "border-green-500 bg-green-50"
-                : "border-gray-300 bg-gray-50"
-            } ${
-              isDragging ? "border-solid" : "border-dashed"
-            } rounded-lg cursor-pointer hover:bg-gray-100 transition-colors`}
+                ? "border-green-500 bg-green-50 scale-105 border-solid"
+                : "border-gray-300 bg-gray-50 border-dashed"
+            } hover:bg-gray-100`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -85,7 +91,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           >
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
               <Upload
-                className={`w-8 h-8 mb-3 ${
+                className={`w-8 h-8 mb-3 transition-colors duration-300 ${
                   isDragging ? "text-green-500" : "text-gray-400"
                 }`}
               />
