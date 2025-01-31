@@ -12,44 +12,36 @@ export function integrateStockData(
   skuEanMapping: SKUEANMapping[],
   zfsPendingShipments: Map<string, number>
 ): IntegratedStockData[] {
-  const skuToEanMap = new Map(
-    skuEanMapping.map((item) => [item.SKU, item.EAN])
-  );
-  const eanToSkuMap = new Map(
-    skuEanMapping.map((item) => [item.EAN, item.SKU])
-  );
-  const integratedMap = new Map<string, IntegratedStockData>();
+  // Start with SKU-EAN mapping as the base
+  const integrated = skuEanMapping.map((mapping) => {
+    // Find matching internal stock (LEFT JOIN)
+    const internalData = internalStock.find(
+      (item) => item.SKU === mapping.SKU
+    ) || {
+      "Product Name": "",
+      "Internal Stock Quantity": 0,
+    };
 
-  // Process internal stock
-  internalStock.forEach((item) => {
-    const ean = skuToEanMap.get(item.SKU) || "";
-    integratedMap.set(item.SKU, {
-      SKU: item.SKU,
-      EAN: ean,
-      "Product Name": item["Product Name"],
-      "Internal Stock Quantity": item["Internal Stock Quantity"],
+    // Find matching ZFS stock (LEFT JOIN)
+    const zfsData = zfsStock.find((item) => item.EAN === mapping.EAN) || {
+      "Product Name": "",
       "ZFS Quantity": 0,
-      "ZFS Pending Shipment": 0,
-    });
-  });
+    };
 
-  // Process ZFS stock
-  zfsStock.forEach((item) => {
-    const sku = eanToSkuMap.get(item.EAN);
-    if (sku && integratedMap.has(sku)) {
-      const record = integratedMap.get(sku)!;
-      record["ZFS Quantity"] = item["ZFS Quantity"];
-      record["ZFS Pending Shipment"] = zfsPendingShipments.get(item.EAN) || 0;
-      if (!record["Product Name"]) {
-        record["Product Name"] = item["Product Name"];
-      }
-      integratedMap.set(sku, record);
-    }
-  });
+    // Get pending shipments for this EAN
+    const pendingShipment = zfsPendingShipments.get(mapping.EAN) || 0;
 
-  const integrated = Array.from(integratedMap.values()).sort((a, b) =>
-    a.SKU.localeCompare(b.SKU)
-  );
+    // Combine the data, preferring internal product name if available
+    return {
+      SKU: mapping.SKU,
+      EAN: mapping.EAN,
+      "Product Name":
+        internalData["Product Name"] || zfsData["Product Name"] || "Unknown",
+      "Internal Stock Quantity": internalData["Internal Stock Quantity"],
+      "ZFS Quantity": zfsData["ZFS Quantity"],
+      "ZFS Pending Shipment": pendingShipment,
+    };
+  });
 
   return filterDuplicates(integrated);
 }
