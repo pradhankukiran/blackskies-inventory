@@ -15,17 +15,15 @@ export function integrateStockData(
   // Start with SKU-EAN mapping as the base
   const integrated = skuEanMapping.map((mapping) => {
     // Find matching internal stock (LEFT JOIN)
-    const internalData = internalStock.find(
-      (item) => item.SKU === mapping.SKU
-    ) || {
+    const internalData = internalStock.find(item => item.SKU === mapping.SKU) || {
       "Product Name": "",
-      "Internal Stock Quantity": 0,
+      "Internal Stock Quantity": 0
     };
 
     // Find matching ZFS stock (LEFT JOIN)
-    const zfsData = zfsStock.find((item) => item.EAN === mapping.EAN) || {
+    const zfsData = zfsStock.find(item => item.EAN === mapping.EAN) || {
       "Product Name": "",
-      "ZFS Quantity": 0,
+      "ZFS Quantity": 0
     };
 
     // Get pending shipments for this EAN
@@ -35,11 +33,10 @@ export function integrateStockData(
     return {
       SKU: mapping.SKU,
       EAN: mapping.EAN,
-      "Product Name":
-        internalData["Product Name"] || zfsData["Product Name"] || "Unknown",
+      "Product Name": internalData["Product Name"] || zfsData["Product Name"] || "Unknown",
       "Internal Stock Quantity": internalData["Internal Stock Quantity"],
       "ZFS Quantity": zfsData["ZFS Quantity"],
-      "ZFS Pending Shipment": pendingShipment,
+      "ZFS Pending Shipment": pendingShipment
     };
   });
 
