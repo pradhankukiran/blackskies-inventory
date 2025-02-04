@@ -8,6 +8,8 @@ export interface ProcessedZFSStock {
   EAN: string;
   "Product Name": string;
   "ZFS Quantity": number;
+  "Status Cluster": string;
+  "Status Description": string;
 }
 
 export interface ProcessedZFSShipment {

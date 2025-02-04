@@ -27,4 +27,6 @@ export interface IntegratedStockData {
   "Internal Stock Quantity": number;
   "ZFS Quantity": number;
   "ZFS Pending Shipment": number;
+  "Status Cluster": string;
+  "Status Description": string;
 }

@@ -21,6 +21,8 @@ const COLUMNS = [
   { key: "ZFS Quantity", label: "ZFS Stock" },
   { key: "ZFS Pending Shipment", label: "ZFS Pending" },
   { key: "ZFS Total", label: "ZFS Total" },
+  { key: "Status Cluster", label: "Status" },
+  { key: "Status Description", label: "Status Description" },
 ] as const;
 
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {

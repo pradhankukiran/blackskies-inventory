@@ -26,6 +26,12 @@ export const StockTableRow: React.FC<StockTableRowProps> = React.memo(
         <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
           {row["ZFS Total"]}
         </td>
+        <td className="px-4 py-3 text-sm text-gray-900">
+          {row["Status Cluster"]}
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-900">
+          {row["Status Description"]}
+        </td>
       </tr>
     );
   }

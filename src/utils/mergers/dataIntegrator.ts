@@ -23,7 +23,9 @@ export function integrateStockData(
     // Find matching ZFS stock (LEFT JOIN)
     const zfsData = zfsStock.find(item => item.EAN === mapping.EAN) || {
       "Product Name": "",
-      "ZFS Quantity": 0
+      "ZFS Quantity": 0,
+      "Status Cluster": "Unknown",
+      "Status Description": "Nil"
     };
 
     // Get pending shipments for this EAN
@@ -36,7 +38,9 @@ export function integrateStockData(
       "Product Name": internalData["Product Name"] || zfsData["Product Name"] || "Unknown",
       "Internal Stock Quantity": internalData["Internal Stock Quantity"],
       "ZFS Quantity": zfsData["ZFS Quantity"],
-      "ZFS Pending Shipment": pendingShipment
+      "ZFS Pending Shipment": pendingShipment,
+      "Status Cluster": zfsData["Status Cluster"] || "Unknown",
+      "Status Description": zfsData["Status Description"] || "Nil"
     };
   });
 
