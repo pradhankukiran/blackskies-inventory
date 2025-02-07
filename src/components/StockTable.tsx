@@ -3,8 +3,6 @@ import { IntegratedStockData } from "@/types/stock";
 import { StockTableRow } from "./StockTableRow";
 import { Pagination } from "./ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
-import { useTableSort } from "@/hooks/useTableSort";
-import { ArrowUp, ArrowDown } from "lucide-react";
 import { ExportButton } from "./ExportButton";
 
 interface StockTableProps {
@@ -25,12 +23,8 @@ const COLUMNS = [
 
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
-  const { sortedItems, sortConfig, requestSort } = useTableSort(data, {
-    key: "EAN",
-    direction: "asc",
-  });
 
-  const dataWithTotal = sortedItems.map((item) => ({
+  const dataWithTotal = data.map((item) => ({
     ...item,
     "ZFS Total": item["ZFS Quantity"] + item["ZFS Pending Shipment"],
   }));
@@ -47,16 +41,6 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   if (!isClient) {
     return null;
   }
-
-  const renderSortIcon = (columnKey: string) => {
-    if (sortConfig?.key !== columnKey) return null;
-
-    return sortConfig.direction === "asc" ? (
-      <ArrowUp className="w-4 h-4 ml-1 inline-block" />
-    ) : (
-      <ArrowDown className="w-4 h-4 ml-1 inline-block" />
-    );
-  };
 
   return (
     <div className="space-y-4">
@@ -75,13 +59,9 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
                 {COLUMNS.map((column) => (
                   <th
                     key={column.key}
-                    onClick={() => requestSort(column.key)}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    <div className="flex items-center">
-                      {column.label}
-                      {renderSortIcon(column.key)}
-                    </div>
+                    {column.label}
                   </th>
                 ))}
               </tr>
