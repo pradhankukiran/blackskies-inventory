@@ -14,21 +14,19 @@ interface StockTableProps {
 const ITEMS_PER_PAGE = 25;
 
 const COLUMNS = [
-  { key: "SKU", label: "SKU" },
   { key: "EAN", label: "EAN" },
-  { key: "Product Name", label: "Product Name" },
-  { key: "Internal Stock Quantity", label: "Internal Stock" },
-  { key: "ZFS Quantity", label: "ZFS Stock" },
-  { key: "ZFS Pending Shipment", label: "ZFS Pending" },
-  { key: "ZFS Total", label: "ZFS Total" },
-  { key: "Status Cluster", label: "Status" },
+  { key: "partner_variant_size", label: "Partner Variant Size" },
+  { key: "Product Name", label: "Article Name" },
   { key: "Status Description", label: "Status Description" },
+  { key: "ZFS Total", label: "ZFS Total" },
+  { key: "Available Stock", label: "Sellable PF Stock" },
+  { key: "Status Cluster", label: "Status Cluster" },
 ] as const;
 
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
   const { sortedItems, sortConfig, requestSort } = useTableSort(data, {
-    key: "SKU",
+    key: "EAN",
     direction: "asc",
   });
 
@@ -90,7 +88,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {paginatedItems.map((row, index) => (
-                <StockTableRow key={`${row.SKU}-${index}`} row={row} />
+                <StockTableRow key={`${row.EAN}-${index}`} row={row} />
               ))}
             </tbody>
           </table>

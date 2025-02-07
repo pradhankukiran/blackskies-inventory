@@ -25,8 +25,11 @@ export interface IntegratedStockData {
   EAN: string;
   "Product Name": string;
   "Internal Stock Quantity": number;
+  "Available Stock": number;
   "ZFS Quantity": number;
   "ZFS Pending Shipment": number;
   "Status Cluster": string;
   "Status Description": string;
+  "country": string;
+  "partner_variant_size": string;
 }

@@ -2,6 +2,7 @@ export interface ProcessedInternalStock {
   SKU: string;
   "Product Name": string;
   "Internal Stock Quantity": number;
+  "Available Stock": number;
 }
 
 export interface ProcessedZFSStock {
@@ -10,6 +11,8 @@ export interface ProcessedZFSStock {
   "ZFS Quantity": number;
   "Status Cluster": string;
   "Status Description": string;
+  "country": string;
+  "partner_variant_size": string;
 }
 
 export interface ProcessedZFSShipment {
