@@ -70,7 +70,7 @@ self.onmessage = async (e) => {
     const stockRecommendations = await withDelay(
       'Calculating stock recommendations',
       () => processedSales.length > 0
-        ? calculateStockRecommendations(processedSales)
+        ? calculateStockRecommendations(processedSales, integrated)
         : []
     );
 

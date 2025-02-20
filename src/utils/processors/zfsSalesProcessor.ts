@@ -1,39 +1,87 @@
 import { ZFSSaleEntry } from "@/types/sales";
 
 export function processZFSSales(data: any[]): ZFSSaleEntry[] {
-  return data.map(item => ({
-    orderId: item.orderId || '',
-    number: item.number || '',
-    customerOrderStatus: item.customerOrderStatus || '',
-    channel: item.channel || '',
-    paymentId: item.paymentId || '',
-    dispatched: parseInt(item.dispatched) || 0,
-    partnerId: item.partnerId || '',
-    shopId: item.shopId || '',
-    invoiceNo: item.invoiceNo || '',
-    invoiceAmn: parseFloat(item.invoiceAmn) || 0,
-    invoiceShipping: parseFloat(item.invoiceShipping) || 0,
-    invoiceVAT: parseFloat(item.invoiceVAT) || 0,
-    invoiceShippingVAT: parseFloat(item.invoiceShippingVAT) || 0,
-    orderTime: item.orderTime || '',
-    transactionComment: item.transactionComment || '',
-    customerInternalComment: item.customerInternalComment || '',
-    taxFree: parseInt(item.taxFree) || 0,
-    temporaryReferrer: item.temporaryReferrer || '',
-    OverallDeliveryTrackingId: item.OverallDeliveryTrackingId || '',
-    languageIso: item.languageIso || '',
-    currency: item.currency || '',
-    currencyFactor: parseFloat(item.currencyFactor) || 0,
-    articleId: item.articleId || '',
-    taxId: parseInt(item.taxId) || 0,
-    taxRate: parseFloat(item.taxRate) || 0,
-    statusId: parseInt(item.statusId) || 0,
-    number_1: item.number_1 || '',
-    articlePrice: parseFloat(item.articlePrice) || 0,
-    quantity: parseInt(item.quantity) || 0,
-    articleNameShipped: item.articleName || '', // Changed from articleNameShipped to articleName
-    shippedReleaseMode: item.shippedReleaseMode || '',
-    eanArticle: item.eanArticle || '',
-    config: item.config || ''
-  }));
+  // Log the first few records to see the actual structure
+  console.log('Debug - First few sales records:', {
+    record1: data[0],
+    record2: data[1],
+    availableFields: data[0] ? Object.keys(data[0]) : []
+  });
+
+  const processed = data.map(item => {
+    // Convert the date string to a proper format (assuming DD.MM.YYYY format)
+    const rawDate = item['Date first on offer'] || '';
+    const [day, month, year] = rawDate.split('.').map(num => num.padStart(2, '0'));
+    const formattedDate = year && month && day ? `${year}-${month}-${day}` : '';
+
+    return {
+      orderId: '',
+      number: item['Article variant'] || '',
+      customerOrderStatus: '',
+      channel: '',
+      paymentId: '',
+      dispatched: 0,
+      partnerId: '',
+      shopId: '',
+      invoiceNo: '',
+      invoiceAmn: 0,
+      invoiceShipping: 0,
+      invoiceVAT: 0,
+      invoiceShippingVAT: 0,
+      orderTime: formattedDate, // Use the first offer date as the order time
+      transactionComment: '',
+      customerInternalComment: '',
+      taxFree: 0,
+      temporaryReferrer: '',
+      OverallDeliveryTrackingId: '',
+      languageIso: item['Country'] || '',
+      currency: '',
+      currencyFactor: 1,
+      articleId: item['Article variant'] || '',
+      taxId: 0,
+      taxRate: 0,
+      statusId: 0,
+      number_1: '',
+      articlePrice: 0,
+      quantity: parseInt(item['Sold articles'] || '0'),
+      articleNameShipped: item['Brand'] || '',
+      shippedReleaseMode: '',
+      eanArticle: item['EAN'] || '',
+      config: ''
+    };
+  });
+
+  // Log a sample of processed data before filtering
+  console.log('Debug - Sample processed data before filtering:', {
+    sampleProcessed: processed[0],
+    hasEAN: processed[0]?.eanArticle,
+    hasOrderTime: processed[0]?.orderTime,
+    hasQuantity: processed[0]?.quantity
+  });
+
+  // Filter out entries with missing required data
+  const filtered = processed.filter(item => {
+    const isValid = item.eanArticle && item.orderTime && item.quantity > 0;
+    if (!isValid) {
+      console.log('Debug - Filtered out item:', {
+        ean: item.eanArticle,
+        orderTime: item.orderTime,
+        quantity: item.quantity,
+        reason: !item.eanArticle ? 'missing EAN' : 
+                !item.orderTime ? 'missing order date' : 
+                item.quantity <= 0 ? 'invalid quantity' : 'unknown'
+      });
+    }
+    return isValid;
+  });
+
+  console.log('Debug - Processed ZFS Sales:', {
+    processedCount: processed.length,
+    filteredCount: filtered.length,
+    sampleProcessedData: filtered[0] || 'no processed data',
+    hasEANs: filtered.some(item => item.eanArticle),
+    uniqueEANs: new Set(filtered.map(item => item.eanArticle)).size
+  });
+
+  return filtered;
 }

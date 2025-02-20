@@ -36,7 +36,9 @@ export interface ZFSSaleEntry {
 
 export interface ArticleRecommendation {
   articleId: string;
+  ean: string;
   articleName: string;
+  partnerVariantSize: string;
   recommendedDays: number;
   averageDailySales: number;
   recommendedStock: number;

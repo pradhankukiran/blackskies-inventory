@@ -33,23 +33,25 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Article ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">EAN</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Partner Variant Size</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Article Name</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Recommended Days</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Recommended Stock</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg. Daily Sales</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Sales</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Recommended Stock</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Last Sale Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {paginatedItems.map((rec, index) => (
                 <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900">{rec.articleId}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{rec.ean}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{rec.partnerVariantSize || 'N/A'}</td>
                   <td className="px-4 py-3 text-sm text-gray-900">{rec.articleName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.recommendedDays}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.recommendedStock}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageDailySales)}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.totalSales}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.recommendedStock}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.lastSaleDate}</td>
                 </tr>
               ))}
             </tbody>

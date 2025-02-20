@@ -6,23 +6,41 @@ interface SalesMetrics {
   lastSaleDate: string;
   uniqueDays: Set<string>;
   articleName: string;
+  eanArticle: string;
 }
 
 export function calculateSalesMetrics(sales: ZFSSaleEntry[]): Map<string, SalesMetrics> {
+  console.log('Debug - Calculate Sales Metrics Input:', {
+    salesCount: sales.length,
+    sampleSale: sales[0] || 'no sales',
+    hasEANs: sales.some(sale => sale.eanArticle),
+    uniqueEANs: new Set(sales.map(sale => sale.eanArticle)).size
+  });
+
   const metricsByArticle = new Map<string, SalesMetrics>();
 
   sales.forEach(sale => {
-    const articleId = sale.articleId;
+    // Use EAN as the key instead of articleId
+    const key = sale.eanArticle;
+
+    if (!key) {
+      console.log('Debug - Skipping sale due to missing EAN:', sale);
+      return;
+    }
+
     const saleDate = sale.orderTime.split(' ')[0];
+    if (!saleDate) {
+      console.log('Debug - Skipping sale due to invalid date:', sale);
+      return;
+    }
 
-    if (!articleId) return; // Skip if no article ID
-
-    const current = metricsByArticle.get(articleId) || {
+    const current = metricsByArticle.get(key) || {
       totalSales: 0,
       firstSaleDate: saleDate,
       lastSaleDate: saleDate,
       uniqueDays: new Set<string>(),
-      articleName: sale.articleNameShipped // Use the article name from the current sale
+      articleName: sale.articleNameShipped,
+      eanArticle: key
     };
 
     current.totalSales += sale.quantity;
@@ -35,12 +53,17 @@ export function calculateSalesMetrics(sales: ZFSSaleEntry[]): Map<string, SalesM
       current.lastSaleDate = saleDate;
     }
 
-    // Always update the article name if it exists in the current sale
     if (sale.articleNameShipped) {
       current.articleName = sale.articleNameShipped;
     }
 
-    metricsByArticle.set(articleId, current);
+    metricsByArticle.set(key, current);
+  });
+
+  console.log('Debug - Sales Metrics Result:', {
+    metricsCount: metricsByArticle.size,
+    sampleMetric: Array.from(metricsByArticle.values())[0] || 'no metrics',
+    uniqueArticles: metricsByArticle.size
   });
 
   return metricsByArticle;

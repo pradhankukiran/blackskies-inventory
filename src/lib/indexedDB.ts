@@ -68,10 +68,10 @@ const deserializeFiles = (serialized: Record<string, SerializedFile | Serialized
     internal: null,
     fba: null,
     zfs: null,
-    fbaShipments: [],
     zfsShipments: [],
     zfsShipmentsReceived: [],
     skuEanMapper: null,
+    zfsSales: null
   };
 
   for (const [key, value] of Object.entries(serialized)) {
