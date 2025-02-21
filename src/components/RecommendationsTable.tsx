@@ -1,29 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArticleRecommendation } from '@/types/sales';
 import { ExportButton } from './ExportButton';
 import { formatNumber } from '@/utils/formatters/numberFormatter';
 import { Pagination } from './ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
+import { CoverageDaysSelector } from './CoverageDaysSelector';
+import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
 
 interface RecommendationsTableProps {
   recommendations: ArticleRecommendation[];
+  onCoverageDaysChange?: (days: number) => void;
 }
 
 const ITEMS_PER_PAGE = 25;
 
 export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ recommendations }) => {
-  if (!recommendations.length) return null;
+  const [coverageDays, setCoverageDays] = useState(7);
+  const [recalculatedRecommendations, setRecalculatedRecommendations] = useState(recommendations);
 
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
-    recommendations,
+    recalculatedRecommendations,
     ITEMS_PER_PAGE
   );
 
+  const handleCoverageDaysChange = (days: number) => {
+    setCoverageDays(days);
+    // Recalculate recommendations with new coverage days
+    const updatedRecommendations = recommendations.map(rec => ({
+      ...rec,
+      recommendedDays: days,
+      recommendedStock: Math.ceil(rec.averageDailySales * days * 1.2 * 1.28) // Include safety buffer and return rate
+    }));
+    setRecalculatedRecommendations(updatedRecommendations);
+  };
+
+  if (!recommendations.length) return null;
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
         <ExportButton 
-          data={recommendations} 
+          data={recalculatedRecommendations} 
           label="Export Stock Recommendations"
           filename="stock-recommendations"
         />
@@ -61,8 +79,8 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
           <div className="text-sm text-gray-500">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-            {Math.min(currentPage * ITEMS_PER_PAGE, recommendations.length)} of{" "}
-            {recommendations.length} entries
+            {Math.min(currentPage * ITEMS_PER_PAGE, recalculatedRecommendations.length)} of{" "}
+            {recalculatedRecommendations.length} entries
           </div>
           <Pagination
             currentPage={currentPage}

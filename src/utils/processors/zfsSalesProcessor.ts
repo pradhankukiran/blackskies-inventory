@@ -9,10 +9,18 @@ export function processZFSSales(data: any[]): ZFSSaleEntry[] {
   });
 
   const processed = data.map(item => {
-    // Convert the date string to a proper format (assuming DD.MM.YYYY format)
-    const rawDate = item['Date first on offer'] || '';
-    const [day, month, year] = rawDate.split('.').map(num => num.padStart(2, '0'));
-    const formattedDate = year && month && day ? `${year}-${month}-${day}` : '';
+    // Parse the date and calculate last sale date
+    const firstOfferDate = item['Date first on offer'] || '';
+    const daysOnline = parseInt(item['Days online'] || '0');
+    const [day, month, year] = firstOfferDate.split('.').map(num => num.padStart(2, '0'));
+    
+    // Calculate the last sale date by adding (daysOnline - 1) to the first offer date
+    const startDate = new Date(`${year}-${month}-${day}`);
+    const lastSaleDate = new Date(startDate);
+    lastSaleDate.setDate(lastSaleDate.getDate() + (daysOnline - 1));
+    
+    const formattedFirstDate = year && month && day ? `${year}-${month}-${day}` : '';
+    const formattedLastDate = lastSaleDate.toISOString().split('T')[0];
 
     return {
       orderId: '',
@@ -28,7 +36,7 @@ export function processZFSSales(data: any[]): ZFSSaleEntry[] {
       invoiceShipping: 0,
       invoiceVAT: 0,
       invoiceShippingVAT: 0,
-      orderTime: formattedDate, // Use the first offer date as the order time
+      orderTime: formattedLastDate, // Use the calculated last sale date
       transactionComment: '',
       customerInternalComment: '',
       taxFree: 0,
@@ -47,7 +55,9 @@ export function processZFSSales(data: any[]): ZFSSaleEntry[] {
       articleNameShipped: item['Brand'] || '',
       shippedReleaseMode: '',
       eanArticle: item['EAN'] || '',
-      config: ''
+      config: '',
+      firstOfferDate: formattedFirstDate, // Keep track of when the item was first offered
+      daysOnline: daysOnline // Store the days online for reference
     };
   });
 
