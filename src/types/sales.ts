@@ -45,4 +45,8 @@ export interface ArticleRecommendation {
   totalSales: number;
   lastSaleDate: string;
   firstSaleDate: string;
+  statusDescription?: string;
+  zfsTotal?: number;
+  sellablePFStock?: number;
+  statusCluster?: string;
 }

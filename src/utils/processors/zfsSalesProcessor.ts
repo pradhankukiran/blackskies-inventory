@@ -1,13 +1,6 @@
 import { ZFSSaleEntry } from "@/types/sales";
 
 export function processZFSSales(data: any[]): ZFSSaleEntry[] {
-  // Log the first few records to see the actual structure
-  console.log('Debug - First few sales records:', {
-    record1: data[0],
-    record2: data[1],
-    availableFields: data[0] ? Object.keys(data[0]) : []
-  });
-
   const processed = data.map(item => {
     // Parse the date and calculate last sale date
     const firstOfferDate = item['Date first on offer'] || '';
@@ -61,36 +54,10 @@ export function processZFSSales(data: any[]): ZFSSaleEntry[] {
     };
   });
 
-  // Log a sample of processed data before filtering
-  console.log('Debug - Sample processed data before filtering:', {
-    sampleProcessed: processed[0],
-    hasEAN: processed[0]?.eanArticle,
-    hasOrderTime: processed[0]?.orderTime,
-    hasQuantity: processed[0]?.quantity
-  });
-
   // Filter out entries with missing required data
   const filtered = processed.filter(item => {
     const isValid = item.eanArticle && item.orderTime && item.quantity > 0;
-    if (!isValid) {
-      console.log('Debug - Filtered out item:', {
-        ean: item.eanArticle,
-        orderTime: item.orderTime,
-        quantity: item.quantity,
-        reason: !item.eanArticle ? 'missing EAN' : 
-                !item.orderTime ? 'missing order date' : 
-                item.quantity <= 0 ? 'invalid quantity' : 'unknown'
-      });
-    }
     return isValid;
-  });
-
-  console.log('Debug - Processed ZFS Sales:', {
-    processedCount: processed.length,
-    filteredCount: filtered.length,
-    sampleProcessedData: filtered[0] || 'no processed data',
-    hasEANs: filtered.some(item => item.eanArticle),
-    uniqueEANs: new Set(filtered.map(item => item.eanArticle)).size
   });
 
   return filtered;

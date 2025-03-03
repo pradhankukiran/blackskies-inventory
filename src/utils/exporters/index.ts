@@ -11,10 +11,12 @@ const transformStockOverview = (data: IntegratedStockData[]) => {
     "Partner Variant Size": item.partner_variant_size || 'N/A',
     "Article Name": item["Product Name"],
     "Status Description": item["Status Description"],
-    "ZFS Stock": item["ZFS Quantity"],
-    "ZFS Pending": item["ZFS Pending Shipment"],
     "ZFS Total": item["ZFS Quantity"] + item["ZFS Pending Shipment"],
+    "Recommended Stock": null,
     "Sellable PF Stock": item["Available Stock"],
+    "Average Daily Sales": null,
+    "Total Sales": null,
+    "Last Sale Date": null,
     "Status Cluster": item["Status Cluster"]
   }));
 };
@@ -24,12 +26,15 @@ const transformStockRecommendations = (data: ArticleRecommendation[]) => {
     "EAN": item.ean,
     "Partner Variant Size": item.partnerVariantSize,
     "Article Name": item.articleName,
+    "Status Description": item.statusDescription || 'N/A',
+    "ZFS Total": item.zfsTotal,
     "Recommended Stock": item.recommendedStock,
+    "Sellable PF Stock": item.sellablePFStock,
     "Average Daily Sales": Number(item.averageDailySales.toFixed(2)),
     "Total Sales": item.totalSales,
-    "First Sale Date": item.firstSaleDate,
     "Last Sale Date": item.lastSaleDate,
-    "Coverage Days": item.recommendedDays
+    "Status Cluster": item.statusCluster || 'N/A',
+    "Coverage Period (Days)": item.recommendedDays
   }));
 };
 

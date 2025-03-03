@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { ParsedData, FileState } from '@/types/stock';
 import { CategoryRecommendation } from '@/types/sales';
-import { storeFiles, getFiles, clearFiles } from '@/lib/indexedDB';
+import { 
+  storeFiles, 
+  getFiles, 
+  clearFiles, 
+  getStoredData, 
+  storeData, 
+  clearStoredData 
+} from '@/lib/indexedDB';
 
 export function useFileProcessing() {
   const [files, setFiles] = useState<FileState>({
@@ -30,6 +37,18 @@ export function useFileProcessing() {
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [worker, setWorker] = useState<Worker | null>(null);
 
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const loadSavedData = async () => {
+      const savedData = await getStoredData();
+      if (savedData?.parsedData && savedData?.recommendations) {
+        setParsedData(savedData.parsedData);
+        setRecommendations(savedData.recommendations);
+      }
+    };
+    loadSavedData();
+  }, []);
+
   useEffect(() => {
     const loadSavedFiles = async () => {
       const savedFiles = await getFiles();
@@ -45,7 +64,7 @@ export function useFileProcessing() {
       { type: 'module' }
     );
 
-    newWorker.onmessage = (e) => {
+    newWorker.onmessage = async (e) => {
       if (e.data.type === 'status') {
         setProcessingStatus(e.data.message);
         return;
@@ -63,6 +82,11 @@ export function useFileProcessing() {
             zfsSales: data.zfsSales,
             integrated: data.integrated,
           });
+          try {
+            await storeData({ parsedData: data, recommendations: data.recommendations });
+          } catch (error) {
+            // Silently handle storage errors
+          }
           setRecommendations(data.recommendations);
         } else {
           setError(e.data.error);
@@ -132,7 +156,7 @@ export function useFileProcessing() {
     }
   };
 
-  const resetAll = async () => {
+  const resetFiles = () => {
     setFiles({
       internal: null,
       fba: null,
@@ -142,6 +166,12 @@ export function useFileProcessing() {
       skuEanMapper: null,
       zfsSales: null,
     });
+    clearTables();
+    clearFiles().catch(() => {});
+    clearStoredData().catch(() => {});
+  };
+
+  const clearTables = () => {
     setParsedData({
       internal: [],
       zfs: [],
@@ -152,9 +182,13 @@ export function useFileProcessing() {
       integrated: [],
     });
     setRecommendations([]);
+  };
+
+  const resetAll = async () => {
+    resetFiles();
+    clearTables();
     setError(null);
     setProcessingStatus('');
-    await clearFiles();
   };
 
   return {
@@ -167,6 +201,8 @@ export function useFileProcessing() {
     handleFileChange,
     handleRemoveFile,
     processFiles,
+    resetFiles,
+    clearTables,
     resetAll,
   };
 }

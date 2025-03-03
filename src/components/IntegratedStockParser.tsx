@@ -23,6 +23,8 @@ const IntegratedStockParser: React.FC = () => {
     handleFileChange,
     handleRemoveFile,
     processFiles,
+    resetFiles,
+    clearTables,
     resetAll,
   } = useFileProcessing();
 
@@ -58,7 +60,10 @@ const IntegratedStockParser: React.FC = () => {
       label: "Stock Recommendations",
       content:
         recommendations.length > 0 ? (
-          <RecommendationsTable recommendations={recommendations} />
+          <RecommendationsTable 
+            recommendations={recommendations}
+            stockData={parsedData.integrated}
+          />
         ) : null,
     },
   ];
@@ -91,13 +96,23 @@ const IntegratedStockParser: React.FC = () => {
               />
 
               <div className="flex justify-between">
-                <button
-                  onClick={resetAll}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset All
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={resetFiles}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset Files
+                  </button>
+                  {showTabs && (
+                    <button
+                      onClick={clearTables}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50"
+                    >
+                      Clear Tables
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={processFiles}
                   disabled={isProcessing}

@@ -52,6 +52,8 @@ export function calculateStockRecommendations(
     // Get return rate from sales data (default to 0 if not available)
     const returnRate = salesData.find(sale => sale.eanArticle === metrics.eanArticle)?.returnRate || 0;
 
+    const zfsTotal = stockItem["ZFS Quantity"] + stockItem["ZFS Pending Shipment"];
+
     const recommendedStock = calculateRecommendedStock(
       averageDailySales,
       returnRate,
@@ -69,7 +71,11 @@ export function calculateStockRecommendations(
       recommendedStock,
       totalSales: metrics.totalSales,
       lastSaleDate: metrics.lastSaleDate,
-      firstSaleDate: metrics.firstSaleDate
+      firstSaleDate: metrics.firstSaleDate,
+      statusDescription: stockItem["Status Description"],
+      zfsTotal,
+      sellablePFStock: stockItem["Available Stock"],
+      statusCluster: stockItem["Status Cluster"]
     });
   });
 

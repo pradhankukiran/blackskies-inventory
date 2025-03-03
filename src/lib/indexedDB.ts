@@ -1,10 +1,18 @@
 import { FileState } from '@/types/stock';
+import { ParsedData } from '@/types/stock';
+import { ArticleRecommendation } from '@/types/sales';
 
 const DB_NAME = 'stockParserDB';
-const STORE_NAME = 'files';
-const DB_VERSION = 1;
+const FILES_STORE = 'files';
+const DATA_STORE = 'parsedData';
+const DB_VERSION = 2;
 
 let dbInstance: IDBDatabase | null = null;
+
+interface StoredData {
+  parsedData: ParsedData;
+  recommendations: ArticleRecommendation[];
+}
 
 interface SerializedFile {
   name: string;
@@ -21,14 +29,23 @@ const getDB = async (): Promise<IDBDatabase> => {
     request.onerror = () => reject(request.error);
     
     request.onsuccess = () => {
+      // Close any existing connection before storing the new one
+      if (dbInstance) {
+        dbInstance.close();
+      }
       dbInstance = request.result;
       resolve(request.result);
     };
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+      
+      // Handle store creation and upgrades
+      const stores = [FILES_STORE, DATA_STORE];
+      for (const storeName of stores) {
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.createObjectStore(storeName);
+        }
       }
     };
   });
@@ -90,8 +107,8 @@ export const storeFiles = async (files: FileState): Promise<void> => {
   const serializedFiles = await serializeFiles(files);
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = db.transaction(FILES_STORE, 'readwrite');
+    const store = transaction.objectStore(FILES_STORE);
 
     const request = store.put(serializedFiles, 'currentFiles');
 
@@ -113,8 +130,8 @@ export const getFiles = async (): Promise<FileState | null> => {
   const db = await getDB();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = db.transaction(FILES_STORE, 'readonly');
+    const store = transaction.objectStore(FILES_STORE);
     const request = store.get('currentFiles');
 
     request.onsuccess = () => {
@@ -137,9 +154,71 @@ export const clearFiles = async (): Promise<void> => {
   const db = await getDB();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = db.transaction(FILES_STORE, 'readwrite');
+    const store = transaction.objectStore(FILES_STORE);
     const request = store.delete('currentFiles');
+
+    request.onsuccess = () => {
+      transaction.oncomplete = () => resolve();
+    };
+
+    request.onerror = () => {
+      transaction.abort();
+      reject(request.error);
+    };
+
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+};
+
+export const storeData = async (data: StoredData): Promise<void> => {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(DATA_STORE, 'readwrite');
+    const store = transaction.objectStore(DATA_STORE);
+    const request = store.put(data, 'currentData');
+
+    request.onsuccess = () => {
+      transaction.oncomplete = () => resolve();
+    };
+
+    request.onerror = () => {
+      transaction.abort();
+      reject(request.error);
+    };
+
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+};
+
+export const getStoredData = async (): Promise<StoredData | null> => {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(DATA_STORE, 'readonly');
+    const store = transaction.objectStore(DATA_STORE);
+    const request = store.get('currentData');
+
+    request.onsuccess = () => {
+      resolve(request.result || null);
+    };
+
+    request.onerror = () => reject(request.error);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+};
+
+export const clearStoredData = async (): Promise<void> => {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(DATA_STORE, 'readwrite');
+    const store = transaction.objectStore(DATA_STORE);
+    const request = store.delete('currentData');
 
     request.onsuccess = () => {
       transaction.oncomplete = () => resolve();
