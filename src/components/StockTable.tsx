@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { IntegratedStockData } from "@/types/stock";
 import { StockTableRow } from "./StockTableRow";
 import { Pagination } from "./ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { ExportButton } from "./ExportButton";
+import { Search, X } from "lucide-react";
 
 interface StockTableProps {
   data: IntegratedStockData[];
@@ -23,14 +24,23 @@ const COLUMNS = [
 
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
+  const [searchEan, setSearchEan] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const dataWithTotal = data.map((item) => ({
     ...item,
     "ZFS Total": item["ZFS Quantity"] + item["ZFS Pending Shipment"],
   }));
 
+  const filteredData = useMemo(() => {
+    if (!searchEan) return dataWithTotal;
+    return dataWithTotal.filter(item => 
+      item.EAN.toLowerCase().includes(searchEan.toLowerCase())
+    );
+  }, [dataWithTotal, searchEan]);
+
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
-    dataWithTotal,
+    filteredData,
     ITEMS_PER_PAGE
   );
 
@@ -56,11 +66,43 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <div className="flex items-center space-x-2">
+                    {isSearching ? (
+                      <div className="flex items-center w-full">
+                        <input
+                          type="text"
+                          value={searchEan}
+                          onChange={(e) => setSearchEan(e.target.value)}
+                          placeholder="Search EAN..."
+                          className="w-full px-2 py-1 text-sm border rounded-l focus:outline-none focus:ring-1 focus:ring-green-500"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => {
+                            setIsSearching(false);
+                            setSearchEan('');
+                          }}
+                          className="px-2 py-1 border border-l-0 rounded-r hover:bg-gray-100"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span>EAN</span>
+                        <button
+                          onClick={() => setIsSearching(true)}
+                          className="hover:text-green-600 transition-colors"
+                        >
+                          <Search className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </th>
+                {COLUMNS.slice(1).map((column) => (
+                  <th key={column.key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {column.label}
                   </th>
                 ))}
@@ -77,8 +119,8 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
           <div className="text-sm text-gray-500">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-            {Math.min(currentPage * ITEMS_PER_PAGE, data.length)} of{" "}
-            {data.length} entries
+            {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
+            {filteredData.length} entries
           </div>
           <Pagination
             currentPage={currentPage}

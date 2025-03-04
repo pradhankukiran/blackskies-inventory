@@ -56,7 +56,7 @@ export function processZFSSales(data: any[]): ZFSSaleEntry[] {
 
   // Filter out entries with missing required data
   const filtered = processed.filter(item => {
-    const isValid = item.eanArticle && item.orderTime && item.quantity > 0;
+    const isValid = item.eanArticle && item.orderTime;
     return isValid;
   });
 
