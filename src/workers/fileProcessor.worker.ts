@@ -31,12 +31,12 @@ self.onmessage = async (e) => {
     
     const zfsShipments = await withDelay(
       'Processing ZFS shipment data',
-      () => Promise.all(files.zfsShipments.map((file) => parseCSVFile(file)))
+      () => Promise.all(files.zfsShipments.map((file: File) => parseCSVFile(file)))
     );
     
     const zfsShipmentsReceived = await withDelay(
       'Processing received shipments',
-      () => Promise.all(files.zfsShipmentsReceived.map((file) => parseCSVFile(file)))
+      () => Promise.all(files.zfsShipmentsReceived.map((file: File) => parseCSVFile(file)))
     );
     
     const skuEanMapper = await withDelay(

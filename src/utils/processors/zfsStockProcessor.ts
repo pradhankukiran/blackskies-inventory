@@ -2,7 +2,6 @@ import { ProcessedZFSStock } from '@/types/processors';
 
 export function processZFSStock(data: any[]): ProcessedZFSStock[] {
   return data
-    .filter(item => String(item.country).toLowerCase() === 'de')
     .map(item => ({
       EAN: item.ean,
       "Product Name": item.article_name,

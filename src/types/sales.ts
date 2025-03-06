@@ -1,37 +1,14 @@
 export interface ZFSSaleEntry {
-  orderId: string;
-  number: string;
-  customerOrderStatus: string;
-  channel: string;
-  paymentId: string;
-  dispatched: number;
-  partnerId: string;
-  shopId: string;
-  invoiceNo: string;
-  invoiceAmn: number;
-  invoiceShipping: number;
-  invoiceVAT: number;
-  invoiceShippingVAT: number;
-  orderTime: string;
-  transactionComment: string;
-  customerInternalComment: string;
-  taxFree: number;
-  temporaryReferrer: string;
-  OverallDeliveryTrackingId: string;
-  languageIso: string;
-  currency: string;
-  currencyFactor: number;
-  articleId: string;
-  taxId: number;
-  taxRate: number;
-  statusId: number;
-  number_1: string;
-  articlePrice: number;
-  quantity: number;
-  articleNameShipped: string;
-  shippedReleaseMode: string;
-  eanArticle: string;
-  config: string;
+  EAN: string;
+  'Article variant': string;
+  'Days online': string;
+  'Sold articles': number;
+  'Return rate (%)': number;
+  'PDP views': number;
+  'Conversion rate (%)': number;
+  'Date first on offer': string;
+  Brand: string;
+  Country: string;
 }
 
 export interface ArticleRecommendation {

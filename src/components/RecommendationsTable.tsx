@@ -1,28 +1,83 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ArticleRecommendation } from '@/types/sales';
 import { ExportButton } from './ExportButton';
 import { formatNumber } from '@/utils/formatters/numberFormatter';
 import { Pagination } from './ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { IntegratedStockData } from '@/types/stock';
+import { IntegratedStockData, ParsedData } from '@/types/stock';
 import { Search, X } from 'lucide-react';
 import { CoverageDaysSelector } from './CoverageDaysSelector';
 import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
 
+// Helper function to create a focused copy of recommendations with only essential properties
+// This reduces memory usage compared to deep cloning the entire objects
+function createOptimizedRecommendationsCopy(recommendations: ArticleRecommendation[]): ArticleRecommendation[] {
+  return recommendations.map(rec => ({
+    ...rec,
+    // Only explicitly update the properties that are essential for the UI
+    recommendedStock: rec.recommendedStock,
+    recommendedDays: rec.recommendedDays,
+    averageDailySales: rec.averageDailySales
+  }));
+}
+
 interface RecommendationsTableProps {
   recommendations: ArticleRecommendation[];
   stockData: IntegratedStockData[];
+  parsedData: ParsedData;
   onCoverageDaysChange?: (days: number) => void;
 }
 
 const ITEMS_PER_PAGE = 25;
 
-export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ recommendations, stockData }) => {
+export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ recommendations, stockData, parsedData }) => {
   const [coverageDays, setCoverageDays] = useState(7);
-  const [recalculatedRecommendations, setRecalculatedRecommendations] = useState(recommendations);
+  const [recalculatedRecommendations, setRecalculatedRecommendations] = useState<ArticleRecommendation[]>([]);
   const [searchEan, setSearchEan] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const stockByEAN = new Map(stockData.map(item => [item.EAN, item]));
+  
+  // Memoize stockByEAN map to avoid recreating it on every render
+  const stockByEAN = useMemo(() => 
+    new Map(stockData.map(item => [item.EAN, item])),
+    [stockData]
+  );
+
+  // Optimized recalculation function that updates without animations or unnecessary re-renders
+  const recalculateRecommendations = useCallback((days: number) => {
+    if (!parsedData.zfsSales || parsedData.zfsSales.length === 0) {
+      return;
+    }
+    
+    try {
+      // Ensure days is a number and positive
+      const coverageDaysNum = Math.max(Number(days), 1);
+      
+      // Calculate new recommendations
+      const newRecommendations = calculateStockRecommendations(
+        parsedData.zfsSales,
+        stockData,
+        coverageDaysNum
+      );
+      
+      // Use our optimized copy function to minimize the impact of state updates
+      const optimizedCopy = createOptimizedRecommendationsCopy(newRecommendations);
+      
+      // Update the recommendations state
+      setRecalculatedRecommendations(optimizedCopy);
+    } catch (error) {
+      console.error('Error recalculating recommendations:', error);
+    }
+  }, [parsedData.zfsSales, stockData]);
+
+  // Initialize recommendations when component mounts or when base data changes
+  useEffect(() => {
+    if (recommendations.length > 0) {
+      // Use the initial coverage days value
+      recalculateRecommendations(coverageDays);
+    } else {
+      setRecalculatedRecommendations(recommendations);
+    }
+  }, [recommendations, recalculateRecommendations, coverageDays]);
 
   const filteredRecommendations = useMemo(() => {
     if (!searchEan) return recalculatedRecommendations;
@@ -36,15 +91,10 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
     ITEMS_PER_PAGE
   );
 
+  // Efficient coverage days change handler - simply updates state and triggers recalculation
   const handleCoverageDaysChange = (days: number) => {
     setCoverageDays(days);
-    // Recalculate recommendations with new coverage days
-    const updatedRecommendations = recommendations.map(rec => ({
-      ...rec,
-      recommendedDays: days,
-      recommendedStock: Math.ceil(rec.averageDailySales * days * 1.2 * 1.28) // Include safety buffer and return rate
-    }));
-    setRecalculatedRecommendations(updatedRecommendations);
+    recalculateRecommendations(days);
   };
 
   if (!recommendations.length) return null;
@@ -53,6 +103,9 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
         <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
+        <div className="text-sm text-gray-700">
+          {recalculatedRecommendations.length} items with {coverageDays} days coverage
+        </div>
         <ExportButton 
           data={recalculatedRecommendations} 
           label="Export Stock Recommendations"
@@ -112,32 +165,45 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {paginatedItems.map((rec, index) => {
-                const stockInfo = stockByEAN.get(rec.ean);
-                const zfsTotal = stockInfo ? stockInfo["ZFS Quantity"] + stockInfo["ZFS Pending Shipment"] : 0;
-                
-                return (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900">{rec.ean}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{rec.partnerVariantSize || 'N/A'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{rec.articleName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Description"] || 'N/A'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{zfsTotal}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.recommendedStock}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{stockInfo?.["Available Stock"] || 0}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageDailySales)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.totalSales}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.lastSaleDate}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Cluster"] || 'N/A'}</td>
+              {paginatedItems.length > 0 ? (
+                paginatedItems.map((rec, index) => {
+                  const stockInfo = stockByEAN.get(rec.ean);
+                  // Pre-calculate or safely access values to avoid rendering issues
+                  const zfsTotal = stockInfo ? 
+                    (stockInfo["ZFS Quantity"] || 0) + (stockInfo["ZFS Pending Shipment"] || 0) : 0;
+                  const availableStock = stockInfo?.["Available Stock"] || 0;
+                  
+                  return (
+                  <tr key={`${rec.ean}-${index}`} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900">{rec.ean}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{rec.partnerVariantSize || 'N/A'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{rec.articleName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Description"] || 'N/A'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{zfsTotal}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-semibold">
+                      {rec.recommendedStock !== undefined ? rec.recommendedStock : 'N/A'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{availableStock}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageDailySales)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.totalSales || 0}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.lastSaleDate}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Cluster"] || 'N/A'}</td>
+                  </tr>
+                )})
+              ) : (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                    No recommendations available with the current selection
+                  </td>
                 </tr>
-              )})}
+              )}
             </tbody>
           </table>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
           <div className="text-sm text-gray-500">
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            Showing {filteredRecommendations.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredRecommendations.length)} of{" "}
             {filteredRecommendations.length} entries
           </div>

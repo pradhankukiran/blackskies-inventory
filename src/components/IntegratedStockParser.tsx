@@ -63,6 +63,7 @@ const IntegratedStockParser: React.FC = () => {
           <RecommendationsTable 
             recommendations={recommendations}
             stockData={parsedData.integrated}
+            parsedData={parsedData}
           />
         ) : null,
     },

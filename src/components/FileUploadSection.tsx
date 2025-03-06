@@ -114,7 +114,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
         {files.length > 0 && (
           <div className="mt-4 space-y-2">
-            {files.map((file, index) => (
+            {files.map((file: File, index) => (
               <div
                 key={index}
                 className="flex items-center justify-between px-3 py-2 text-sm rounded-md bg-green-50 border border-green-200"
