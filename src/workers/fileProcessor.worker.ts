@@ -3,78 +3,89 @@ import { processAndIntegrateData } from '@/utils/dataIntegration';
 import { processZFSSales } from '@/utils/processors/zfsSalesProcessor';
 import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
 
-// Helper function to add delay and update status
-const withDelay = async (message: string, operation: () => Promise<any> | any) => {
+// Helper function to process file with progress updates
+const processFileWithProgress = async (
+  message: string,
+  file: File | null,
+  defaultValue: any[] = []
+) => {
   self.postMessage({ type: 'status', message });
-  // Add a minimum delay of 800ms for each step
-  const [result] = await Promise.all([
-    operation(),
-    new Promise(resolve => setTimeout(resolve, 2500))
-  ]);
-  return result;
+  
+  if (!file) return defaultValue;
+  
+  return parseCSVFile(file, (progress) => {
+    self.postMessage({
+      type: 'status',
+      message: `${message} (${Math.round(progress)}%)`
+    });
+  });
 };
 
 self.onmessage = async (e) => {
   try {
     const { files, timeline } = e.data;
     
-    // Process files
-    const internal = await withDelay(
+    // Process files with progress tracking
+    const internal = await processFileWithProgress(
       'Loading internal stock data',
-      () => files.internal ? parseCSVFile(files.internal) : []
+      files.internal
     );
     
-    const zfs = await withDelay(
+    const zfs = await processFileWithProgress(
       'Loading ZFS stock data',
-      () => files.zfs ? parseCSVFile(files.zfs) : []
+      files.zfs
     );
     
-    const zfsShipments = await withDelay(
-      'Processing ZFS shipment data',
-      () => Promise.all(files.zfsShipments.map((file: File) => parseCSVFile(file)))
-    );
+    // Process multiple shipment files
+    const zfsShipments = [];
+    for (let i = 0; i < files.zfsShipments.length; i++) {
+      const data = await processFileWithProgress(
+        `Processing ZFS shipment file ${i + 1}/${files.zfsShipments.length}`,
+        files.zfsShipments[i]
+      );
+      zfsShipments.push(data);
+    }
     
-    const zfsShipmentsReceived = await withDelay(
-      'Processing received shipments',
-      () => Promise.all(files.zfsShipmentsReceived.map((file: File) => parseCSVFile(file)))
-    );
+    const zfsShipmentsReceived = [];
+    for (let i = 0; i < files.zfsShipmentsReceived.length; i++) {
+      const data = await processFileWithProgress(
+        `Processing received shipment file ${i + 1}/${files.zfsShipmentsReceived.length}`,
+        files.zfsShipmentsReceived[i]
+      );
+      zfsShipmentsReceived.push(data);
+    }
     
-    const skuEanMapper = await withDelay(
+    const skuEanMapper = await processFileWithProgress(
       'Loading SKU-EAN mapping data',
-      () => files.skuEanMapper ? parseCSVFile(files.skuEanMapper) : []
+      files.skuEanMapper
     );
     
-    const zfsSales = await withDelay(
+    const zfsSales = await processFileWithProgress(
       'Processing sales data',
-      () => files.zfsSales ? parseCSVFile(files.zfsSales) : []
+      files.zfsSales
     );
 
-    // Process data integration
-    const [flattenedShipments, flattenedReceived] = await withDelay(
-      'Flattening shipment data',
-      () => [zfsShipments.flat(), zfsShipmentsReceived.flat()]
-    );
+    self.postMessage({ type: 'status', message: 'Flattening shipment data' });
+    const flattenedShipments = zfsShipments.flat();
+    const flattenedReceived = zfsShipmentsReceived.flat();
     
-    const integrated = await withDelay(
-      'Integrating stock data',
-      () => processAndIntegrateData(
-        internal,
-        zfs,
-        flattenedShipments,
-        flattenedReceived,
-        skuEanMapper
-      )
+    self.postMessage({ type: 'status', message: 'Integrating stock data' });
+    const integrated = processAndIntegrateData(
+      internal,
+      zfs,
+      flattenedShipments,
+      flattenedReceived,
+      skuEanMapper
     );
 
     const processedSales = zfsSales.length > 0 ? processZFSSales(zfsSales) : [];
-    const stockRecommendations = await withDelay(
-      'Calculating stock recommendations',
-      () => processedSales.length > 0
-        ? calculateStockRecommendations(processedSales, integrated, 1, timeline)
-        : []
-    );
-
-    await withDelay('Finalizing results', () => Promise.resolve());
+    
+    self.postMessage({ type: 'status', message: 'Calculating stock recommendations' });
+    const stockRecommendations = processedSales.length > 0
+      ? calculateStockRecommendations(processedSales, integrated, 1, timeline)
+      : [];
+    
+    self.postMessage({ type: 'status', message: 'Finalizing results' });
 
     self.postMessage({
       type: 'complete',

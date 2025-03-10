@@ -1,7 +1,13 @@
 import Papa from 'papaparse';
 
-export const parseCSVFile = (file: File): Promise<any[]> => {
+const CHUNK_SIZE = 10000; // Process 10,000 rows at a time
+
+export const parseCSVFile = (file: File, onProgress?: (progress: number) => void): Promise<any[]> => {
   return new Promise((resolve, reject) => {
+    const results: any[] = [];
+    let processedChunks = 0;
+    let totalChunks = 0;
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -17,8 +23,27 @@ export const parseCSVFile = (file: File): Promise<any[]> => {
         }
         return value;
       },
-      complete: (results) => resolve(results.data),
+      chunk: (chunk, parser) => {
+        results.push(...chunk.data);
+        processedChunks++;
+        
+        if (onProgress) {
+          const progress = totalChunks > 0 ? (processedChunks / totalChunks) * 100 : 0;
+          onProgress(Math.min(progress, 99)); // Cap at 99% until complete
+        }
+      },
+      complete: () => {
+        if (onProgress) {
+          onProgress(100);
+        }
+        resolve(results);
+      },
       error: (error) => reject(error),
+      beforeFirstChunk: (chunk) => {
+        // Estimate total chunks based on file size and first chunk size
+        const firstChunkSize = chunk.length;
+        totalChunks = Math.ceil(file.size / firstChunkSize);
+      }
     });
   });
 };

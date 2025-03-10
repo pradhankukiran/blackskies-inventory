@@ -89,7 +89,7 @@ const IntegratedStockParser: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-center font-bold">
-              Inventory Management
+              Demand Planning Tool
             </CardTitle>
           </CardHeader>
           <CardContent>

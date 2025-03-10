@@ -134,38 +134,17 @@ function calculateRecommendedStock(
   statusCluster: string = 'Live',
   pricePoint: number = 0
 ): number {
-  // Special case: If there are no sales but significant views, estimate potential demand
-  if (salesData.totalSales === 0 && salesData.pdpViews >= 50) {
-    // Use views as a proxy for interest, with estimated conversion
-    const estimatedDemand = salesData.pdpViews * 0.02; // 2% estimated conversion
-    // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
-    const dailyDemand = safeDivide(estimatedDemand, salesData.timelineDays);
-    const returnRateMultiplier = 1 - (salesData.returnRate / 100);
-    return Math.max(1, Math.ceil(dailyDemand * coverageDays * returnRateMultiplier));
-  }
-  
-  // If there are no sales and low views, keep minimal stock but scale with coverage period
-  if (salesData.totalSales === 0 && salesData.pdpViews < 50) {
-    if (statusCluster === 'Discontinued' || statusCluster === 'discontinued') {
-      return 0; // No stock for discontinued items with no interest
-    }
-    return 1; // Minimum stock for items with no sales
+  // If there are no sales, return 0 recommended stock
+  if (salesData.totalSales === 0) {
+    return 0;
   }
 
   // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
   const dailySales = safeDivide(salesData.totalSales, salesData.timelineDays);
   const returnRateMultiplier = 1 - (salesData.returnRate / 100);
-  let recommendedStock = Math.ceil(dailySales * coverageDays * returnRateMultiplier);
-
-  // Apply status-based adjustments with reduced impact
-  if (statusCluster === 'New' || statusCluster === 'new') {
-    recommendedStock = Math.ceil(recommendedStock * 1.2); // 20% buffer for new items
-  } else if (statusCluster === 'Discontinued' || statusCluster === 'discontinued') {
-    return 0; // No stock for discontinued items
-  }
+  let recommendedStock = Math.round(dailySales * coverageDays * returnRateMultiplier);
   
-  // Return the recommended stock, ensuring it's at least 1
-  return Math.max(1, recommendedStock);
+  return recommendedStock;
 }
 
 /**
@@ -325,10 +304,6 @@ export function calculateStockRecommendations(
     // Extract status cluster
     const statusCluster = stockItem["Status Cluster"] || 'Live';
     
-    // IMPROVED: Scaled market multiplier that increases more gradually
-    // For products in multiple markets, we might want to maintain slightly higher stock
-    const marketMultiplier = 1 + (Math.log(marketCount) / Math.log(10)) * 0.2; // Logarithmic scaling
-    
     // Calculate recommended stock considering current inventory, status, and price
     const recommendedStock = calculateRecommendedStock(
       { 
@@ -346,8 +321,7 @@ export function calculateStockRecommendations(
       pricePoint
     );
     
-    // Apply market multiplier for multi-market products
-    const finalRecommendedStock = Math.ceil(recommendedStock * marketMultiplier);
+    const finalRecommendedStock = recommendedStock;
     
     // Calculate country-specific stock allocations based on sales distribution
     const countryAllocations: Record<string, number> = {};

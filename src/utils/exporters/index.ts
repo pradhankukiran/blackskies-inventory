@@ -5,36 +5,32 @@ import { exportToCSV } from "./csvExporter";
 import { exportToTSV } from "./tsvExporter";
 import { exportToXLSX } from "./xlsxExporter";
 
-const transformStockOverview = (data: IntegratedStockData[]) => {
+const transformStockOverview = (data: IntegratedStockData[]): Record<string, any>[] => {
   return data.map(item => ({
     "EAN": item.EAN,
     "Partner Variant Size": item.partner_variant_size || 'N/A',
     "Article Name": item["Product Name"],
     "Status Description": item["Status Description"],
     "ZFS Total": item["ZFS Quantity"] + item["ZFS Pending Shipment"],
-    "Recommended Stock": null,
     "Sellable PF Stock": item["Available Stock"],
-    "Average Daily Sales": null,
-    "Total Sales": null,
-    "Last Sale Date": null,
     "Status Cluster": item["Status Cluster"]
   }));
 };
 
-const transformStockRecommendations = (data: ArticleRecommendation[]) => {
+const transformStockRecommendations = (data: ArticleRecommendation[]): Record<string, any>[] => {
   return data.map(item => ({
     "EAN": item.ean,
     "Partner Variant Size": item.partnerVariantSize,
     "Article Name": item.articleName,
     "Status Description": item.statusDescription || 'N/A',
-    "ZFS Total": item.zfsTotal,
-    "Recommended Stock": item.recommendedStock,
-    "Sellable PF Stock": item.sellablePFStock,
-    "Average Daily Sales": Number(item.averageDailySales.toFixed(2)),
-    "Total Sales": item.totalSales,
-    "Last Sale Date": item.lastSaleDate,
+    "ZFS Total": item.zfsTotal || 0,
+    "Recommended Stock": item.recommendedStock || 0,
+    "Sellable PF Stock": item.sellablePFStock || 0,
+    "Avg. Daily Sales": Number(item.averageDailySales.toFixed(2)),
+    "Total Sales": item.totalSales || 0,
+    "Last Sale Date": item.lastSaleDate || 'N/A',
     "Status Cluster": item.statusCluster || 'N/A',
-    "Coverage Period (Days)": item.recommendedDays
+    "Coverage Days": item.recommendedDays || 0
   }));
 };
 
