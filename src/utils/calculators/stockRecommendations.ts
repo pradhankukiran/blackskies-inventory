@@ -122,28 +122,26 @@ function calculatePriceSensitivity(pricePoint: number): number {
 function calculateRecommendedStock(
   salesData: {
     totalSales: number;
-    timelineDays: number;
+    timelineDays: number,
     returnRate: number;
     pdpViews: number;
     conversionRate: number;
     category?: string;
     season?: string;
   }, 
-  coverageWeeks: number,
+  coverageDays: number,
   currentStock: number = 0,
   statusCluster: string = 'Live',
   pricePoint: number = 0
 ): number {
-  // Convert coverage weeks to days for calculations
-  const coverageDays = coverageWeeks * 7;
-  
   // Special case: If there are no sales but significant views, estimate potential demand
   if (salesData.totalSales === 0 && salesData.pdpViews >= 50) {
     // Use views as a proxy for interest, with estimated conversion
     const estimatedDemand = salesData.pdpViews * 0.02; // 2% estimated conversion
-    // Calculate weekly demand and apply coverage
-    const weeklyDemand = estimatedDemand * (7 / salesData.timelineDays);
-    return Math.ceil(weeklyDemand * coverageWeeks);
+    // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
+    const dailyDemand = safeDivide(estimatedDemand, salesData.timelineDays);
+    const returnRateMultiplier = 1 - (salesData.returnRate / 100);
+    return Math.max(1, Math.ceil(dailyDemand * coverageDays * returnRateMultiplier));
   }
   
   // If there are no sales and low views, keep minimal stock but scale with coverage period
@@ -151,83 +149,23 @@ function calculateRecommendedStock(
     if (statusCluster === 'Discontinued' || statusCluster === 'discontinued') {
       return 0; // No stock for discontinued items with no interest
     }
-    return Math.max(1, coverageWeeks); // Minimum stock based on coverage weeks
+    return 1; // Minimum stock for items with no sales
   }
 
-  // Calculate daily sales rate using safe division to avoid division by zero
-  const dailySales = safeDivide(salesData.totalSales, Math.max(salesData.timelineDays, 1));
-  const weeklySales = dailySales * 7;
+  // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
+  const dailySales = safeDivide(salesData.totalSales, salesData.timelineDays);
+  const returnRateMultiplier = 1 - (salesData.returnRate / 100);
+  let recommendedStock = Math.ceil(dailySales * coverageDays * returnRateMultiplier);
 
-  // Calculate base recommended stock using weekly sales and coverage weeks
-  const baseStock = weeklySales * coverageWeeks;
-  
-  // Apply weighted return rate for low sales volume items
-  // This reduces the impact of extreme return rates when sample size is small
-  const weightedReturnRate = salesData.totalSales < 5 
-    ? salesData.returnRate * (salesData.totalSales / 5) 
-    : salesData.returnRate;
-  
-  // Add safety stock based on return rate - IMPROVED: Use logarithmic scaling 
-  // to prevent overwhelming the coverage days effect
-  const returnRateMultiplier = 1 + (Math.log(1 + weightedReturnRate) / Math.log(100));
-
-  // Add safety stock based on conversion rate - IMPROVED: Reduce impact
-  const conversionRateAdjustment = Math.min(salesData.conversionRate / 200, 0.05); // Reduced from 0.1 to 0.05 max
-  
-  // IMPROVED: Log intermediate calculation steps for debugging
-  const afterBaseStock = baseStock;
-  const afterReturnRate = baseStock * returnRateMultiplier;
-  const afterConversion = baseStock * returnRateMultiplier * (1 + conversionRateAdjustment);
-  
-  // Calculate initial recommended stock with more balanced multipliers
-  let recommendedStock = afterConversion;
-  
   // Apply status-based adjustments with reduced impact
   if (statusCluster === 'New' || statusCluster === 'new') {
-    // IMPROVED: Reduce multiplier from 1.5 to 1.3 to let coverage days have more impact
-    recommendedStock *= 1.3;
+    recommendedStock = Math.ceil(recommendedStock * 1.2); // 20% buffer for new items
   } else if (statusCluster === 'Discontinued' || statusCluster === 'discontinued') {
-    // For discontinued items, reduce to minimum stock or less
-    return Math.min(Math.ceil(coverageDays / 14), currentStock); // Scale with coverage days
+    return 0; // No stock for discontinued items
   }
   
-  // IMPROVED: Apply price sensitivity factor with reduced impact
-  const priceSensitivity = calculatePriceSensitivity(pricePoint);
-  // Use square root to dampen the effect (more balanced)
-  recommendedStock *= Math.sqrt(priceSensitivity);
-  
-  // Apply seasonal adjustments if available with reduced impact
-  if (salesData.season) {
-    const currentSeason = getCurrentSeason();
-    if (salesData.season.toLowerCase().includes(currentSeason.toLowerCase())) {
-      // IMPROVED: Reduced multiplier from 1.3 to 1.15
-      recommendedStock *= 1.15;
-    } else if (isEndOfSeason(salesData.season)) {
-      // End-of-season products should be reduced
-      return Math.min(Math.ceil(recommendedStock), currentStock);
-    }
-  }
-  
-  // Round up to get whole number
-  const roundedRecommendedStock = Math.ceil(recommendedStock);
-  
-  // Calculate additional stock needed considering current inventory
-  const additionalStockNeeded = Math.max(0, roundedRecommendedStock - currentStock);
-  
-  // Consider fast-moving items (selling more than 1 per day)
-  const isFastMoving = dailySales > 1;
-  
-  // IMPROVED: For fast-moving items, ensure we don't fall below 75% of recommended level
-  // instead of 50%, to make coverage days have more impact
-  const finalRecommendation = isFastMoving 
-    ? Math.max(roundedRecommendedStock - Math.floor(currentStock * 0.25), 0)
-    : additionalStockNeeded;
-
-  // IMPROVED: Dynamic minimum based on coverage days
-  const dynamicMinimum = Math.max(1, Math.ceil(coverageDays / 14));
-  
-  // Ensure minimum stock level scales with coverage period
-  return Math.max(finalRecommendation, dynamicMinimum);
+  // Return the recommended stock, ensuring it's at least 1
+  return Math.max(1, recommendedStock);
 }
 
 /**
@@ -236,7 +174,7 @@ function calculateRecommendedStock(
 export function calculateStockRecommendations(
   salesData: ExtendedZFSSaleEntry[],
   stockData: IntegratedStockData[],
-  coverageWeeks: number = 1,  // Coverage period in weeks
+  coverageDays: number = 7,  // Coverage period in days
   timeline: 'none' | '30days' | '6months' = '30days'  // Sales timeline selection
 ): ExtendedArticleRecommendation[] {
   // Get timeline days from selection
@@ -401,9 +339,8 @@ export function calculateStockRecommendations(
         conversionRate: salesData.conversionRate,
         category: salesData.category,
         season: salesData.season,
-        timelineDays 
       }, 
-      coverageWeeks,
+      coverageDays,
       currentStock,
       statusCluster,
       pricePoint
@@ -467,7 +404,7 @@ export function calculateStockRecommendations(
       ean: ean,
       articleName: stockItem["Product Name"] || salesData.articleName || 'Unknown Article',
       partnerVariantSize: stockItem.partner_variant_size || 'N/A',
-      recommendedDays: coverageWeeks * 7,
+      recommendedDays: coverageDays,
       averageDailySales: safeNumber(safeDivide(salesData.totalSales, salesData.daysOnline)),
       recommendedStock: finalRecommendedStock,
       totalSales: salesData.totalSales,
