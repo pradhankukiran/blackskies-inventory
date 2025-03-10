@@ -8,21 +8,43 @@ import { useFileProcessing } from "@/hooks/useFileProcessing";
 import { Tabs } from "./ui/tabs";
 import { RotateCcw } from "lucide-react";
 import { LoadingOverlay } from "./ui/loading-overlay";
+import { TimelineType } from "@/types/common";
 
-const IntegratedStockParser: React.FC = () => {
+// Custom hook to handle scrolling logic
+function useScrollToResults() {
   const tabsRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
+
+  useEffect(() => {
+    if (!shouldScroll || !tabsRef.current) return;
+    
+    setTimeout(() => {
+      tabsRef.current?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start'
+      });
+      setShouldScroll(false);
+    }, 100);
+  }, [shouldScroll]);
+
+  return { tabsRef, setShouldScroll };
+}
+
+const IntegratedStockParser: React.FC = () => {
+  const { tabsRef, setShouldScroll } = useScrollToResults();
 
   const {
     files,
     parsedData,
     recommendations,
+    timeline,
     error,
     isProcessing,
     processingStatus,
     handleFileChange,
     handleRemoveFile,
     processFiles,
+    setTimeline,
     resetFiles,
     clearTables,
     resetAll,
@@ -32,19 +54,7 @@ const IntegratedStockParser: React.FC = () => {
     if (isProcessing) {
       setShouldScroll(true);
     }
-  }, [isProcessing]);
-
-  useEffect(() => {
-    if (!isProcessing && shouldScroll && tabsRef.current) {
-      setTimeout(() => {
-        tabsRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'start'
-        });
-        setShouldScroll(false);
-      }, 100);
-    }
-  }, [isProcessing, shouldScroll]);
+  }, [isProcessing, setShouldScroll]);
 
   const tabs = [
     {
@@ -72,7 +82,7 @@ const IntegratedStockParser: React.FC = () => {
   const showTabs =
     parsedData.integrated.length > 0 || recommendations.length > 0;
 
-  return (
+  return ( 
     <>
       <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
       <div className="container mx-auto px-4 py-8">
@@ -94,6 +104,8 @@ const IntegratedStockParser: React.FC = () => {
                 files={files}
                 onFileChange={handleFileChange}
                 onFileRemove={handleRemoveFile}
+                timeline={timeline}
+                onTimelineChange={setTimeline}
               />
 
               <div className="flex justify-between">
@@ -115,8 +127,14 @@ const IntegratedStockParser: React.FC = () => {
                   )}
                 </div>
                 <button
-                  onClick={processFiles}
-                  disabled={isProcessing}
+                  onClick={() => {
+                    if (files.zfsSales && timeline === 'none') {
+                      setError('Please select a timeline for the sales file');
+                      return;
+                    }
+                    processFiles(timeline);
+                  }}
+                  disabled={isProcessing || (files.zfsSales && timeline === 'none')}
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Process Files
@@ -130,8 +148,8 @@ const IntegratedStockParser: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </>
-  );
-};
-
-export default IntegratedStockParser
+    </> 
+  ); 
+}
+ 
+export default IntegratedStockParser;

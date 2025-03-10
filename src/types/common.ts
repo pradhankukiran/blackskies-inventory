@@ -1,0 +1,1 @@
+export type TimelineType = 'none' | '30days' | '6months';

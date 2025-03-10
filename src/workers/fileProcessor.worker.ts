@@ -16,7 +16,7 @@ const withDelay = async (message: string, operation: () => Promise<any> | any) =
 
 self.onmessage = async (e) => {
   try {
-    const { files } = e.data;
+    const { files, timeline } = e.data;
     
     // Process files
     const internal = await withDelay(
@@ -70,7 +70,7 @@ self.onmessage = async (e) => {
     const stockRecommendations = await withDelay(
       'Calculating stock recommendations',
       () => processedSales.length > 0
-        ? calculateStockRecommendations(processedSales, integrated)
+        ? calculateStockRecommendations(processedSales, integrated, 1, timeline)
         : []
     );
 

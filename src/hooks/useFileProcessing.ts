@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ParsedData, FileState } from '@/types/stock';
 import { CategoryRecommendation } from '@/types/sales';
+import { TimelineType } from '@/types/common';
 import { 
   storeFiles, 
   getFiles, 
@@ -35,6 +36,7 @@ export function useFileProcessing() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [timeline, setTimeline] = useState<TimelineType>('none');
   const [worker, setWorker] = useState<Worker | null>(null);
 
   // Load data from localStorage on mount
@@ -137,7 +139,7 @@ export function useFileProcessing() {
     }
   };
 
-  const processFiles = async () => {
+  const processFiles = async (timeline: TimelineType) => {
     if (!worker) {
       setError('Worker not initialized');
       return;
@@ -147,7 +149,7 @@ export function useFileProcessing() {
       setIsProcessing(true);
       setError(null);
       setProcessingStatus('Initializing...');
-      worker.postMessage({ files });
+      worker.postMessage({ files, timeline });
       await storeFiles(files);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred while processing files");
@@ -195,12 +197,14 @@ export function useFileProcessing() {
     files,
     parsedData,
     recommendations,
+    timeline,
     error,
     isProcessing,
     processingStatus,
     handleFileChange,
     handleRemoveFile,
     processFiles,
+    setTimeline,
     resetFiles,
     clearTables,
     resetAll,

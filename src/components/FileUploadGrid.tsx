@@ -1,5 +1,6 @@
 import React from "react";
 import { FileUploadSection } from "./FileUploadSection";
+import { TimelineSelector } from "./TimelineSelector";
 import { FileState } from "@/types/stock";
 
 interface FileUploadGridProps {
@@ -9,12 +10,16 @@ interface FileUploadGridProps {
     type: keyof FileState
   ) => void;
   onFileRemove: (fileName: string, type: keyof FileState) => void;
+  timeline: 'none' | '30days' | '6months';
+  onTimelineChange: (value: 'none' | '30days' | '6months') => void;
 }
 
 export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
   files,
   onFileChange,
   onFileRemove,
+  timeline,
+  onTimelineChange,
 }) => {
   return (
     <>
@@ -62,6 +67,12 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           onChange={(e) => onFileChange(e, "zfsSales")}
           onRemove={(name) => onFileRemove(name, "zfsSales")}
           files={files.zfsSales ? [files.zfsSales] : []}
+          additionalControls={
+            <TimelineSelector
+              value={timeline}
+              onChange={onTimelineChange}
+            />
+          }
         />
       </div>
     </>

@@ -7,6 +7,7 @@ interface FileUploadSectionProps {
   onRemove: (fileName: string) => void;
   files?: File[];
   multiple?: boolean;
+  additionalControls?: React.ReactNode;
 }
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
@@ -15,6 +16,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   onRemove,
   files = [],
   multiple = false,
+  additionalControls,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -73,7 +75,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-4 border-b border-gray-200">
-        <h3 className="text-sm font-bold text-gray-900 text-center">{title}</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+          {additionalControls}
+        </div>
       </div>
       <div className="p-4">
         <div className="flex justify-center items-center w-full">
