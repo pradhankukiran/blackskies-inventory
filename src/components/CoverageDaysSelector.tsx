@@ -18,16 +18,13 @@ export function CoverageDaysSelector({ value, onChange }: CoverageDaysSelectorPr
         className="rounded-md border border-gray-300 py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
       >
         <option value={3}>3 Days (Minimum)</option>
-        <option value={7}>7 Days (One Week)</option>
-        <option value={14}>14 Days (Two Weeks)</option>
-        <option value={30}>30 Days (One Month)</option>
-        <option value={60}>60 Days (Two Months)</option>
-        <option value={90}>90 Days (Three Months)</option>
-        <option value={180}>180 Days (Six Months)</option>
+        <option value={7}>7 Days (1 Week)</option>
+        <option value={14}>14 Days (2 Weeks)</option>
+        <option value={30}>30 Days (1 Month)</option>
+        <option value={60}>60 Days (2 Months)</option>
+        <option value={90}>90 Days (3 Months)</option>
+        <option value={180}>180 Days (6 Months)</option>
       </select>
-      <span className="text-xs text-gray-500 ml-2">
-        Higher values = more buffer stock
-      </span>
     </div>
   );
 }
