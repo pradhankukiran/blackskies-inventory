@@ -8,7 +8,7 @@ import { IntegratedStockData } from "@/types/stock";
 const TIMELINE_DAYS = {
   'none': 0,
   '30days': 30,
-  '6months': 180
+  '6months': 180,
 } as const;
 
 // Extended interface to include Category
@@ -293,6 +293,10 @@ export function calculateStockRecommendations(
     const stockItem = stockByEAN.get(ean);
     if (!stockItem) return;
 
+    // Get timeline days from selection
+    const timelineDays = TIMELINE_DAYS[timeline];
+    if (timelineDays === 0) return;
+
     // Get total ZFS stock (current + pending)
     const zfsTotal = safeNumber(stockItem["ZFS Quantity"]) + safeNumber(stockItem["ZFS Pending Shipment"]);
     
@@ -313,7 +317,7 @@ export function calculateStockRecommendations(
     let recommendedStock = calculateRecommendedStock(
       { 
         totalSales: salesData.totalSales,
-        timelineDays,
+        timelineDays: timelineDays,
         returnRate: salesData.returnRate,
         pdpViews: salesData.pdpViews,
         conversionRate: salesData.conversionRate,
@@ -385,7 +389,7 @@ export function calculateStockRecommendations(
       articleName: stockItem["Product Name"] || salesData.articleName || 'Unknown Article',
       partnerVariantSize: stockItem.partner_variant_size || 'N/A',
       recommendedDays: coverageDays,
-      averageDailySales: safeNumber(safeDivide(salesData.totalSales, salesData.daysOnline)),
+      averageDailySales: safeNumber(safeDivide(salesData.totalSales, timelineDays)),
       recommendedStock: finalRecommendedStock,
       totalSales: salesData.totalSales,
       lastSaleDate: salesData.lastDate,
