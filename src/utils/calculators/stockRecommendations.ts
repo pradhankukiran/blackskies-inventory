@@ -144,6 +144,11 @@ function calculateRecommendedStock(
   const returnRateMultiplier = 1 - (salesData.returnRate / 100);
   let recommendedStock = Math.round(dailySales * coverageDays * returnRateMultiplier);
   
+  // Apply multiplier for high-selling items
+  if (salesData.totalSales > 5) {
+    recommendedStock = Math.round(recommendedStock * 1.2);
+  }
+  
   return recommendedStock;
 }
 
@@ -305,7 +310,7 @@ export function calculateStockRecommendations(
     const statusCluster = stockItem["Status Cluster"] || 'Live';
     
     // Calculate recommended stock considering current inventory, status, and price
-    const recommendedStock = calculateRecommendedStock(
+    let recommendedStock = calculateRecommendedStock(
       { 
         totalSales: salesData.totalSales,
         timelineDays,
@@ -320,8 +325,9 @@ export function calculateStockRecommendations(
       statusCluster,
       pricePoint
     );
-    
-    const finalRecommendedStock = recommendedStock;
+
+    // Calculate final recommended stock by subtracting current ZFS stock
+    const finalRecommendedStock = Math.max(0, recommendedStock - zfsTotal);
     
     // Calculate country-specific stock allocations based on sales distribution
     const countryAllocations: Record<string, number> = {};
