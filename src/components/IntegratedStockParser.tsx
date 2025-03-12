@@ -48,6 +48,7 @@ const IntegratedStockParser: React.FC = () => {
     resetFiles,
     clearTables,
     resetAll,
+    setError,
   } = useFileProcessing();
 
   useEffect(() => {
@@ -74,6 +75,7 @@ const IntegratedStockParser: React.FC = () => {
             recommendations={recommendations}
             stockData={parsedData.integrated}
             parsedData={parsedData}
+            timeline={timeline}
           />
         ) : null,
     },

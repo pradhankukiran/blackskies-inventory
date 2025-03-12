@@ -8,6 +8,7 @@ import { IntegratedStockData, ParsedData } from '@/types/stock';
 import { Search, X } from 'lucide-react';
 import { CoverageDaysSelector } from './CoverageDaysSelector';
 import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
+import { TimelineType } from '@/types/common';
 
 // Helper function to create a focused copy of recommendations with only essential properties
 // This reduces memory usage compared to deep cloning the entire objects
@@ -25,12 +26,18 @@ interface RecommendationsTableProps {
   recommendations: ArticleRecommendation[];
   stockData: IntegratedStockData[];
   parsedData: ParsedData;
+  timeline: TimelineType;
   onCoverageDaysChange?: (days: number) => void;
 }
 
 const ITEMS_PER_PAGE = 25;
 
-export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ recommendations, stockData, parsedData }) => {
+export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ 
+  recommendations, 
+  stockData, 
+  parsedData,
+  timeline 
+}) => {
   const [coverageDays, setCoverageDays] = useState(7);
   const [recalculatedRecommendations, setRecalculatedRecommendations] = useState<ArticleRecommendation[]>([]);
   const [searchEan, setSearchEan] = useState('');
@@ -52,11 +59,12 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
       // Ensure days is a number and positive
       const coverageDaysNum = Math.max(Number(days), 1);
       
-      // Calculate new recommendations
+      // Calculate new recommendations - using the explicitly provided timeline
       const newRecommendations = calculateStockRecommendations(
         parsedData.zfsSales,
         stockData,
-        coverageDaysNum
+        coverageDaysNum,
+        timeline // Use the timeline prop directly
       );
       
       // Use our optimized copy function to minimize the impact of state updates
@@ -67,7 +75,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
     } catch (error) {
       console.error('Error recalculating recommendations:', error);
     }
-  }, [parsedData.zfsSales, stockData]);
+  }, [parsedData.zfsSales, stockData, timeline]); // Add timeline as dependency
 
   // Initialize recommendations when component mounts or when base data changes
   useEffect(() => {
@@ -105,6 +113,9 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
         <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
         <div className="text-sm text-gray-700">
           {recalculatedRecommendations.length} items with {coverageDays} days coverage
+          <span className="ml-2 text-green-600 font-medium">
+            ({timeline === '30days' ? '30 days' : '6 months'} timeline)
+          </span>
         </div>
         <ExportButton 
           data={recalculatedRecommendations} 

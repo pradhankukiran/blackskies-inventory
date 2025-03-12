@@ -208,5 +208,6 @@ export function useFileProcessing() {
     resetFiles,
     clearTables,
     resetAll,
+    setError,
   };
 }
