@@ -28,7 +28,7 @@ const transformStockRecommendations = (data: ArticleRecommendation[]): Record<st
     "Sellable PF Stock": item.sellablePFStock || 0,
     "Avg. Daily Sales": Number(item.averageDailySales.toFixed(2)),
     "Total Sales": item.totalSales || 0,
-    "Last Sale Date": item.lastSaleDate || 'N/A',
+    "Avg. Return Rate (%)": Number(item.averageReturnRate.toFixed(2)),
     "Status Cluster": item.statusCluster || 'N/A',
     "Coverage Days": item.recommendedDays || 0
   }));

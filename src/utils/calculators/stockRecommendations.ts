@@ -229,11 +229,11 @@ export function calculateStockRecommendations(
       existing.totalSales += soldArticles;
       // For daysOnline, use the maximum as we want coverage that works across all markets
       existing.daysOnline = Math.max(existing.daysOnline, daysOnline);
-      // For return rate, use weighted average based on sales volume
-      const totalSalesNow = existing.totalSales + soldArticles;
-      existing.returnRate = totalSalesNow > 0 ? 
-        ((existing.returnRate * existing.totalSales) + (returnRate * soldArticles)) / totalSalesNow : 
-        Math.max(existing.returnRate, returnRate);
+      // Calculate weighted return rate
+      const totalSalesNow = existing.totalSales;
+      if (soldArticles > 0) {
+        existing.returnRate = ((existing.returnRate * (totalSalesNow - soldArticles)) + (returnRate * soldArticles)) / totalSalesNow;
+      }
       // Aggregate PDP views across all countries
       existing.pdpViews += pdpViews;
       // For conversion, use weighted average based on views
@@ -392,7 +392,7 @@ export function calculateStockRecommendations(
       averageDailySales: safeNumber(safeDivide(salesData.totalSales, timelineDays)),
       recommendedStock: finalRecommendedStock,
       totalSales: salesData.totalSales,
-      lastSaleDate: salesData.lastDate,
+      averageReturnRate: salesData.returnRate,
       firstSaleDate: salesData.firstDate,
       statusDescription: stockItem["Status Description"],
       zfsTotal,

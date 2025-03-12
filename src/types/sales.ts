@@ -20,7 +20,7 @@ export interface ArticleRecommendation {
   averageDailySales: number;
   recommendedStock: number;
   totalSales: number;
-  lastSaleDate: string;
+  averageReturnRate: number;
   firstSaleDate: string;
   statusDescription?: string;
   zfsTotal?: number;

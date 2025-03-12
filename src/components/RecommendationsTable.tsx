@@ -160,7 +160,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sellable PF Stock</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg. Daily Sales</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Sales</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Last Sale Date</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg. Return Rate (%)</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status Cluster</th>
               </tr>
             </thead>
@@ -186,7 +186,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({ reco
                     <td className="px-4 py-3 text-sm text-gray-900 text-right">{availableStock}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageDailySales)}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.totalSales || 0}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.lastSaleDate}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageReturnRate)}%</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Cluster"] || 'N/A'}</td>
                   </tr>
                 )})
