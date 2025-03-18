@@ -163,7 +163,7 @@ export function calculateStockRecommendations(
 ): ExtendedArticleRecommendation[] {
   // Get timeline days from selection
   const timelineDays = TIMELINE_DAYS[timeline];
-  if (timelineDays === 0) {
+  if (timelineDays === 0 || !stockData.length) {
     return [];
   }
   
@@ -288,21 +288,43 @@ export function calculateStockRecommendations(
     }
   });
 
-  // Calculate recommendations
-  salesByEAN.forEach((salesData, ean) => {
-    const stockItem = stockByEAN.get(ean);
-    if (!stockItem) return;
+  // Process all stock items, regardless of sales data
+  stockData.forEach((stockItem) => {
+    const salesData = salesByEAN.get(stockItem.EAN);
+    const zfsTotal = safeNumber(stockItem["ZFS Quantity"]) + safeNumber(stockItem["ZFS Pending Shipment"]);
+    const currentStock = safeNumber(stockItem["Available Stock"]);
+    
+    // If no sales data or zero sales, set default values
+    if (!salesData || salesData.totalSales === 0) {
+      recommendations.push({
+        articleId: stockItem.SKU,
+        ean: stockItem.EAN,
+        articleName: stockItem["Product Name"] || 'Unknown Article',
+        partnerVariantSize: stockItem.partner_variant_size || 'N/A',
+        recommendedDays: coverageDays,
+        averageDailySales: 0,
+        recommendedStock: zfsTotal === 0 ? 1 : 0, // Set to 1 if no ZFS stock
+        totalSales: 0,
+        averageReturnRate: 0,
+        firstSaleDate: '',
+        statusDescription: stockItem["Status Description"],
+        zfsTotal,
+        sellablePFStock: currentStock,
+        statusCluster: stockItem["Status Cluster"],
+        category: '',
+        markets: '',
+        countryAllocations: {},
+        pricePoint: 0,
+        season: ''
+      });
+      return;
+    }
 
     // Get timeline days from selection
     const timelineDays = TIMELINE_DAYS[timeline];
     if (timelineDays === 0) return;
 
     // Get total ZFS stock (current + pending)
-    const zfsTotal = safeNumber(stockItem["ZFS Quantity"]) + safeNumber(stockItem["ZFS Pending Shipment"]);
-    
-    // Get current available stock
-    const currentStock = safeNumber(stockItem["Available Stock"]);
-    
     // Track how many markets this product is sold in
     const marketCount = salesData.countries.size;
     
@@ -385,7 +407,7 @@ export function calculateStockRecommendations(
 
     recommendations.push({
       articleId: stockItem.SKU,
-      ean: ean,
+      ean: stockItem.EAN,
       articleName: stockItem["Product Name"] || salesData.articleName || 'Unknown Article',
       partnerVariantSize: stockItem.partner_variant_size || 'N/A',
       recommendedDays: coverageDays,
