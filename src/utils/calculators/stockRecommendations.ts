@@ -355,21 +355,26 @@ export function calculateStockRecommendations(
     // Calculate final recommended stock by subtracting current ZFS stock
     const finalRecommendedStock = Math.max(0, recommendedStock - zfsTotal);
     
+    // If ZFS stock is 0, recommended stock is 0, but we have sellable PF stock, set to 1
+    const adjustedRecommendedStock = zfsTotal === 0 && finalRecommendedStock === 0 && currentStock > 0 
+      ? 1 
+      : finalRecommendedStock;
+    
     // Calculate country-specific stock allocations based on sales distribution
     const countryAllocations: Record<string, number> = {};
     
-    if (finalRecommendedStock > 0 && salesData.countrySales.size > 0) {
+    if (adjustedRecommendedStock > 0 && salesData.countrySales.size > 0) {
       let totalCountrySales = 0;
       salesData.countrySales.forEach(data => totalCountrySales += data.totalSales);
       
       // Default allocation for countries with zero sales but listed product
-      const defaultAllocation = Math.max(1, Math.floor(finalRecommendedStock / salesData.countrySales.size));
+      const defaultAllocation = Math.max(1, Math.floor(adjustedRecommendedStock / salesData.countrySales.size));
       
       // Allocate based on sales proportion, with minimum of 1 unit per country
       salesData.countrySales.forEach((data, country) => {
         if (totalCountrySales > 0 && data.totalSales > 0) {
           countryAllocations[country] = Math.max(1, 
-            Math.round((data.totalSales / totalCountrySales) * finalRecommendedStock)
+            Math.round((data.totalSales / totalCountrySales) * adjustedRecommendedStock)
           );
         } else {
           countryAllocations[country] = defaultAllocation;
@@ -378,7 +383,7 @@ export function calculateStockRecommendations(
       
       // Ensure the total allocated stock matches the recommended stock
       let allocatedTotal = Object.values(countryAllocations).reduce((sum, val) => sum + val, 0);
-      const difference = finalRecommendedStock - allocatedTotal;
+      const difference = adjustedRecommendedStock - allocatedTotal;
       
       // Adjust for any rounding differences by adding/removing from highest sales countries
       if (difference !== 0) {
@@ -412,7 +417,7 @@ export function calculateStockRecommendations(
       partnerVariantSize: stockItem.partner_variant_size || 'N/A',
       recommendedDays: coverageDays,
       averageDailySales: safeNumber(safeDivide(salesData.totalSales, timelineDays)),
-      recommendedStock: finalRecommendedStock,
+      recommendedStock: adjustedRecommendedStock,
       totalSales: salesData.totalSales,
       averageReturnRate: salesData.returnRate,
       firstSaleDate: salesData.firstDate,
