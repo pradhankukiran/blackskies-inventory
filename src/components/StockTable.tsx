@@ -53,7 +53,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full flex flex-col">
       <div className="flex justify-end mb-4">
         <ExportButton
           data={dataWithTotal}
@@ -61,10 +61,10 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
           filename="stock-data"
         />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
+        <div className="overflow-auto flex-1">
           <table className="w-full border-collapse">
-            <thead>
+            <thead className="sticky top-0 bg-white z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   <div className="flex items-center space-x-2">
@@ -115,8 +115,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
             </tbody>
           </table>
         </div>
-
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
           <div className="text-sm text-gray-500">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}

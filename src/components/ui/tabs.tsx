@@ -14,14 +14,14 @@ export function Tabs({ tabs }: TabsProps) {
 
   return (
     <div>
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-gray-200 flex justify-center">
+        <nav className="-mb-px flex space-x-8 justify-center" aria-label="Tabs">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                "whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm",
                 activeTab === tab.id
                   ? "border-green-500 text-green-600"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -32,7 +32,7 @@ export function Tabs({ tabs }: TabsProps) {
           ))}
         </nav>
       </div>
-      <div className="mt-4">
+      <div className="mt-6 max-w-7xl mx-auto h-[calc(100vh-100px)] overflow-hidden">
         {tabs.find((tab) => tab.id === activeTab)?.content}
       </div>
     </div>

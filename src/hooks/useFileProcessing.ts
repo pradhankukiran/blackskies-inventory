@@ -20,6 +20,7 @@ export function useFileProcessing() {
     zfsShipmentsReceived: [],
     skuEanMapper: null,
     zfsSales: null,
+    storeType: 'zfs'
   });
 
   const [parsedData, setParsedData] = useState<ParsedData>({
@@ -111,15 +112,19 @@ export function useFileProcessing() {
   ) => {
     const newFiles = event.target.files;
     if (!newFiles) return;
+    
+    const storeType = type.startsWith('zfs') ? 'zfs' : 'fba';
 
     if (Array.isArray(files[type])) {
       setFiles((prev) => ({
         ...prev,
+        storeType,
         [type]: [...(prev[type] as File[]), ...Array.from(newFiles)],
       }));
     } else {
       setFiles((prev) => ({
         ...prev,
+        storeType,
         [type]: newFiles[0],
       }));
     }

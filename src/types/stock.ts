@@ -18,6 +18,7 @@ export interface FileState {
   zfsShipmentsReceived: File[];
   skuEanMapper: File | null;
   zfsSales: File | null;
+  storeType?: 'zfs' | 'fba';
 }
 
 export interface IntegratedStockData {
