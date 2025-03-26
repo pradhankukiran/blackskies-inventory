@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { FileUploadGrid } from "./FileUploadGrid";
+import { FileUploadSection } from "./FileUploadSection";
 import { StockTable } from "./StockTable";
 import { RecommendationsTable } from "./RecommendationsTable";
 import { useFileProcessing } from "@/hooks/useFileProcessing";
@@ -59,7 +60,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
       label: "Stock Recommendations",
       content:
         recommendations.length > 0 ? (
-          <RecommendationsTable 
+          <RecommendationsTable
             recommendations={recommendations}
             stockData={parsedData.integrated}
             parsedData={parsedData}
@@ -105,13 +106,13 @@ const ZFSContent: React.FC<TabContentProps> = ({
         </div>
         <button
           onClick={() => {
-            if (files.zfsSales && timeline === 'none') {
-              setError('Please select a timeline for the sales file');
+            if (files.zfsSales && timeline === "none") {
+              setError("Please select a timeline for the sales file");
               return;
             }
             processFiles(timeline);
           }}
-          disabled={isProcessing || (files.zfsSales && timeline === 'none')}
+          disabled={isProcessing || (files.zfsSales && timeline === "none")}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Process Files
@@ -126,9 +127,82 @@ const ZFSContent: React.FC<TabContentProps> = ({
 };
 
 const FBAContent: React.FC = () => {
+  const [files, setFiles] = useState({
+    fbaSales: null,
+    sellerboardExport: null,
+    sellerboardReturns: null,
+  });
+  const [timeline] = useState<TimelineType>("30days");
+
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    type: string
+  ) => {
+    const newFiles = event.target.files;
+    if (!newFiles) return;
+    setFiles((prev) => ({
+      ...prev,
+      [type]: newFiles[0],
+    }));
+  };
+
+  const handleRemoveFile = (fileName: string, type: string) => {
+    setFiles((prev) => ({
+      ...prev,
+      [type]: null,
+    }));
+  };
+
   return (
-    <div className="flex items-center justify-center h-64">
-      <p className="text-gray-500">FBA functionality coming soon...</p>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <FileUploadSection
+          title="Sellerboard Export"
+          onChange={(e) => handleFileChange(e, "sellerboardExport")}
+          onRemove={(name) => handleRemoveFile(name, "sellerboardExport")}
+          files={files.sellerboardExport ? [files.sellerboardExport] : []}
+        />
+        <FileUploadSection
+          title="Sellerboard Returns Export"
+          onChange={(e) => handleFileChange(e, "sellerboardReturns")}
+          onRemove={(name) => handleRemoveFile(name, "sellerboardReturns")}
+          files={files.sellerboardReturns ? [files.sellerboardReturns] : []}
+        />
+      </div>
+      <div className="flex justify-center">
+        <div className="w-full md:w-1/2">
+          <FileUploadSection
+            title="FBA Sales"
+            onChange={(e) => handleFileChange(e, "fbaSales")}
+            onRemove={(name) => handleRemoveFile(name, "fbaSales")}
+            files={files.fbaSales ? [files.fbaSales] : []}
+            additionalControls={
+              <div className="text-sm text-gray-500">30 Days Timeline</div>
+            }
+          />
+        </div>
+      </div>
+      <div className="flex justify-between">
+        <button
+          onClick={() =>
+            setFiles({
+              fbaSales: null,
+              sellerboardExport: null,
+              sellerboardReturns: null,
+            })
+          }
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Reset Files
+        </button>
+        <button
+          onClick={() => processFiles(timeline)}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
+          Process Files
+        </button>
+      </div>
     </div>
   );
 };
@@ -141,11 +215,11 @@ function useScrollToResults() {
 
   useEffect(() => {
     if (!shouldScroll || !tabsRef.current || !hasProcessed) return;
-    
+
     setTimeout(() => {
-      tabsRef.current?.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center'
+      tabsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
       });
       setShouldScroll(false);
     }, 300);
@@ -155,9 +229,9 @@ function useScrollToResults() {
 }
 
 const IntegratedStockParser: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'zfs' | 'fba'>('zfs');
+  const [activeTab, setActiveTab] = useState<"zfs" | "fba">("zfs");
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
-  
+
   const {
     files,
     parsedData,
@@ -188,30 +262,33 @@ const IntegratedStockParser: React.FC = () => {
     }
   }, [isProcessing, showTabs, setShouldScroll, setHasProcessed]);
 
-  return ( 
+  return (
     <>
       <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
       <div className="container mx-auto px-4 py-8">
         <Card>
           <CardHeader>
             <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8 justify-center" aria-label="Tabs">
+              <nav
+                className="-mb-px flex space-x-8 justify-center"
+                aria-label="Tabs"
+              >
                 <button
-                  onClick={() => setActiveTab('zfs')}
+                  onClick={() => setActiveTab("zfs")}
                   className={`whitespace-nowrap py-4 px-6 border-b-2 font-bold text-lg ${
-                    activeTab === 'zfs'
-                      ? 'border-green-500 text-green-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    activeTab === "zfs"
+                      ? "border-green-500 text-green-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
                 >
                   ZFS
                 </button>
                 <button
-                  onClick={() => setActiveTab('fba')}
+                  onClick={() => setActiveTab("fba")}
                   className={`whitespace-nowrap py-4 px-6 border-b-2 font-bold text-lg ${
-                    activeTab === 'fba'
-                      ? 'border-green-500 text-green-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    activeTab === "fba"
+                      ? "border-green-500 text-green-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
                 >
                   FBA
@@ -220,7 +297,7 @@ const IntegratedStockParser: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
-            {activeTab === 'zfs' ? (
+            {activeTab === "zfs" ? (
               <ZFSContent
                 files={files}
                 parsedData={parsedData}
@@ -244,8 +321,8 @@ const IntegratedStockParser: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </> 
-  ); 
-}
+    </>
+  );
+};
 
 export default IntegratedStockParser;
