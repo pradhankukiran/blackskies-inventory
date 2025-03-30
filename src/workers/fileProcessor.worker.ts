@@ -36,24 +36,25 @@ self.onmessage = async (e) => {
       files.zfs
     );
     
-    // Process multiple shipment files
-    const zfsShipments = [];
-    for (let i = 0; i < files.zfsShipments.length; i++) {
-      const data = await processFileWithProgress(
+    // Process multiple shipment files in parallel
+    self.postMessage({ type: 'status', message: 'Processing ZFS shipment files' });
+    const zfsShipmentsPromises = files.zfsShipments.map((file: File, i: number) => 
+      processFileWithProgress(
         `Processing ZFS shipment file ${i + 1}/${files.zfsShipments.length}`,
-        files.zfsShipments[i]
-      );
-      zfsShipments.push(data);
-    }
+        file
+      )
+    );
+    const zfsShipments = await Promise.all(zfsShipmentsPromises);
     
-    const zfsShipmentsReceived = [];
-    for (let i = 0; i < files.zfsShipmentsReceived.length; i++) {
-      const data = await processFileWithProgress(
+    // Process multiple received shipment files in parallel
+    self.postMessage({ type: 'status', message: 'Processing received shipment files' });
+    const zfsShipmentsReceivedPromises = files.zfsShipmentsReceived.map((file: File, i: number) => 
+      processFileWithProgress(
         `Processing received shipment file ${i + 1}/${files.zfsShipmentsReceived.length}`,
-        files.zfsShipmentsReceived[i]
-      );
-      zfsShipmentsReceived.push(data);
-    }
+        file
+      )
+    );
+    const zfsShipmentsReceived = await Promise.all(zfsShipmentsReceivedPromises);
     
     const skuEanMapper = await processFileWithProgress(
       'Loading SKU-EAN mapping data',

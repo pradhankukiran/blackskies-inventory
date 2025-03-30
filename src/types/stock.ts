@@ -1,4 +1,5 @@
-import { CategoryRecommendation } from './sales';
+import { ArticleRecommendation } from './sales';
+import { ProcessedSellerboardStock } from './processors';
 
 export interface ParsedData {
   internal: any[];
@@ -8,6 +9,7 @@ export interface ParsedData {
   skuEanMapper: any[];
   zfsSales: any[];
   integrated: IntegratedStockData[];
+  sellerboardStock: ProcessedSellerboardStock[];
 }
 
 export interface FileState {
@@ -18,6 +20,9 @@ export interface FileState {
   zfsShipmentsReceived: File[];
   skuEanMapper: File | null;
   zfsSales: File | null;
+  sellerboardExport: File | null;
+  sellerboardReturns: File | null;
+  fbaSales: File | null;
   storeType?: 'zfs' | 'fba';
 }
 

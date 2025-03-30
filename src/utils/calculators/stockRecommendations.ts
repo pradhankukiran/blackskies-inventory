@@ -158,7 +158,7 @@ function calculateRecommendedStock(
 export function calculateStockRecommendations(
   salesData: ExtendedZFSSaleEntry[],
   stockData: IntegratedStockData[],
-  coverageDays: number = 7,  // Coverage period in days
+  coverageDays: number = 14,  // Coverage period in days
   timeline: 'none' | '30days' | '6months' = '30days'  // Sales timeline selection
 ): ExtendedArticleRecommendation[] {
   // Get timeline days from selection

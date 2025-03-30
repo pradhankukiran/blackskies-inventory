@@ -47,7 +47,7 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           multiple
         />
         <FileUploadSection
-          title="ZFS Received Shipment"
+          title="ZFS Shipment Received"
           onChange={(e) => onFileChange(e, "zfsShipmentsReceived")}
           onRemove={(name) => onFileRemove(name, "zfsShipmentsReceived")}
           files={files.zfsShipmentsReceived}

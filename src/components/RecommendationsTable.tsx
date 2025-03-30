@@ -9,6 +9,7 @@ import { Search, X } from 'lucide-react';
 import { CoverageDaysSelector } from './CoverageDaysSelector';
 import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
 import { TimelineType } from '@/types/common';
+import { getStoredData, storeData } from '@/lib/indexedDB';
 
 // Helper function to create a focused copy of recommendations with only essential properties
 // This reduces memory usage compared to deep cloning the entire objects
@@ -38,7 +39,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
   parsedData,
   timeline 
 }) => {
-  const [coverageDays, setCoverageDays] = useState(7);
+  const [coverageDays, setCoverageDays] = useState(14);
   const [recalculatedRecommendations, setRecalculatedRecommendations] = useState<ArticleRecommendation[]>([]);
   const [searchEan, setSearchEan] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -48,6 +49,22 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     new Map(stockData.map(item => [item.EAN, item])),
     [stockData]
   );
+
+  // Load coverage days from IndexedDB when component mounts
+  useEffect(() => {
+    const loadCoverageDays = async () => {
+      try {
+        const savedData = await getStoredData('zfs');
+        if (savedData?.coverageDays) {
+          setCoverageDays(savedData.coverageDays);
+        }
+      } catch (err) {
+        console.error("Error loading coverage days:", err);
+      }
+    };
+    
+    loadCoverageDays();
+  }, []);
 
   // Optimized recalculation function that updates without animations or unnecessary re-renders
   const recalculateRecommendations = useCallback((days: number) => {
@@ -99,10 +116,39 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     ITEMS_PER_PAGE
   );
 
-  // Efficient coverage days change handler - simply updates state and triggers recalculation
-  const handleCoverageDaysChange = (days: number) => {
+  // Efficient coverage days change handler - save to IndexedDB
+  const handleCoverageDaysChange = async (days: number) => {
     setCoverageDays(days);
     recalculateRecommendations(days);
+    
+    // Save the coverage days to IndexedDB
+    try {
+      const savedData = await getStoredData('zfs');
+      if (savedData) {
+        await storeData({
+          ...savedData,
+          coverageDays: days
+        }, 'zfs');
+      } else {
+        // If no data exists yet, create a minimal structure
+        await storeData({
+          parsedData: {
+            internal: [],
+            zfs: [],
+            zfsShipments: [],
+            zfsShipmentsReceived: [],
+            skuEanMapper: [],
+            zfsSales: [],
+            integrated: [],
+            sellerboardStock: []
+          },
+          recommendations: [],
+          coverageDays: days
+        }, 'zfs');
+      }
+    } catch (err) {
+      console.error("Error saving coverage days:", err);
+    }
   };
 
   if (!recommendations.length) return null;
@@ -119,7 +165,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
         </div>
         <ExportButton 
           data={recalculatedRecommendations} 
-          label="Export Stock Recommendations"
+          label="Export ZFS Stock Recommendation"
           filename="stock-recommendations"
         />
       </div>

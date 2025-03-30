@@ -8,6 +8,7 @@ interface FileUploadSectionProps {
   files?: File[];
   multiple?: boolean;
   additionalControls?: React.ReactNode;
+  acceptedFileTypes?: string;
 }
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
@@ -17,6 +18,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   files = [],
   multiple = false,
   additionalControls,
+  acceptedFileTypes = ".csv,.tsv,.txt",
 }) => {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -72,6 +74,12 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     onChange(syntheticEvent);
   };
 
+  // Get file extensions for display
+  const fileExtensions = acceptedFileTypes
+    .split(',')
+    .map(ext => ext.replace('.', '').toUpperCase())
+    .join(', ');
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-4 border-b border-gray-200">
@@ -104,12 +112,12 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                 and drop
               </p>
               <p className="text-xs text-gray-500">
-                CSV, TSV, or TXT files {multiple ? "(multiple allowed)" : ""}
+                {fileExtensions} files {multiple ? "(multiple allowed)" : ""}
               </p>
             </div>
             <input
               type="file"
-              accept=".csv,.tsv,.txt"
+              accept={acceptedFileTypes}
               onChange={onChange}
               multiple={multiple}
               className="hidden"

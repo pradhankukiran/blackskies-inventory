@@ -7,10 +7,30 @@ interface TabsProps {
     label: string;
     content: React.ReactNode;
   }[];
+  id?: string; // Optional unique identifier for this tabs component
 }
 
-export function Tabs({ tabs }: TabsProps) {
-  const [activeTab, setActiveTab] = React.useState(tabs[0]?.id);
+export function Tabs({ tabs, id = "default-tabs" }: TabsProps) {
+  const storageKey = `activeTab-${id}`;
+  
+  // Initialize state from localStorage or use the first tab
+  const [activeTab, setActiveTab] = React.useState(() => {
+    if (tabs.length === 0) return "";
+    
+    const savedTab = localStorage.getItem(storageKey);
+    // Check if the saved tab still exists in the current tabs
+    if (savedTab && tabs.some(tab => tab.id === savedTab)) {
+      return savedTab;
+    }
+    return tabs[0]?.id;
+  });
+  
+  // Save the active tab to localStorage whenever it changes
+  React.useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem(storageKey, activeTab);
+    }
+  }, [activeTab, storageKey]);
 
   return (
     <div>

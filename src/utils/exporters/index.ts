@@ -1,5 +1,6 @@
 import { IntegratedStockData } from "@/types/stock";
 import { ArticleRecommendation } from "@/types/sales";
+import { ProcessedSellerboardStock } from "@/types/processors";
 import { ExportFormat, ExportOptions } from "./types";
 import { exportToCSV } from "./csvExporter";
 import { exportToTSV } from "./tsvExporter";
@@ -17,36 +18,63 @@ const transformStockOverview = (data: IntegratedStockData[]): Record<string, any
   }));
 };
 
+const transformFBAStockOverview = (data: ProcessedSellerboardStock[]): Record<string, any>[] => {
+  return data.map(item => ({
+    "SKU": item.SKU,
+    "ASIN": item.ASIN,
+    "Product Name": item["Product Name"],
+    "FBA Quantity": item["FBA Quantity"],
+    "Internal Stock": item["Internal Stock"],
+    "Units In Transit": item["Units In Transit"],
+    "Reserved Units": item["Reserved Units"],
+    "Total Stock": item["FBA Quantity"] + item["Reserved Units"],
+    "Restock Level": item["Restock Level"],
+    "Regular Price": item["Regular Price"],
+    "Buy Box Price": item["Buy Box Price"],
+    "Fulfillment Fee": item["Fulfillment Fee"],
+    "Shipping Type": item["Shipping Type"],
+    "Weight": item.Weight,
+    "Dimensions": item.Dimensions
+  }));
+};
+
 const transformStockRecommendations = (data: ArticleRecommendation[]): Record<string, any>[] => {
   return data.map(item => ({
     "EAN": item.ean,
-    "Partner Variant Size": item.partnerVariantSize,
+    "Partner Variant Size": item.partnerVariantSize || 'N/A',
     "Article Name": item.articleName,
     "Status Description": item.statusDescription || 'N/A',
     "ZFS Total": item.zfsTotal || 0,
     "Recommended Stock": item.recommendedStock || 0,
     "Sellable PF Stock": item.sellablePFStock || 0,
-    "Avg. Daily Sales": Number(item.averageDailySales.toFixed(2)),
+    "Avg. Daily Sales": Number(item.averageDailySales?.toFixed(2) || 0),
     "Total Sales": item.totalSales || 0,
-    "Avg. Return Rate (%)": Number(item.averageReturnRate.toFixed(2)),
+    "Avg. Return Rate (%)": Number(item.averageReturnRate?.toFixed(2) || 0),
     "Status Cluster": item.statusCluster || 'N/A',
     "Coverage Days": item.recommendedDays || 0
   }));
 };
 
+type ExportDataType = IntegratedStockData[] | ArticleRecommendation[] | ProcessedSellerboardStock[];
+
 export const exportData = (
-  data: IntegratedStockData[] | ArticleRecommendation[],
+  data: ExportDataType,
   format: ExportFormat,
   options: ExportOptions
-) => {
+): void => {
   const filename = options.timestamp
     ? `${options.filename}-${new Date().toISOString().split("T")[0]}`
     : options.filename;
-
-  // Determine the type of data and transform accordingly
-  const transformedData = options.filename.includes('recommendations')
-    ? transformStockRecommendations(data as ArticleRecommendation[])
-    : transformStockOverview(data as IntegratedStockData[]);
+    
+  let transformedData: Record<string, any>[];
+  
+  if (options.filename.includes('recommendations')) {
+    transformedData = transformStockRecommendations(data as ArticleRecommendation[]);
+  } else if (options.filename.includes('fba')) {
+    transformedData = transformFBAStockOverview(data as ProcessedSellerboardStock[]);
+  } else {
+    transformedData = transformStockOverview(data as IntegratedStockData[]);
+  }
 
   switch (format) {
     case "csv":
@@ -58,5 +86,7 @@ export const exportData = (
     case "xlsx":
       exportToXLSX(transformedData, filename);
       break;
+    default:
+      throw new Error("Unsupported export format");
   }
 };

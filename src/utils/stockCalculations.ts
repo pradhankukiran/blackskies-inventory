@@ -5,14 +5,14 @@ export const calculateZFSPendingShipments = (
   const shipmentsByEAN = new Map();
   zfsShipments.forEach((shipment) => {
     const ean = shipment.EAN;
-    const quantity = parseInt(shipment.Quantity) || 0;
+    const quantity = +shipment.Quantity || 0;
     shipmentsByEAN.set(ean, (shipmentsByEAN.get(ean) || 0) + quantity);
   });
 
   const receivedByEAN = new Map();
   zfsShipmentsReceived.forEach((received) => {
     const ean = received.EAN;
-    const quantity = parseInt(received.Quantity) || 0;
+    const quantity = +received.Quantity || 0;
     receivedByEAN.set(ean, (receivedByEAN.get(ean) || 0) + quantity);
   });
 

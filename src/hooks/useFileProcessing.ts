@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ParsedData, FileState } from '@/types/stock';
-import { CategoryRecommendation } from '@/types/sales';
+import { ArticleRecommendation } from '@/types/sales';
 import { TimelineType } from '@/types/common';
 import { 
   storeFiles, 
@@ -20,6 +20,9 @@ export function useFileProcessing() {
     zfsShipmentsReceived: [],
     skuEanMapper: null,
     zfsSales: null,
+    sellerboardExport: null,
+    sellerboardReturns: null,
+    fbaSales: null,
     storeType: 'zfs'
   });
 
@@ -31,22 +34,74 @@ export function useFileProcessing() {
     skuEanMapper: [],
     zfsSales: [],
     integrated: [],
+    sellerboardStock: []
   });
 
-  const [recommendations, setRecommendations] = useState<CategoryRecommendation[]>([]);
+  const [recommendations, setRecommendations] = useState<ArticleRecommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
-  const [timeline, setTimeline] = useState<TimelineType>('none');
+  // Initialize timeline from localStorage if available
+  const [timeline, setTimeline] = useState<TimelineType>(() => {
+    const savedTimeline = localStorage.getItem('zfsTimeline');
+    return (savedTimeline as TimelineType) || 'none';
+  });
   const [worker, setWorker] = useState<Worker | null>(null);
 
-  // Load data from localStorage on mount
+  // Wrap the setTimeline function to save to IndexedDB
+  const handleTimelineChange = async (newTimeline: TimelineType) => {
+    setTimeline(newTimeline);
+    
+    // Save the timeline to localStorage for persistence across tab changes
+    localStorage.setItem('zfsTimeline', newTimeline);
+    
+    // Save the updated timeline to IndexedDB
+    try {
+      const savedData = await getStoredData('zfs');
+      if (savedData) {
+        await storeData({
+          ...savedData,
+          timeline: newTimeline
+        }, 'zfs');
+      } else {
+        // If no data exists yet, create a minimal structure with just the timeline
+        await storeData({
+          parsedData: {
+            internal: [],
+            zfs: [],
+            zfsShipments: [],
+            zfsShipmentsReceived: [],
+            skuEanMapper: [],
+            zfsSales: [],
+            integrated: [],
+            sellerboardStock: []
+          },
+          recommendations: [],
+          timeline: newTimeline,
+          coverageDays: 14 // Default coverage days
+        }, 'zfs');
+      }
+    } catch (err) {
+      console.error("Error saving timeline:", err);
+    }
+  };
+
+  // Load data from IndexedDB on mount
   useEffect(() => {
     const loadSavedData = async () => {
-      const savedData = await getStoredData();
-      if (savedData?.parsedData && savedData?.recommendations) {
-        setParsedData(savedData.parsedData);
-        setRecommendations(savedData.recommendations);
+      const savedData = await getStoredData('zfs');
+      if (savedData) {
+        // Load parsedData and recommendations if they exist
+        if (savedData.parsedData) {
+          setParsedData(savedData.parsedData);
+        }
+        if (savedData.recommendations) {
+          setRecommendations(savedData.recommendations);
+        }
+        // Always load timeline if available, regardless of table data
+        if (savedData.timeline) {
+          setTimeline(savedData.timeline);
+        }
       }
     };
     loadSavedData();
@@ -54,7 +109,7 @@ export function useFileProcessing() {
 
   useEffect(() => {
     const loadSavedFiles = async () => {
-      const savedFiles = await getFiles();
+      const savedFiles = await getFiles('zfs');
       if (savedFiles) {
         setFiles(savedFiles);
       }
@@ -84,9 +139,14 @@ export function useFileProcessing() {
             skuEanMapper: data.skuEanMapper,
             zfsSales: data.zfsSales,
             integrated: data.integrated,
+            sellerboardStock: data.sellerboardStock || []
           });
           try {
-            await storeData({ parsedData: data, recommendations: data.recommendations });
+            await storeData({ 
+              parsedData: data, 
+              recommendations: data.recommendations,
+              timeline: timeline 
+            }, 'zfs');
           } catch (error) {
             // Silently handle storage errors
           }
@@ -154,6 +214,8 @@ export function useFileProcessing() {
       setIsProcessing(true);
       setError(null);
       setProcessingStatus('Initializing...');
+      // Use the current timeline value from state and also update it
+      handleTimelineChange(timeline);
       worker.postMessage({ files, timeline });
       await storeFiles(files);
     } catch (err) {
@@ -172,10 +234,30 @@ export function useFileProcessing() {
       zfsShipmentsReceived: [],
       skuEanMapper: null,
       zfsSales: null,
+      sellerboardExport: null,
+      sellerboardReturns: null,
+      fbaSales: null,
+      storeType: 'zfs',
     });
     clearTables();
-    clearFiles().catch(() => {});
-    clearStoredData().catch(() => {});
+    // Reset timeline to 'none'
+    setTimeline('none');
+    // Also clear from localStorage
+    localStorage.removeItem('zfsTimeline');
+    
+    // Update stored data to reset coverageDays to default value
+    getStoredData('zfs').then(savedData => {
+      if (savedData) {
+        storeData({
+          ...savedData,
+          timeline: 'none',
+          coverageDays: 14 // Reset to default value
+        }, 'zfs').catch(() => {});
+      }
+    }).catch(() => {});
+    
+    clearFiles('zfs').catch(() => {});
+    clearStoredData('zfs').catch(() => {});
   };
 
   const clearTables = () => {
@@ -187,8 +269,33 @@ export function useFileProcessing() {
       skuEanMapper: [],
       zfsSales: [],
       integrated: [],
+      sellerboardStock: []
     });
     setRecommendations([]);
+    
+    // Clear data from storage while preserving timeline
+    getStoredData('zfs').then(savedData => {
+      if (savedData) {
+        storeData({
+          ...savedData,
+          parsedData: {
+            internal: [],
+            zfs: [],
+            zfsShipments: [],
+            zfsShipmentsReceived: [],
+            skuEanMapper: [],
+            zfsSales: [],
+            integrated: [],
+            sellerboardStock: []
+          },
+          recommendations: []
+        }, 'zfs').catch(err => {
+          console.error("Error updating stored data:", err);
+        });
+      }
+    }).catch(err => {
+      console.error("Error retrieving stored data:", err);
+    });
   };
 
   const resetAll = async () => {
@@ -209,7 +316,7 @@ export function useFileProcessing() {
     handleFileChange,
     handleRemoveFile,
     processFiles,
-    setTimeline,
+    setTimeline: handleTimelineChange,
     resetFiles,
     clearTables,
     resetAll,

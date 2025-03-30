@@ -1,8 +1,7 @@
 import Papa from "papaparse";
-import { IntegratedStockData } from "@/types/stock";
 import { downloadFile } from "./downloadHelper";
 
-export const exportToTSV = (data: IntegratedStockData[], filename: string) => {
+export const exportToTSV = (data: Record<string, any>[], filename: string) => {
   const tsv = Papa.unparse(data, {
     header: true,
     delimiter: "\t",
