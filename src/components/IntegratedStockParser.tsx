@@ -136,12 +136,10 @@ const ZFSContent: React.FC<TabContentProps> = ({
 
 interface FBAContentProps {
   fbaFiles: {
-    fbaSales: File | null;
     sellerboardExport: File | null;
     sellerboardReturns: File | null;
   };
   setFbaFiles: React.Dispatch<React.SetStateAction<{
-    fbaSales: File | null;
     sellerboardExport: File | null;
     sellerboardReturns: File | null;
   }>>;
@@ -178,7 +176,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
         const savedFiles = await getFiles('fba');
         if (savedFiles) {
           setFbaFiles({
-            fbaSales: savedFiles.fbaSales,
             sellerboardExport: savedFiles.sellerboardExport,
             sellerboardReturns: savedFiles.sellerboardReturns,
           });
@@ -232,7 +229,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
         zfsShipmentsReceived: [],
         skuEanMapper: null,
         zfsSales: null,
-        fbaSales: updatedFiles.fbaSales,
         sellerboardExport: updatedFiles.sellerboardExport,
         sellerboardReturns: updatedFiles.sellerboardReturns,
         storeType: 'fba'
@@ -262,7 +258,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
         zfsShipmentsReceived: [],
         skuEanMapper: null,
         zfsSales: null,
-        fbaSales: updatedFiles.fbaSales,
         sellerboardExport: updatedFiles.sellerboardExport,
         sellerboardReturns: updatedFiles.sellerboardReturns,
         storeType: 'fba'
@@ -286,7 +281,16 @@ const FBAContent: React.FC<FBAContentProps> = ({
           setProcessingStatus(`Processing Sellerboard export (${Math.round(progress)}%)...`);
         });
         
-        const processedSellerboardData = processSellerboardStock(sellerboardData);
+        // Process Sellerboard Sales + Returns if available
+        let salesReturnsData = null;
+        if (fbaFiles.sellerboardReturns) {
+          setProcessingStatus("Processing Sellerboard Sales + Returns...");
+          salesReturnsData = await parseFile(fbaFiles.sellerboardReturns, (progress) => {
+            setProcessingStatus(`Processing Sellerboard Sales + Returns (${Math.round(progress)}%)...`);
+          });
+        }
+        
+        const processedSellerboardData = processSellerboardStock(sellerboardData, salesReturnsData);
         
         // Update local state
         setFbaData({
@@ -385,26 +389,12 @@ const FBAContent: React.FC<FBAContentProps> = ({
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
           <FileUploadSection
-            title="Sellerboard Returns Export"
+            title="Sellerboard Sales + Returns"
             onChange={(e) => handleFileChange(e, "sellerboardReturns")}
             onRemove={(name) => handleRemoveFile(name, "sellerboardReturns")}
             files={fbaFiles.sellerboardReturns ? [fbaFiles.sellerboardReturns] : []}
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
-        </div>
-        <div className="flex justify-center">
-          <div className="w-full md:w-1/2">
-            <FileUploadSection
-              title="FBA Sales"
-              onChange={(e) => handleFileChange(e, "fbaSales")}
-              onRemove={(name) => handleRemoveFile(name, "fbaSales")}
-              files={fbaFiles.fbaSales ? [fbaFiles.fbaSales] : []}
-              acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
-              additionalControls={
-                <div className="text-sm text-gray-500">30 Days Timeline</div>
-              }
-            />
-          </div>
         </div>
         <div className="flex justify-between">
           <div className="flex gap-2">
@@ -475,11 +465,9 @@ const IntegratedStockParser: React.FC = () => {
   
   // Add state for FBA tab
   const [fbaFiles, setFbaFiles] = useState<{
-    fbaSales: File | null;
     sellerboardExport: File | null;
     sellerboardReturns: File | null;
   }>({
-    fbaSales: null,
     sellerboardExport: null,
     sellerboardReturns: null,
   });
@@ -519,7 +507,6 @@ const IntegratedStockParser: React.FC = () => {
         const savedFbaFiles = await getFiles('fba');
         if (savedFbaFiles) {
           setFbaFiles({
-            fbaSales: savedFbaFiles.fbaSales,
             sellerboardExport: savedFbaFiles.sellerboardExport,
             sellerboardReturns: savedFbaFiles.sellerboardReturns,
           });
@@ -579,7 +566,6 @@ const IntegratedStockParser: React.FC = () => {
   const resetFBAFiles = async () => {
     // Clear FBA state
     setFbaFiles({
-      fbaSales: null,
       sellerboardExport: null,
       sellerboardReturns: null,
     });

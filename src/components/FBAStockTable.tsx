@@ -15,15 +15,13 @@ const COLUMNS = [
   { key: "SKU", label: "SKU" },
   { key: "ASIN", label: "ASIN" },
   { key: "Product Name", label: "Product Name" },
-  { key: "FBA Quantity", label: "FBA Stock" },
-  { key: "Internal Stock", label: "Internal Stock" },
-  { key: "Units In Transit", label: "In Transit" },
-  { key: "Reserved Units", label: "Reserved" },
+  { key: "FBA Quantity", label: "FBA Quantity" },
+  { key: "Units In Transit", label: "Units in Transit" },
+  { key: "Reserved Units", label: "Reserved Units" },
   { key: "Total Stock", label: "Total Stock" },
-  { key: "Restock Level", label: "Restock Level" },
-  { key: "Regular Price", label: "Regular Price" },
-  { key: "Buy Box Price", label: "Buy Box Price" },
-  { key: "Fulfillment Fee", label: "Fulfillment Fee" }
+  { key: "Internal Stock", label: "Internal Stock" },
+  { key: "Avg. Daily Sales", label: "Avg. Daily Sales" },
+  { key: "Avg. Total Sales (30 Days)", label: "Avg. Total Sales (30 Days)" }
 ] as const;
 
 export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
@@ -124,28 +122,22 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                       {item["FBA Quantity"]}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                      {item["Internal Stock"]}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["Units In Transit"]}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["Reserved Units"]}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                      {item["Total Stock"]}
+                      {item["FBA Quantity"] + item["Units In Transit"] + item["Reserved Units"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                      {item["Restock Level"]}
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      {item["Internal Stock"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                      €{item["Regular Price"]?.toFixed(2)}
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      {item["Avg. Daily Sales"]?.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                      €{item["Buy Box Price"]?.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                      €{item["Fulfillment Fee"]?.toFixed(2)}
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      {item["Avg. Total Sales (30 Days)"]?.toFixed(2)}
                     </td>
                   </tr>
                 ))

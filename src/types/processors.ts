@@ -44,6 +44,8 @@ export interface ProcessedSellerboardStock {
   "Units In Transit": number;
   "Reserved Units": number;
   "Total Stock"?: number;
+  "Avg. Daily Sales": number;
+  "Avg. Total Sales (30 Days)": number;
   "Status": string;
   "Size": string;
   "Price": number;

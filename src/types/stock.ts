@@ -22,7 +22,6 @@ export interface FileState {
   zfsSales: File | null;
   sellerboardExport: File | null;
   sellerboardReturns: File | null;
-  fbaSales: File | null;
   storeType?: 'zfs' | 'fba';
 }
 
