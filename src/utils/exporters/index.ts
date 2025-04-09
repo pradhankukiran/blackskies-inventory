@@ -24,17 +24,13 @@ const transformFBAStockOverview = (data: ProcessedSellerboardStock[]): Record<st
     "ASIN": item.ASIN,
     "Product Name": item["Product Name"],
     "FBA Quantity": item["FBA Quantity"],
-    "Internal Stock": item["Internal Stock"],
     "Units In Transit": item["Units In Transit"],
     "Reserved Units": item["Reserved Units"],
-    "Total Stock": item["FBA Quantity"] + item["Reserved Units"],
-    "Restock Level": item["Restock Level"],
-    "Regular Price": item["Regular Price"],
-    "Buy Box Price": item["Buy Box Price"],
-    "Fulfillment Fee": item["Fulfillment Fee"],
-    "Shipping Type": item["Shipping Type"],
-    "Weight": item.Weight,
-    "Dimensions": item.Dimensions
+    "Total Stock": item["FBA Quantity"] + item["Units In Transit"] + item["Reserved Units"],
+    "Internal Stock": item["Internal Stock"],
+    "Avg. Daily Sales": Number(item["Avg. Daily Sales"]?.toFixed(2) || 0),
+    "Avg. Total Sales (30 Days)": Number(item["Avg. Total Sales (30 Days)"]?.toFixed(2) || 0),
+    "Avg. Return Rate (%)": Number(item["Avg. Return Rate (%)"]?.toFixed(2) || 0)
   }));
 };
 
