@@ -288,6 +288,30 @@ const FBAContent: React.FC<FBAContentProps> = ({
           salesReturnsData = await parseFile(fbaFiles.sellerboardReturns, (progress) => {
             setProcessingStatus(`Processing Sellerboard Sales + Returns (${Math.round(progress)}%)...`);
           });
+          
+          // Log sellerboard returns data for debugging
+          console.log("Parsed sellerboard returns data:", salesReturnsData);
+          
+          // Log specific fields for debugging sales and returns values
+          if (salesReturnsData && salesReturnsData.length > 0) {
+            // Find an entry with SKU for better logging
+            const sampleItem = salesReturnsData.find(item => item.SKU) || salesReturnsData[0];
+            console.log("Sample returns data fields:", {
+              SKU: sampleItem.SKU,
+              // Sales fields
+              Totals: sampleItem.Totals,
+              EMPTY_22: sampleItem.__EMPTY_22,
+              undefined_22: sampleItem.undefined_22,
+              // Keys that might contain sales data
+              allKeys: Object.keys(sampleItem).filter(key => 
+                key.includes('22') || key.includes('Totals') || key.includes('Sales')
+              ),
+              // Return rate fields
+              EMPTY_24: sampleItem.__EMPTY_24,
+              undefined_24: sampleItem.undefined_24,
+              PercentRefunds: sampleItem["% Refunds"]
+            });
+          }
         }
         
         const processedSellerboardData = processSellerboardStock(sellerboardData, salesReturnsData);

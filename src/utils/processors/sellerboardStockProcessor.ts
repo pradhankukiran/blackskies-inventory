@@ -5,6 +5,8 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
   const salesMap: Record<string, number> = {};
   // Create a map for SKU to refund percentage
   const refundsMap: Record<string, number> = {};
+  // Track which SKUs have already had sales processed from __EMPTY_22/undefined_22
+  const processedSalesSKUs: Record<string, boolean> = {};
   
   // Helper function to normalize SKUs (trim, uppercase)
   const normalizeSkuForMapping = (sku: string): string => {
@@ -31,11 +33,16 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       const sku = item.SKU || '';
 
       // --- Enhanced Sales Value Parsing ---
-      const originalSalesValue = item.Totals;
+      // Prioritize __EMPTY_22/undefined_22 fields over Totals for sales data
+      const originalSalesValue = item.__EMPTY_22 || item["__EMPTY_22"] || 
+                           item.undefined_22 || item["undefined_22"] ||
+                           item.Totals;
       
       // --- Extract Refund Percentage, ensuring we catch the exact field name ---
       // Look for the field by exact name
-      const originalRefundValue = item.__EMPTY_24 || item["__EMPTY_24"] || item["% Refunds"];
+      const originalRefundValue = item.__EMPTY_24 || item["__EMPTY_24"] || 
+                           item.undefined_24 || item["undefined_24"] || 
+                           item["% Refunds"];
 
       // --- Check if this row is a header --- 
       if (typeof originalSalesValue === 'string' && originalSalesValue.toLowerCase() === 'sales') {
@@ -60,8 +67,10 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       const refundPercentage = parseFloat(cleanedRefundValue || 0);
 
       // Store the return rate directly if SKU exists and __EMPTY_24 exists
-      if (sku && (item.__EMPTY_24 !== undefined || item["__EMPTY_24"] !== undefined)) {
-        const returnRate = parseFloat(item.__EMPTY_24 || item["__EMPTY_24"]);
+      if (sku && (item.__EMPTY_24 !== undefined || item["__EMPTY_24"] !== undefined || 
+          item.undefined_24 !== undefined || item["undefined_24"] !== undefined)) {
+        const returnRate = parseFloat(item.__EMPTY_24 || item["__EMPTY_24"] || 
+                                     item.undefined_24 || item["undefined_24"] || 0);
         if (!isNaN(returnRate)) {
           // Store with normalized SKU
           const normalizedSku = normalizeSkuForMapping(sku);
@@ -70,16 +79,43 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
         }
       }
 
-      if (sku && !isNaN(sales)) {
+      // Store the sales value directly if SKU exists and __EMPTY_22 exists
+      if (sku && (item.__EMPTY_22 !== undefined || item["__EMPTY_22"] !== undefined || 
+          item.undefined_22 !== undefined || item["undefined_22"] !== undefined)) {
+        const salesValue = parseFloat(item.__EMPTY_22 || item["__EMPTY_22"] || 
+                                     item.undefined_22 || item["undefined_22"] || 0);
+        if (!isNaN(salesValue)) {
+          // Store with normalized SKU
+          const normalizedSku = normalizeSkuForMapping(sku);
+          // Store directly in our global salesMap
+          salesMap[normalizedSku] = (salesMap[normalizedSku] || 0) + salesValue;
+          // Mark this SKU as already processed for sales
+          processedSalesSKUs[normalizedSku] = true;
+          
+          // Debug log
+          if (sku === 'DE-10-F-S') { // Log for a specific SKU to avoid console spam
+            console.log(`Using __EMPTY_22/_22 value for ${sku}: ${salesValue}`);
+          }
+        }
+      }
+
+      if (sku && !isNaN(sales) && !processedSalesSKUs[normalizeSkuForMapping(sku)]) {
+        // Only add sales from Totals if we haven't already processed this SKU from __EMPTY_22
         // Use normalized SKU for the map
         const normalizedSku = normalizeSkuForMapping(sku);
         // If we already have a value for this SKU, add to it (handling potential duplicates)
         salesMap[normalizedSku] = (salesMap[normalizedSku] || 0) + sales;
         
-        // ALWAYS set the refund percentage if we have a valid value, regardless of sales
-        if (!isNaN(refundPercentage)) {
-          refundsMap[normalizedSku] = refundPercentage;
+        // Debug log
+        if (sku === 'DE-10-F-S') { // Log for a specific SKU to avoid console spam
+          console.log(`Using Totals value for ${sku}: ${sales}`);
         }
+      }
+      
+      // ALWAYS set the refund percentage if we have a valid value, regardless of sales source
+      if (sku && !isNaN(refundPercentage)) {
+        const normalizedSku = normalizeSkuForMapping(sku);
+        refundsMap[normalizedSku] = refundPercentage;
       }
     }); // End forEach
   }
@@ -155,6 +191,19 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Marketplace": item.Marketplace || item.marketplace || ''
     };
   });
+  
+  // Log some sample data for debugging purposes
+  // Find a few SKUs for debugging
+  const sampleSKUs = Object.keys(salesMap).slice(0, 3);
+  if (sampleSKUs.length > 0) {
+    console.log('Sample sales data (30 days total / 3 = avg):', 
+      sampleSKUs.map(sku => ({
+        SKU: sku,
+        TotalSales: salesMap[sku],
+        AvgSales: salesMap[sku] / 3
+      }))
+    );
+  }
   
   return results;
 } 
