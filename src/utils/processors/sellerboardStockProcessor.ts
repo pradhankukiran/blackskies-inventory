@@ -4,20 +4,84 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
   // Create a map of SKU to total sales in the last 30 days
   const salesMap: Record<string, number> = {};
   
+  // Helper function to normalize SKUs (trim, uppercase)
+  const normalizeSkuForMapping = (sku: string): string => {
+    return sku.trim().toUpperCase();
+  };
+  
   if (salesReturnsData && salesReturnsData.length > 0) {
-    salesReturnsData.forEach(item => {
+    // First check if the sales data has marketplace information
+    const hasSalesMarketplace = salesReturnsData.some(item => 
+      (item.Marketplace || item.marketplace) !== undefined
+    );
+    
+    // If sales data also has marketplace info, filter for Amazon.de only
+    const relevantSalesData = hasSalesMarketplace 
+      ? salesReturnsData.filter(item => {
+          const marketplace = item.Marketplace || item.marketplace || '';
+          return marketplace.includes('Amazon.de') || !marketplace.includes('Amazon.co.uk');
+        })
+      : salesReturnsData;
+    
+    // Process filtered sales data
+    relevantSalesData.forEach((item, index) => {
       // Look for data under the "Totals" section and find the "Sales" column
       const sku = item.SKU || '';
-      // Get the sales value from the Totals column (as shown in the image)
-      const sales = parseFloat(item.Totals || 0);
+
+      // --- Enhanced Sales Value Parsing ---
+      const originalSalesValue = item.Totals;
+
+      // --- Check if this row is a header --- 
+      if (typeof originalSalesValue === 'string' && originalSalesValue.toLowerCase() === 'sales') {
+        // Skip this row if it looks like a header
+        return; 
+      }
+      // --- End Header Check ---
+
+      // Clean the value: remove currency symbols (€, $, £), thousand separators (,), 
+      // replace comma decimal separator with period, and trim whitespace.
+      const cleanedSalesValue = typeof originalSalesValue === 'string' 
+        ? originalSalesValue.replace(/[€$£]/g, '').replace(/,/g, '').trim()
+        : originalSalesValue; // Keep as is if not a string
+      
+      // Attempt to parse the cleaned value
+      const sales = parseFloat(cleanedSalesValue || 0);
       
       if (sku && !isNaN(sales)) {
-        salesMap[sku] = sales;
+        // Use normalized SKU for the map
+        const normalizedSku = normalizeSkuForMapping(sku);
+        // If we already have a value for this SKU, add to it (handling potential duplicates)
+        salesMap[normalizedSku] = (salesMap[normalizedSku] || 0) + sales;
       }
-    });
+    }); // End forEach
   }
   
-  return data.map(item => {
+  // Log the sales map for debugging
+  // console.log('Sales map entries:', Object.keys(salesMap).length); // Logging removed
+  // console.log('Full Sales map contents:', salesMap); // Logging removed
+  
+  // Filter out Amazon.co.uk entries and only keep Amazon.de entries
+  const filteredData = data.filter(item => {
+    const marketplace = item.Marketplace || item.marketplace || '';
+    return marketplace.includes('Amazon.de') || !marketplace.includes('Amazon.co.uk');
+  });
+  
+  // Create a map to deduplicate SKUs, keeping only one entry per SKU
+  const uniqueItems = new Map();
+  
+  filteredData.forEach(item => {
+    const sku = item.SKU || item.sku || '';
+    // If we already have this SKU and the current item is from Amazon.de, replace the existing one
+    const existingItem = uniqueItems.get(sku);
+    const currentMarketplace = item.Marketplace || item.marketplace || '';
+    
+    if (!existingItem || currentMarketplace.includes('Amazon.de')) {
+      uniqueItems.set(sku, item);
+    }
+  });
+  
+  // Convert map back to array for processing
+  return Array.from(uniqueItems.values()).map((item, index) => {
     const fbaQuantity = parseInt(item["FBA/FBM Stock"] || item["Stock"] || item.stock || item["FBA Quantity"] || 0);
     const reservedUnits = parseInt(item["Reserved"] || 0);
     
@@ -31,9 +95,16 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     }
     
     const sku = item.SKU || item.sku || '';
-    // Calculate average daily sales from the Sales + Returns data
-    // Divide by 30 to get the daily average
-    const avgDailySales30Days = salesMap[sku] ? salesMap[sku] / 30 : 0;
+    // Use normalized SKU for looking up sales data
+    const normalizedSku = normalizeSkuForMapping(sku);
+    // Get the total sales value from the map
+    const totalSalesFromMap = salesMap[normalizedSku] || 0; 
+    // Calculate the average over 3 days
+    const avgSales3Days = totalSalesFromMap ? totalSalesFromMap / 3 : 0;
+    
+    // --- Remove logging --- 
+    // if (index < 3) { ... logging removed ... }
+    // --- End Logging ---
     
     return {
       SKU: sku,
@@ -45,7 +116,7 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Reserved Units": reservedUnits,
       "Total Stock": fbaQuantity + reservedUnits,
       "Avg. Daily Sales": parseFloat(item["Estimated\nSales\nVelocity"] || 0),
-      "Avg. Total Sales (30 Days)": avgDailySales30Days,
+      "Avg. Total Sales (30 Days)": avgSales3Days,
       "Status": item.Status || item.status || '',
       "Size": item.Size || item.size || item["Child ASIN size"] || '',
       "Price": parseFloat(item.Price || item["Regular Price"] || 0),
@@ -56,7 +127,8 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Shipping Type": item["Shipping Type"] || '',
       "Weight": item.Weight || '',
       "Dimensions": item.Dimensions || item["Dimensions (cm/inch)"] || '',
-      "Color": item.Color || ''
+      "Color": item.Color || '',
+      "Marketplace": item.Marketplace || item.marketplace || ''
     };
   });
 } 
