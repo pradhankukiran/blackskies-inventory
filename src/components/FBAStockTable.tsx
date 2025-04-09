@@ -21,7 +21,8 @@ const COLUMNS = [
   { key: "Total Stock", label: "Total Stock" },
   { key: "Internal Stock", label: "Internal Stock" },
   { key: "Avg. Daily Sales", label: "Avg. Daily Sales" },
-  { key: "Avg. Total Sales (30 Days)", label: "Avg. Total Sales (30 Days)" }
+  { key: "Avg. Total Sales (30 Days)", label: "Avg. Total Sales (30 Days)" },
+  { key: "Avg. Return Rate (%)", label: "Avg. Return Rate (%)" }
 ] as const;
 
 export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
@@ -44,7 +45,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+  }, [data]);
 
   if (!isClient) {
     return null;
@@ -138,6 +139,9 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["Avg. Total Sales (30 Days)"]?.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      {item["Avg. Return Rate (%)"]?.toFixed(2)}
                     </td>
                   </tr>
                 ))

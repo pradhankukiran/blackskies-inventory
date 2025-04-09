@@ -3,6 +3,8 @@ import { ProcessedSellerboardStock } from '@/types/processors';
 export function processSellerboardStock(data: any[], salesReturnsData?: any[] | null): ProcessedSellerboardStock[] {
   // Create a map of SKU to total sales in the last 30 days
   const salesMap: Record<string, number> = {};
+  // Create a map for SKU to refund percentage
+  const refundsMap: Record<string, number> = {};
   
   // Helper function to normalize SKUs (trim, uppercase)
   const normalizeSkuForMapping = (sku: string): string => {
@@ -24,12 +26,16 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       : salesReturnsData;
     
     // Process filtered sales data
-    relevantSalesData.forEach((item, index) => {
+    relevantSalesData.forEach((item) => {
       // Look for data under the "Totals" section and find the "Sales" column
       const sku = item.SKU || '';
 
       // --- Enhanced Sales Value Parsing ---
       const originalSalesValue = item.Totals;
+      
+      // --- Extract Refund Percentage, ensuring we catch the exact field name ---
+      // Look for the field by exact name
+      const originalRefundValue = item.__EMPTY_24 || item["__EMPTY_24"] || item["% Refunds"];
 
       // --- Check if this row is a header --- 
       if (typeof originalSalesValue === 'string' && originalSalesValue.toLowerCase() === 'sales') {
@@ -44,21 +50,39 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
         ? originalSalesValue.replace(/[€$£]/g, '').replace(/,/g, '').trim()
         : originalSalesValue; // Keep as is if not a string
       
-      // Attempt to parse the cleaned value
-      const sales = parseFloat(cleanedSalesValue || 0);
+      // Clean the refund value: remove '%', trim whitespace
+      const cleanedRefundValue = typeof originalRefundValue === 'string'
+        ? originalRefundValue.replace(/%/g, '').trim()
+        : originalRefundValue; // Keep as is if not a string
       
+      // Attempt to parse the cleaned values
+      const sales = parseFloat(cleanedSalesValue || 0);
+      const refundPercentage = parseFloat(cleanedRefundValue || 0);
+
+      // Store the return rate directly if SKU exists and __EMPTY_24 exists
+      if (sku && (item.__EMPTY_24 !== undefined || item["__EMPTY_24"] !== undefined)) {
+        const returnRate = parseFloat(item.__EMPTY_24 || item["__EMPTY_24"]);
+        if (!isNaN(returnRate)) {
+          // Store with normalized SKU
+          const normalizedSku = normalizeSkuForMapping(sku);
+          // Store directly in our global refundsMap
+          refundsMap[normalizedSku] = returnRate;
+        }
+      }
+
       if (sku && !isNaN(sales)) {
         // Use normalized SKU for the map
         const normalizedSku = normalizeSkuForMapping(sku);
         // If we already have a value for this SKU, add to it (handling potential duplicates)
         salesMap[normalizedSku] = (salesMap[normalizedSku] || 0) + sales;
+        
+        // ALWAYS set the refund percentage if we have a valid value, regardless of sales
+        if (!isNaN(refundPercentage)) {
+          refundsMap[normalizedSku] = refundPercentage;
+        }
       }
     }); // End forEach
   }
-  
-  // Log the sales map for debugging
-  // console.log('Sales map entries:', Object.keys(salesMap).length); // Logging removed
-  // console.log('Full Sales map contents:', salesMap); // Logging removed
   
   // Filter out Amazon.co.uk entries and only keep Amazon.de entries
   const filteredData = data.filter(item => {
@@ -81,7 +105,7 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
   });
   
   // Convert map back to array for processing
-  return Array.from(uniqueItems.values()).map((item, index) => {
+  const results = Array.from(uniqueItems.values()).map((item) => {
     const fbaQuantity = parseInt(item["FBA/FBM Stock"] || item["Stock"] || item.stock || item["FBA Quantity"] || 0);
     const reservedUnits = parseInt(item["Reserved"] || 0);
     
@@ -101,10 +125,9 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     const totalSalesFromMap = salesMap[normalizedSku] || 0; 
     // Calculate the average over 3 days
     const avgSales3Days = totalSalesFromMap ? totalSalesFromMap / 3 : 0;
-    
-    // --- Remove logging --- 
-    // if (index < 3) { ... logging removed ... }
-    // --- End Logging ---
+
+    // Get Refund Percentage from the refunds map
+    const refundPercentageFromMap = refundsMap[normalizedSku] || 0;
     
     return {
       SKU: sku,
@@ -117,6 +140,7 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Total Stock": fbaQuantity + reservedUnits,
       "Avg. Daily Sales": parseFloat(item["Estimated\nSales\nVelocity"] || 0),
       "Avg. Total Sales (30 Days)": avgSales3Days,
+      "Avg. Return Rate (%)": refundPercentageFromMap,
       "Status": item.Status || item.status || '',
       "Size": item.Size || item.size || item["Child ASIN size"] || '',
       "Price": parseFloat(item.Price || item["Regular Price"] || 0),
@@ -131,4 +155,6 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Marketplace": item.Marketplace || item.marketplace || ''
     };
   });
+  
+  return results;
 } 
