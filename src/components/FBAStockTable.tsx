@@ -102,13 +102,18 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
           return prevData.map(item => {
             const dailySales = item["Avg. Daily Sales"] || 0;
             const refundPercentage = item["Avg. Return Rate (%)"] || 0;
+            const fbaQuantity = item["FBA Quantity"] || 0;
+            const unitsInTransit = item["Units In Transit"] || 0;
+            const reservedUnits = item["Reserved Units"] || 0;
+            const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
             
             // Calculate new recommended quantity using the same formula as in sellerboardStockProcessor
             const newRecommendedQuantity = Math.round(
               dailySales * 
               days * 
               (1 - (refundPercentage / 100)) * 
-              ((dailySales * 30) > 30 ? 1.2 : 1)
+              ((dailySales * 30) > 30 ? 1.2 : 1) - 
+              totalStock
             );
             
             return {
@@ -123,12 +128,17 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
         const updatedStoredData = savedData.parsedData.sellerboardStock.map(item => {
           const dailySales = item["Avg. Daily Sales"] || 0;
           const refundPercentage = item["Avg. Return Rate (%)"] || 0;
+          const fbaQuantity = item["FBA Quantity"] || 0;
+          const unitsInTransit = item["Units In Transit"] || 0;
+          const reservedUnits = item["Reserved Units"] || 0;
+          const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
           
           const newRecommendedQuantity = Math.round(
             dailySales * 
             days * 
             (1 - (refundPercentage / 100)) * 
-            ((dailySales * 30) > 30 ? 1.2 : 1)
+            ((dailySales * 30) > 30 ? 1.2 : 1) - 
+            totalStock
           );
           
           return {

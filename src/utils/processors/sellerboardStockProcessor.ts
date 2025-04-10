@@ -178,11 +178,12 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
         dailySales * 
         coverageDays * 
         (1 - (refundPercentageFromMap / 100)) * 
-        ((dailySales * 30) > 30 ? 1.2 : 1)
+        ((dailySales * 30) > 10 ? 1.2 : 1)  - 
+        (fbaQuantity + sentToFBAValue + reservedUnits)
       ),
       "Units In Transit": sentToFBAValue,
       "Reserved Units": reservedUnits,
-      "Total Stock": fbaQuantity + reservedUnits,
+      "Total Stock": fbaQuantity + sentToFBAValue + reservedUnits,
       "Avg. Daily Sales": dailySales,
       "Avg. Total Sales (30 Days)": dailySales * 30,
       "Avg. Return Rate (%)": refundPercentageFromMap,
