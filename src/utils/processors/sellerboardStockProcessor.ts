@@ -174,13 +174,13 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Product Name": item.Title || item.title || item["Product Name"] || '',
       "FBA Quantity": fbaQuantity,
       "Internal Stock": parseInt(item["FBA prep. stock Prep center 1 stock"] || 0),
-      "Recommended Quantity": Math.round(
+      "Recommended Quantity": Math.max(0, Math.round(
         dailySales * 
         coverageDays * 
         (1 - (refundPercentageFromMap / 100)) * 
         ((dailySales * 30) > 10 ? 1.2 : 1)  - 
         (fbaQuantity + sentToFBAValue + reservedUnits)
-      ),
+      )),
       "Units In Transit": sentToFBAValue,
       "Reserved Units": reservedUnits,
       "Total Stock": fbaQuantity + sentToFBAValue + reservedUnits,

@@ -108,13 +108,16 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
             
             // Calculate new recommended quantity using the same formula as in sellerboardStockProcessor
-            const newRecommendedQuantity = Math.round(
+            let newRecommendedQuantity = Math.round(
               dailySales * 
               days * 
               (1 - (refundPercentage / 100)) * 
               ((dailySales * 30) > 30 ? 1.2 : 1) - 
               totalStock
             );
+            
+            // Ensure recommended quantity is not negative
+            newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
             
             return {
               ...item,
@@ -133,13 +136,16 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
           const reservedUnits = item["Reserved Units"] || 0;
           const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
           
-          const newRecommendedQuantity = Math.round(
+          let newRecommendedQuantity = Math.round(
             dailySales * 
             days * 
             (1 - (refundPercentage / 100)) * 
             ((dailySales * 30) > 30 ? 1.2 : 1) - 
             totalStock
           );
+          
+          // Ensure recommended quantity is not negative
+          newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
           
           return {
             ...item,
@@ -280,7 +286,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                       {item["Avg. Daily Sales"]?.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                      {item["Avg. Total Sales (30 Days)"]?.toFixed(2)}
+                      {Math.round(item["Avg. Total Sales (30 Days)"] || 0)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["Avg. Return Rate (%)"]?.toFixed(2)}
