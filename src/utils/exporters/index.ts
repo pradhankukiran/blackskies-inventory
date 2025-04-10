@@ -29,7 +29,7 @@ const transformFBAStockOverview = (data: ProcessedSellerboardStock[]): Record<st
     "Total Stock": item["FBA Quantity"] + item["Units In Transit"] + item["Reserved Units"],
     "Internal Stock": item["Internal Stock"],
     "Avg. Daily Sales": Number(item["Avg. Daily Sales"]?.toFixed(2) || 0),
-    "Avg. Total Sales (30 Days)": Number(item["Avg. Total Sales (30 Days)"]?.toFixed(2) || 0),
+    "Avg. Total Sales (30 Days)": Number((item["Avg. Daily Sales"] * 30)?.toFixed(2) || 0),
     "Avg. Return Rate (%)": Number(item["Avg. Return Rate (%)"]?.toFixed(2) || 0)
   }));
 };

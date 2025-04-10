@@ -24,7 +24,7 @@ export const parseCSVFile = (file: File, onProgress?: (progress: number) => void
         }
         return value;
       },
-      chunk: (chunk, parser) => {
+      chunk: (chunk, _parser) => {
         results.push(...chunk.data);
         processedChunks++;
         
@@ -53,19 +53,62 @@ export const parseXLSXFile = (file: File, onProgress?: (progress: number) => voi
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
+    // Show progress for file reading
+    if (onProgress) onProgress(5); // Start at 5%
+    
+    // Track reading progress
+    reader.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        // Calculate reading progress (0-50%)
+        const readingProgress = (event.loaded / event.total) * 50;
+        onProgress(Math.min(Math.round(readingProgress), 50)); 
+      }
+    };
+    
     reader.onload = (e) => {
       try {
         if (onProgress) onProgress(50); // Reading completed
         
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
+        
+        if (onProgress) onProgress(70); // Workbook parsed
+        
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
+        if (onProgress) onProgress(80); // Worksheet selected
+        
+        // Start converting to JSON
+        if (onProgress) onProgress(85);
         const results = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: '' });
         
-        if (onProgress) onProgress(100); // Processing completed
-        resolve(results);
+        // Calculate processing progress based on data size
+        const rowCount = results.length;
+        if (rowCount > 1000 && onProgress) {
+          // Process in chunks for large datasets to show incremental progress
+          const processedResults = [];
+          const chunkSize = CHUNK_SIZE / 20; // Using a smaller chunk size for processing display
+          const totalChunks = Math.ceil(rowCount / chunkSize);
+          
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, rowCount);
+            const chunk = results.slice(start, end);
+            processedResults.push(...chunk);
+            
+            // Update progress (85-99%)
+            const processingProgress = 85 + ((i + 1) / totalChunks) * 14;
+            if (onProgress) onProgress(Math.min(Math.round(processingProgress), 99));
+          }
+          
+          if (onProgress) onProgress(100); // Processing completed
+          resolve(processedResults);
+        } else {
+          // Small dataset, just complete
+          if (onProgress) onProgress(100); // Processing completed
+          resolve(results);
+        }
       } catch (error) {
         reject(error);
       }
@@ -75,7 +118,6 @@ export const parseXLSXFile = (file: File, onProgress?: (progress: number) => voi
       reject(error);
     };
     
-    if (onProgress) onProgress(10); // Starting to read
     reader.readAsBinaryString(file);
   });
 };

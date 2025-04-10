@@ -175,7 +175,7 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Reserved Units": reservedUnits,
       "Total Stock": fbaQuantity + reservedUnits,
       "Avg. Daily Sales": parseFloat(item["Estimated\nSales\nVelocity"] || 0),
-      "Avg. Total Sales (30 Days)": avgSales3Days,
+      "Avg. Total Sales (30 Days)": parseFloat(item["Estimated\nSales\nVelocity"] || 0) * 30,
       "Avg. Return Rate (%)": refundPercentageFromMap,
       "Status": item.Status || item.status || '',
       "Size": item.Size || item.size || item["Child ASIN size"] || '',
