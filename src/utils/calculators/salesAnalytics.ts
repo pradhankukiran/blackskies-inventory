@@ -14,13 +14,13 @@ export function calculateSalesMetrics(sales: ZFSSaleEntry[]): Map<string, SalesM
 
   sales.forEach(sale => {
     // Use EAN as the key
-    const key = sale.eanArticle;
+    const key = sale.EAN;
 
     if (!key) {
       return;
     }
 
-    const saleDate = sale.orderTime.split(' ')[0];
+    const saleDate = sale['Date first on offer'];
     if (!saleDate) {
       return;
     }
@@ -31,12 +31,12 @@ export function calculateSalesMetrics(sales: ZFSSaleEntry[]): Map<string, SalesM
       firstSaleDate: saleDate,          // Set initial first sale date
       lastSaleDate: saleDate,           // Set initial last sale date
       uniqueDays: new Set<string>(),    // Initialize set of unique sale days
-      articleName: sale.articleNameShipped,
+      articleName: sale['Article variant'],
       eanArticle: key
     };
 
     // Add the sale quantity to total sales
-    current.totalSales += sale.quantity;
+    current.totalSales += sale['Sold articles'];
     
     // Add this sale date to unique days
     current.uniqueDays.add(saleDate);
@@ -52,8 +52,8 @@ export function calculateSalesMetrics(sales: ZFSSaleEntry[]): Map<string, SalesM
     }
 
     // Update article name if available
-    if (sale.articleNameShipped) {
-      current.articleName = sale.articleNameShipped;
+    if (sale['Article variant']) {
+      current.articleName = sale['Article variant'];
     }
 
     metricsByArticle.set(key, current);

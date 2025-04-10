@@ -231,6 +231,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
         zfsSales: null,
         sellerboardExport: updatedFiles.sellerboardExport,
         sellerboardReturns: updatedFiles.sellerboardReturns,
+        fbaSales: null,
         storeType: 'fba'
       };
       
@@ -260,6 +261,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
         zfsSales: null,
         sellerboardExport: updatedFiles.sellerboardExport,
         sellerboardReturns: updatedFiles.sellerboardReturns,
+        fbaSales: null,
         storeType: 'fba'
       };
       
