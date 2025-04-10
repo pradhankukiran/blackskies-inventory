@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { X, Search } from "lucide-react";
 import { ProcessedSellerboardStock } from "@/types/processors";
 import { usePagination } from "@/hooks/usePagination";
 import { ExportButton } from "./ExportButton";
 import { Pagination } from "./ui/pagination";
+import { CoverageDaysSelector } from "./CoverageDaysSelector";
+import { getStoredData, storeData } from "@/lib/indexedDB";
+import { processSellerboardStock } from "@/utils/processors/sellerboardStockProcessor";
 
 interface FBAStockTableProps {
   data: ProcessedSellerboardStock[];
@@ -20,28 +23,151 @@ const COLUMNS = [
   { key: "Reserved Units", label: "Reserved Units" },
   { key: "Total Stock", label: "Total Stock" },
   { key: "Internal Stock", label: "Internal Stock" },
+  { key: "Recommended Quantity", label: "Recommended Quantity" },
   { key: "Avg. Daily Sales", label: "Avg. Daily Sales" },
   { key: "Avg. Total Sales (30 Days)", label: "Avg. Total Sales (30 Days)" },
   { key: "Avg. Return Rate (%)", label: "Avg. Return Rate (%)" }
 ] as const;
 
+// Display columns (excluding Product Name)
+const DISPLAY_COLUMNS = COLUMNS.filter(column => column.key !== "Product Name");
+
 export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
   const [searchSku, setSearchSku] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [coverageDays, setCoverageDays] = useState(14);
+  const [displayData, setDisplayData] = useState<ProcessedSellerboardStock[]>(data);
+
+  // Update initial data once
+  useEffect(() => {
+    // Initialize display data from the props
+    setDisplayData(data);
+  }, [data]);
 
   const filteredData = useMemo(() => {
-    if (!searchSku) return data;
-    return data.filter(item => 
+    if (!searchSku) return displayData;
+    return displayData.filter(item => 
       item.SKU.toLowerCase().includes(searchSku.toLowerCase()) ||
       item.ASIN.toLowerCase().includes(searchSku.toLowerCase())
     );
-  }, [data, searchSku]);
+  }, [displayData, searchSku]);
 
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
     filteredData,
     ITEMS_PER_PAGE
   );
+
+  // Load coverage days from IndexedDB when component mounts
+  useEffect(() => {
+    const loadCoverageDays = async () => {
+      try {
+        const savedData = await getStoredData('fba');
+        if (savedData?.coverageDays) {
+          setCoverageDays(savedData.coverageDays);
+        }
+      } catch (err) {
+        console.error("Error loading coverage days:", err);
+      }
+    };
+    
+    loadCoverageDays();
+  }, []);
+
+  // Efficient coverage days change handler - save to IndexedDB and recalculate recommendations
+  const handleCoverageDaysChange = async (days: number) => {
+    setCoverageDays(days);
+    
+    // Recalculate the recommended quantities with the new coverage days
+    try {
+      const savedData = await getStoredData('fba');
+      if (savedData?.parsedData?.sellerboardStock) {
+        // Get the raw data that was used to generate the current recommendations
+        const originalData = savedData.parsedData.sellerboardStock.map(item => ({
+          ...item,
+          // Add all original fields that are needed for recalculation
+          SKU: item.SKU,
+          "Estimated\nSales\nVelocity": item["Avg. Daily Sales"]
+        }));
+
+        // Get returns data if available
+        let returnsData: any[] | null = null;
+        // Access rawReturnsData safely (it might not exist in the type)
+        if (savedData && 'rawReturnsData' in savedData && Array.isArray(savedData.rawReturnsData)) {
+          returnsData = savedData.rawReturnsData;
+        }
+
+        // Instead of reprocessing everything, calculate only the new recommended quantities
+        setDisplayData(prevData => {
+          return prevData.map(item => {
+            const dailySales = item["Avg. Daily Sales"] || 0;
+            const refundPercentage = item["Avg. Return Rate (%)"] || 0;
+            
+            // Calculate new recommended quantity using the same formula as in sellerboardStockProcessor
+            const newRecommendedQuantity = Math.round(
+              dailySales * 
+              days * 
+              (1 - (refundPercentage / 100)) * 
+              ((dailySales * 30) > 30 ? 1.2 : 1)
+            );
+            
+            return {
+              ...item,
+              "Recommended Quantity": newRecommendedQuantity,
+              "Coverage Period (Days)": days
+            };
+          });
+        });
+        
+        // Update only the recommended quantity in the stored data
+        const updatedStoredData = savedData.parsedData.sellerboardStock.map(item => {
+          const dailySales = item["Avg. Daily Sales"] || 0;
+          const refundPercentage = item["Avg. Return Rate (%)"] || 0;
+          
+          const newRecommendedQuantity = Math.round(
+            dailySales * 
+            days * 
+            (1 - (refundPercentage / 100)) * 
+            ((dailySales * 30) > 30 ? 1.2 : 1)
+          );
+          
+          return {
+            ...item,
+            "Recommended Quantity": newRecommendedQuantity,
+            "Coverage Period (Days)": days
+          };
+        });
+        
+        // Store the updated data
+        await storeData({
+          ...savedData,
+          parsedData: {
+            ...savedData.parsedData,
+            sellerboardStock: updatedStoredData
+          },
+          coverageDays: days
+        }, 'fba');
+      } else {
+        // If no processed data exists yet, just save the coverage days
+        await storeData({
+          parsedData: savedData?.parsedData || {
+            internal: [],
+            zfs: [],
+            zfsShipments: [],
+            zfsShipmentsReceived: [],
+            skuEanMapper: [],
+            zfsSales: [],
+            integrated: [],
+            sellerboardStock: []
+          },
+          recommendations: savedData?.recommendations || [],
+          coverageDays: days
+        }, 'fba');
+      }
+    } catch (err) {
+      console.error("Error updating with new coverage days:", err);
+    }
+  };
 
   useEffect(() => {
     setIsClient(true);
@@ -53,9 +179,13 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
+        <div className="text-sm text-gray-700">
+          {filteredData.length} items with {coverageDays} days coverage
+        </div>
         <ExportButton
-          data={data}
+          data={displayData}
           label="Export FBA Stock Overview & Recommendation"
           filename="fba-stock-data"
         />
@@ -100,7 +230,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                     )}
                   </div>
                 </th>
-                {COLUMNS.slice(1).map((column) => (
+                {DISPLAY_COLUMNS.slice(1).map((column) => (
                   <th
                     key={column.key}
                     className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase ${
@@ -118,7 +248,6 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                   <tr key={`${item.SKU}-${index}`} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-sm text-gray-900">{item.SKU}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{item.ASIN}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item["Product Name"]}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["FBA Quantity"]}
                     </td>
@@ -135,6 +264,9 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                       {item["Internal Stock"]}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      {item["Recommended Quantity"]}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                       {item["Avg. Daily Sales"]?.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
@@ -148,7 +280,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
               ) : (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length}
+                    colSpan={DISPLAY_COLUMNS.length + 1}
                     className="px-4 py-8 text-center text-sm text-gray-500"
                   >
                     No data available

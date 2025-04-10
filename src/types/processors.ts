@@ -41,6 +41,7 @@ export interface ProcessedSellerboardStock {
   "Product Name": string;
   "FBA Quantity": number;
   "Internal Stock": number;
+  "Recommended Quantity": number;
   "Units In Transit": number;
   "Reserved Units": number;
   "Total Stock"?: number;
@@ -58,6 +59,8 @@ export interface ProcessedSellerboardStock {
   "Weight": string;
   "Dimensions": string;
   "Color": string;
+  "Marketplace": string;
+  "Coverage Period (Days)"?: number;
 }
 
 export interface SKUEANMapping {

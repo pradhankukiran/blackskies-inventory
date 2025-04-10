@@ -314,7 +314,18 @@ const FBAContent: React.FC<FBAContentProps> = ({
           }
         }
         
-        const processedSellerboardData = processSellerboardStock(sellerboardData, salesReturnsData);
+        // Get coverage days from IndexedDB or use default
+        let coverageDays = 14; // Default value
+        try {
+          const savedData = await getStoredData('fba');
+          if (savedData?.coverageDays) {
+            coverageDays = savedData.coverageDays;
+          }
+        } catch (err) {
+          console.error("Error loading coverage days:", err);
+        }
+        
+        const processedSellerboardData = processSellerboardStock(sellerboardData, salesReturnsData, coverageDays);
         
         // Update local state
         setFbaData({
@@ -338,7 +349,9 @@ const FBAContent: React.FC<FBAContentProps> = ({
           
           await storeData({ 
             parsedData: parsedDataObj, 
-            recommendations: [] 
+            recommendations: [],
+            coverageDays: coverageDays, // Save coverage days with the stored data
+            rawReturnsData: salesReturnsData // Store the raw returns data for recalculations
           }, 'fba'); // Pass 'fba' as storeType
         } catch (err) {
           console.error("Error storing parsed data:", err);
@@ -600,7 +613,23 @@ const IntegratedStockParser: React.FC = () => {
     // Clear only FBA data from IndexedDB
     try {
       await clearFiles('fba');
-      await clearStoredData('fba');
+      
+      // Reset stored data but maintain default coverage days
+      await storeData({
+        parsedData: {
+          internal: [],
+          zfs: [],
+          zfsShipments: [],
+          zfsShipmentsReceived: [],
+          skuEanMapper: [],
+          zfsSales: [],
+          integrated: [],
+          sellerboardStock: []
+        },
+        recommendations: [],
+        coverageDays: 14 // Reset to default value
+      }, 'fba');
+      
       console.log("FBA data cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing FBA data:", err);

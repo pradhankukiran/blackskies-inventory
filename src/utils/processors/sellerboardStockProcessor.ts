@@ -1,6 +1,6 @@
 import { ProcessedSellerboardStock } from '@/types/processors';
 
-export function processSellerboardStock(data: any[], salesReturnsData?: any[] | null): ProcessedSellerboardStock[] {
+export function processSellerboardStock(data: any[], salesReturnsData?: any[] | null, coverageDays: number = 14): ProcessedSellerboardStock[] {
   // Create a map of SKU to total sales in the last 30 days
   const salesMap: Record<string, number> = {};
   // Create a map for SKU to refund percentage
@@ -165,17 +165,26 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     // Get Refund Percentage from the refunds map
     const refundPercentageFromMap = refundsMap[normalizedSku] || 0;
     
+    // Calculate daily sales
+    const dailySales = parseFloat(item["Estimated\nSales\nVelocity"] || 0);
+    
     return {
       SKU: sku,
       ASIN: item.ASIN || item.asin || '',
       "Product Name": item.Title || item.title || item["Product Name"] || '',
       "FBA Quantity": fbaQuantity,
       "Internal Stock": parseInt(item["FBA prep. stock Prep center 1 stock"] || 0),
+      "Recommended Quantity": Math.round(
+        dailySales * 
+        coverageDays * 
+        (1 - (refundPercentageFromMap / 100)) * 
+        ((dailySales * 30) > 30 ? 1.2 : 1)
+      ),
       "Units In Transit": sentToFBAValue,
       "Reserved Units": reservedUnits,
       "Total Stock": fbaQuantity + reservedUnits,
-      "Avg. Daily Sales": parseFloat(item["Estimated\nSales\nVelocity"] || 0),
-      "Avg. Total Sales (30 Days)": parseFloat(item["Estimated\nSales\nVelocity"] || 0) * 30,
+      "Avg. Daily Sales": dailySales,
+      "Avg. Total Sales (30 Days)": dailySales * 30,
       "Avg. Return Rate (%)": refundPercentageFromMap,
       "Status": item.Status || item.status || '',
       "Size": item.Size || item.size || item["Child ASIN size"] || '',

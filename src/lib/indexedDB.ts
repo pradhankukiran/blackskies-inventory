@@ -20,6 +20,7 @@ interface StoredData {
   recommendations: ArticleRecommendation[];
   timeline?: 'none' | '30days' | '6months';
   coverageDays?: number;
+  rawReturnsData?: any[] | null; // Store raw returns data for recalculation when coverage period changes
 }
 
 interface SerializedFile {
