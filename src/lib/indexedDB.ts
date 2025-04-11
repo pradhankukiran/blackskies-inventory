@@ -371,17 +371,118 @@ const clearStoredDataByKey = async (db: IDBDatabase, key: string): Promise<void>
     const request = store.delete(key);
 
     request.onsuccess = () => {
-      console.log(`Data cleared with key: ${key}`);
+      console.log(`Stored data cleared successfully for key: ${key}`);
       transaction.oncomplete = () => resolve();
     };
 
     request.onerror = () => {
-      console.error(`Error clearing data with key ${key}:`, request.error);
+      console.error(`Error clearing stored data for key ${key}:`, request.error);
       transaction.abort();
       reject(request.error);
     };
-
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(new Error('Transaction aborted'));
   });
+};
+
+// --- Generic Data Storage Functions --- 
+
+// Helper structure to mark serialized files
+interface StoredFileWrapper {
+  _isFile: true;
+  data: SerializedFile;
+}
+
+/**
+ * Stores generic data (including Files) in IndexedDB under a specific key.
+ * Files are automatically serialized.
+ */
+export const storeGenericData = async (key: string, value: any): Promise<void> => {
+  const db = await getDB();
+  let dataToStore = value;
+
+  if (value instanceof File) {
+    try {
+      const serialized = await serializeFile(value);
+      dataToStore = { _isFile: true, data: serialized } as StoredFileWrapper;
+      console.log(`Serialized file for generic storage under key: ${key}`);
+    } catch (error) {
+      console.error(`Error serializing file for key ${key}:`, error);
+      throw error; // Re-throw to indicate failure
+    }
+  } else {
+     console.log(`Storing generic non-file data under key: ${key}`);
+  }
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(DATA_STORE, 'readwrite');
+    const store = transaction.objectStore(DATA_STORE);
+    const request = store.put(dataToStore, key);
+
+    request.onsuccess = () => {
+      console.log(`Generic data stored successfully for key: ${key}`);
+      transaction.oncomplete = () => resolve();
+    };
+
+    request.onerror = () => {
+      console.error(`Error storing generic data for key ${key}:`, request.error);
+      transaction.abort();
+      reject(request.error);
+    };
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+};
+
+/**
+ * Retrieves generic data from IndexedDB by key.
+ * Automatically deserializes Files.
+ */
+export const getGenericData = async (key: string): Promise<any | null> => {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(DATA_STORE, 'readonly');
+    const store = transaction.objectStore(DATA_STORE);
+    const request = store.get(key);
+
+    request.onsuccess = () => {
+      const storedValue = request.result;
+      if (!storedValue) {
+        console.log(`No generic data found for key: ${key}`);
+        resolve(null);
+        return;
+      }
+      
+      // Check if it's a wrapped file
+      if (storedValue && typeof storedValue === 'object' && storedValue._isFile === true && storedValue.data) {
+         try {
+           const file = deserializeToFile(storedValue.data as SerializedFile);
+           console.log(`Deserialized file retrieved for generic key: ${key}`);
+           resolve(file);
+         } catch (error) {
+            console.error(`Error deserializing file for key ${key}:`, error);
+            reject(error); // Indicate failure
+         }
+      } else {
+        console.log(`Retrieved generic non-file data for key: ${key}`);
+        resolve(storedValue);
+      }
+    };
+
+    request.onerror = () => {
+      console.error(`Error retrieving generic data for key ${key}:`, request.error);
+      reject(request.error);
+    };
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+};
+
+/**
+ * Clears generic data from IndexedDB by key.
+ */
+export const clearGenericData = async (key: string): Promise<void> => {
+  const db = await getDB();
+  // Use the same underlying implementation as clearStoredDataByKey
+  return clearStoredDataByKey(db, key);
 };

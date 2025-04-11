@@ -14,8 +14,9 @@ import { FBAStockTable } from "./FBAStockTable";
 import { parseFile } from "@/utils/fileParser";
 import { processSellerboardStock } from "@/utils/processors/sellerboardStockProcessor";
 import { ProcessedSellerboardStock } from "@/types/processors";
-import { storeFiles, getFiles, storeData, getStoredData, clearFiles, clearStoredData } from '@/lib/indexedDB';
+import { storeFiles, getFiles, storeData, getStoredData, clearFiles, clearStoredData, storeGenericData, getGenericData, clearGenericData } from '@/lib/indexedDB';
 import { FileState, ParsedData } from "@/types/stock";
+import RelativeStockTable from "./RelativeStockTable";
 
 interface TabContentProps {
   files: any;
@@ -490,6 +491,10 @@ function useScrollToResults() {
   return { tabsRef, setShouldScroll, setHasProcessed };
 }
 
+// Define keys for persistence
+const RELATIVE_STOCK_FILE_KEY = 'relativeStockFile';
+const RELATIVE_STOCK_TABLE_KEY = 'relativeStockTable';
+
 const IntegratedStockParser: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"zfs" | "fba">(() => {
     // Load the saved tab from localStorage, default to "zfs" if not found
@@ -500,6 +505,17 @@ const IntegratedStockParser: React.FC = () => {
   // Add state for export overlay
   const [showExportOverlay, setShowExportOverlay] = useState(false);
   const [exportFile, setExportFile] = useState<File | null>(null);
+  // State for overlay content
+  const [relativeStockData, setRelativeStockData] = useState<{
+     articleNumber: string;
+     warehouse?: string; 
+     binLocation?: string; 
+     isDefaultBinLocation?: boolean; 
+     physicalStock: number; 
+  }[]>([]);
+  const [processingExport, setProcessingExport] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isLoadingPersistedData, setIsLoadingPersistedData] = useState(true); // Loading state
   
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
@@ -673,68 +689,287 @@ const IntegratedStockParser: React.FC = () => {
     }
   };
 
-  // Handle file change for export
-  const handleExportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = event.target.files;
-    if (!newFiles) return;
-    setExportFile(newFiles[0]);
+  // Load persisted data on mount - Update type check
+  useEffect(() => {
+    const loadPersistedExportData = async () => {
+      setIsLoadingPersistedData(true);
+      try {
+        const storedFile = await getGenericData(RELATIVE_STOCK_FILE_KEY);
+        if (storedFile instanceof File) {
+          console.log("Loaded persisted export file:", storedFile.name);
+          setExportFile(storedFile);
+        }
+
+        const storedTableData = await getGenericData(RELATIVE_STOCK_TABLE_KEY);
+        // Update check for new structure
+        if (
+          Array.isArray(storedTableData) &&
+          storedTableData.every(
+            (item) =>
+              item &&
+              typeof item.articleNumber === 'string' &&
+              typeof item.physicalStock === 'number' &&
+              // Check optional fields exist or are undefined/null (adjust if they become mandatory)
+              (item.warehouse === undefined || item.warehouse === null || typeof item.warehouse === 'string') &&
+              (item.binLocation === undefined || item.binLocation === null || typeof item.binLocation === 'string') &&
+              (item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null || typeof item.isDefaultBinLocation === 'boolean')
+          )
+        ) {
+          console.log(`Loaded persisted relative stock table data with ${storedTableData.length} items.`);
+          // Cast to the new type
+          setRelativeStockData(storedTableData as {
+             articleNumber: string;
+             warehouse?: string;
+             binLocation?: string;
+             isDefaultBinLocation?: boolean;
+             physicalStock: number; 
+          }[]);
+        } else if (storedTableData) {
+          console.warn("Persisted table data has incorrect structure. Clearing.");
+          await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
+        }
+      } catch (err) {
+         console.error("Error loading persisted relative stock data:", err);
+         await clearGenericData(RELATIVE_STOCK_FILE_KEY);
+         await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
+      } finally {
+        setIsLoadingPersistedData(false);
+      }
+    };
+    loadPersistedExportData();
+  }, []);
+
+  // Handle file selection for export using generic functions
+  const handleExportFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setExportFile(file);
+      setRelativeStockData([]); 
+      setExportError(null);
+      try {
+        await storeGenericData(RELATIVE_STOCK_FILE_KEY, file);
+        console.log("Stored export file in IndexedDB");
+        await clearGenericData(RELATIVE_STOCK_TABLE_KEY); 
+      } catch (err) {
+        console.error("Error storing export file:", err);
+      }
+    }
   };
 
-  // Handle file removal for export
-  const handleExportFileRemove = () => {
+  // Handle file removal for export using generic functions
+  const handleExportFileRemove = async () => { 
     setExportFile(null);
+    setRelativeStockData([]);
+    setExportError(null);
+    try {
+      await clearGenericData(RELATIVE_STOCK_FILE_KEY);
+      await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
+      console.log("Cleared persisted relative stock file and table data.");
+    } catch (err) {
+      console.error("Error clearing persisted relative stock data:", err);
+    }
   };
 
-  // Process the export file
-  const processExportFile = () => {
-    console.log("Processing export file:", exportFile);
-    // Implement export functionality here
+  // Process the export file - Apply hardcoded values
+  const processExportFile = async () => {
+    if (!exportFile) return;
+
+    setProcessingExport(true);
+    setExportError(null);
+    setRelativeStockData([]);
+
+    try {
+      const parsedData = await parseFile(exportFile, (progress) => {
+        // Optional: update status if needed, though it might be quick
+        console.log(`Parsing progress: ${progress}%`);
+      });
+
+      if (!parsedData || parsedData.length === 0) {
+        throw new Error("File is empty or could not be parsed.");
+      }
+
+      const headers = Object.keys(parsedData[0]);
+      
+      // --- Define expected column headers (Only required ones now) --- 
+      const expectedHeaders = {
+          sku: ["Partner Variant Size", "SKU"],
+          stock: ["Recommended Stock", "Recommended Quantity"],
+      };
+
+      // --- Find actual column names used in the file --- 
+      const findHeader = (possibleNames: string[]): string | null => {
+          for (const name of possibleNames) {
+              if (headers.includes(name)) return name;
+          }
+          return null;
+      };
+
+      const skuColumn = findHeader(expectedHeaders.sku);
+      const stockColumn = findHeader(expectedHeaders.stock);
+      // No longer need to find warehouse, binLocation, isDefault columns
+
+      // --- Validate required columns --- 
+      if (!skuColumn || !stockColumn) {
+           const missing = [!skuColumn ? "SKU/Partner Variant Size" : null, !stockColumn ? "Recommended Stock/Quantity" : null].filter(Boolean).join(' and ');
+           throw new Error(`Required columns (${missing}) not found in the file.`);
+      }
+      console.log("Found required columns:", { skuColumn, stockColumn });
+
+      // --- Extract data rows, applying hardcoded values --- 
+      const extractedData = parsedData
+        .map((row: any) => {
+          const sku = row[skuColumn!];
+          const stockVal = row[stockColumn!];
+          
+          if (typeof sku !== 'string' || sku.trim() === '') return null;
+          const stockNum = Number(stockVal);
+          if (isNaN(stockNum)) return null;
+
+          // Assign hardcoded values
+          const warehouse = "HL"; 
+          const binLocation = undefined; // Represent empty bin location
+          const isDefaultBinLocation = false;
+          
+          return {
+             articleNumber: sku.trim(),
+             warehouse: warehouse, // Always HL
+             binLocation: binLocation, // Always empty
+             isDefaultBinLocation: isDefaultBinLocation, // Always false
+             physicalStock: stockNum
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+
+      if (extractedData.length === 0) {
+        throw new Error("No valid data rows found after extraction.");
+      }
+      
+      console.log(`Extracted ${extractedData.length} valid data rows.`);
+
+      // --- Sort by articleNumber --- 
+      extractedData.sort((a, b) => a.articleNumber.localeCompare(b.articleNumber));
+      console.log("Sorted data (first 10):", extractedData.slice(0, 10));
+
+      // Set state and persist
+      setRelativeStockData(extractedData);
+      await storeGenericData(RELATIVE_STOCK_TABLE_KEY, extractedData);
+      console.log("Stored updated table data in IndexedDB");
+
+    } catch (err) {
+      console.error("Error processing export file:", err);
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during processing.";
+      setExportError(errorMessage);
+      setRelativeStockData([]);
+      await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
+    } finally {
+      setProcessingExport(false);
+    }
+  };
+
+  // Function to close and reset the overlay state using generic functions
+  const handleCloseOverlay = async () => {
     setShowExportOverlay(false);
+    // Don't clear state immediately, just hide overlay.
+    // Let the removal functions handle state and persistence if needed.
+    // Clear persisted data on close
+    try {
+      // Clear the specific keys used by this feature
+      await clearGenericData(RELATIVE_STOCK_FILE_KEY);
+      await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
+      console.log("Cleared persisted relative stock data on overlay close.");
+       // Also reset the state now that persistence is cleared
+       setExportFile(null);
+       setRelativeStockData([]);
+       setProcessingExport(false);
+       setExportError(null);
+    } catch (err) {
+      console.error("Error clearing persisted relative stock data on close:", err);
+       // Still attempt to reset state even if clearing fails
+       setExportFile(null);
+       setRelativeStockData([]);
+       setProcessingExport(false);
+       setExportError(null);
+    }
+  };
+  
+  // Open Overlay function
+  const handleOpenOverlay = () => {
+    // Reset transient states
+    setProcessingExport(false);
+    setExportError(null);
+    // Data (exportFile, relativeStockData) will be loaded from IndexedDB by useEffect
+    setShowExportOverlay(true);
   };
 
   return (
     <>
-      <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
+      <LoadingOverlay isLoading={isProcessing || isLoadingPersistedData} message={processingStatus || (isLoadingPersistedData ? 'Loading data...' : '')} />
       
       {/* Relative Stock Export Overlay */}
       {showExportOverlay && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
-            <button 
-              onClick={() => setShowExportOverlay(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 relative flex flex-col max-h-[90vh]"> {/* Increased max-width for two columns */}
+            <button
+              onClick={handleCloseOverlay} // Use handler
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10" // Ensure button is on top
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            
-            <h2 className="text-lg font-medium mb-4">Create Stock Deduction File for Shopware</h2>
-            
-            <div className="space-y-4">
-              <FileUploadSection
-                title="Relative Stock Export"
-                onChange={handleExportFileChange}
-                onRemove={handleExportFileRemove}
-                files={exportFile ? [exportFile] : []}
-                acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
-              />
-              
-              <div className="flex justify-end space-x-3 mt-4">
-                <button
-                  onClick={() => setShowExportOverlay(false)}
-                  className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={processExportFile}
-                  disabled={!exportFile}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Process
-                </button>
-              </div>
+
+            <h2 className="text-lg font-medium mb-4 flex-shrink-0">Create Stock Deduction File for Shopware</h2>
+
+            <div className="flex-grow overflow-y-auto space-y-4"> {/* Make content area scrollable */}
+              {processingExport ? (
+                <div className="flex justify-center items-center h-32">
+                   <p>Processing...</p> {/* Basic loading indicator */}
+                </div>
+              ) : exportError ? (
+                <div className="space-y-4">
+                  <Alert variant="destructive">
+                    <AlertTitle>Error Processing File</AlertTitle>
+                    <p>{exportError}</p>
+                  </Alert>
+                   <div className="flex justify-end mt-4">
+                     <button
+                      onClick={handleCloseOverlay} // Use handler
+                      className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : relativeStockData.length > 0 ? (
+                <div className="space-y-4">
+                  <RelativeStockTable data={relativeStockData} />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <FileUploadSection
+                    title="Upload ZFS/FBA Recommended Stock File here" // Updated Title
+                    onChange={handleExportFileChange}
+                    onRemove={handleExportFileRemove}
+                    files={exportFile ? [exportFile] : []}
+                    acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+                  />
+                  <div className="flex justify-end space-x-3 mt-4">
+                    <button
+                      onClick={handleCloseOverlay} // Use handler
+                      className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={processExportFile}
+                      disabled={!exportFile || processingExport} // Disable during processing
+                      className="inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Process
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -745,9 +980,10 @@ const IntegratedStockParser: React.FC = () => {
           <CardHeader>
             <div className="flex justify-center mb-4">
               <button
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                onClick={() => setShowExportOverlay(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                onClick={handleOpenOverlay} // Use new handler to open
                 title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
+                disabled={isLoadingPersistedData} // Disable while loading
               >
                 Relative Stock Export
               </button>
