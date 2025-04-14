@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/pagination";
 import { Search, X } from "lucide-react";
+import { ExportButton } from "./ExportButton";
 
 interface RelativeStockTableProps {
   data: {
@@ -59,6 +60,16 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-4 px-1">
+        <div className="text-sm text-gray-700">
+          {filteredData.length} {filteredData.length === 1 ? "item" : "items"} found
+        </div>
+        <ExportButton
+          data={filteredData} 
+          label="Export Relative Stock"
+          filename="relative-stock-data"
+        />
+      </div>
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
         <div className="overflow-auto flex-1">
           <table className="min-w-full divide-y divide-gray-200">

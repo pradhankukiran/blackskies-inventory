@@ -36,6 +36,17 @@ const transformFBAStockOverview = (data: ProcessedSellerboardStock[]): Record<st
   }));
 };
 
+const transformRelativeStock = (data: any[]): Record<string, any>[] => {
+  return data.map(item => ({
+    "Article Number": item.articleNumber,
+    "Warehouse": item.warehouse || 'N/A',
+    "Bin Location": item.binLocation || 'N/A',
+    "Default Bin?": item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null ? 
+                    'N/A' : (item.isDefaultBinLocation ? 'Yes' : 'No'),
+    "Physical Stock": -item.physicalStock // Negating as per the table display
+  }));
+};
+
 const transformStockRecommendations = (data: ArticleRecommendation[]): Record<string, any>[] => {
   return data.map(item => ({
     "EAN": item.ean,
@@ -53,7 +64,7 @@ const transformStockRecommendations = (data: ArticleRecommendation[]): Record<st
   }));
 };
 
-type ExportDataType = IntegratedStockData[] | ArticleRecommendation[] | ProcessedSellerboardStock[];
+type ExportDataType = IntegratedStockData[] | ArticleRecommendation[] | ProcessedSellerboardStock[] | any[];
 
 export const exportData = (
   data: ExportDataType,
@@ -70,6 +81,8 @@ export const exportData = (
     transformedData = transformStockRecommendations(data as ArticleRecommendation[]);
   } else if (options.filename.includes('fba')) {
     transformedData = transformFBAStockOverview(data as ProcessedSellerboardStock[]);
+  } else if (options.filename.includes('relative-stock')) {
+    transformedData = transformRelativeStock(data);
   } else {
     transformedData = transformStockOverview(data as IntegratedStockData[]);
   }
