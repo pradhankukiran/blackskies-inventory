@@ -38,12 +38,12 @@ const transformFBAStockOverview = (data: ProcessedSellerboardStock[]): Record<st
 
 const transformRelativeStock = (data: any[]): Record<string, any>[] => {
   return data.map(item => ({
-    "Article Number": item.articleNumber,
-    "Warehouse": item.warehouse || 'N/A',
-    "Bin Location": item.binLocation || 'N/A',
-    "Default Bin?": item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null ? 
+    "articleNumber": item.articleNumber,
+    "warehouse": item.warehouse || 'N/A',
+    "binLocation": item.binLocation || 'N/A',
+    "isDefaultBin?": item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null ? 
                     'N/A' : (item.isDefaultBinLocation ? 'Yes' : 'No'),
-    "Physical Stock": -item.physicalStock // Negating as per the table display
+    "physicalStock": -item.physicalStock // Negating as per the table display
   }));
 };
 

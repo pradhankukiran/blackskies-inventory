@@ -815,44 +815,109 @@ const IntegratedStockParser: React.FC = () => {
       }
       console.log("Found required columns:", { skuColumn, stockColumn });
 
-      // --- Extract data rows, applying hardcoded values --- 
-      const extractedData = parsedData
-        .map((row: any) => {
-          const sku = row[skuColumn!];
-          const stockVal = row[stockColumn!];
-          
-          if (typeof sku !== 'string' || sku.trim() === '') return null;
-          const stockNum = Number(stockVal);
-          if (isNaN(stockNum)) return null;
+      // --- Process rows, handling SET SKUs and aggregating ---
+      const processedItems: { 
+        articleNumber: string; 
+        warehouse?: string; 
+        binLocation?: string; 
+        isDefaultBinLocation?: boolean; 
+        physicalStock: number; 
+      }[] = [];
+      const baseSkuStock: Record<string, { 
+          warehouse?: string; 
+          binLocation?: string; 
+          isDefaultBinLocation?: boolean; 
+          physicalStock: number; 
+      }> = {};
 
-          // Assign hardcoded values
-          const warehouse = "HL"; 
-          const binLocation = undefined; // Represent empty bin location
-          const isDefaultBinLocation = false;
-          
-          return {
-             articleNumber: sku.trim(),
-             warehouse: warehouse, // Always HL
-             binLocation: binLocation, // Always empty
-             isDefaultBinLocation: isDefaultBinLocation, // Always false
-             physicalStock: stockNum
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
+      for (const row of parsedData) {
+        const sku = row[skuColumn!];
+        const stockVal = row[stockColumn!];
 
-      if (extractedData.length === 0) {
-        throw new Error("No valid data rows found after extraction.");
+        if (typeof sku !== 'string' || sku.trim() === '') continue;
+        const stockNum = Number(stockVal);
+        if (isNaN(stockNum)) continue;
+
+        const trimmedSku = sku.trim();
+        const warehouse = "HL"; // Always HL
+        const binLocation = undefined; // Always empty
+        const isDefaultBinLocation = false; // Always false
+
+        if (trimmedSku.includes("-SET-")) {
+          const parts = trimmedSku.split("-SET-");
+          if (parts.length === 2) {
+            const prefix = parts[0];
+            const suffix = parts[1];
+            
+            // Generate Variant SKU
+            const variantSku = `${prefix}-${suffix}`;
+            processedItems.push({
+              articleNumber: variantSku,
+              warehouse,
+              binLocation,
+              isDefaultBinLocation,
+              physicalStock: stockNum 
+            });
+
+            // Generate Base SKU and aggregate stock
+            const lastHyphenIndex = suffix.lastIndexOf('-');
+            const baseSuffix = lastHyphenIndex !== -1 ? suffix.substring(0, lastHyphenIndex) : suffix;
+            const baseSku = `${prefix}-${baseSuffix}`;
+
+            if (!baseSkuStock[baseSku]) {
+              baseSkuStock[baseSku] = { 
+                warehouse, 
+                binLocation, 
+                isDefaultBinLocation, 
+                physicalStock: 0 
+              };
+            }
+            baseSkuStock[baseSku].physicalStock += stockNum;
+
+          } else {
+            // Handle malformed SET SKU (e.g., multiple -SET-) - treat as standard for now
+             processedItems.push({
+               articleNumber: trimmedSku,
+               warehouse,
+               binLocation,
+               isDefaultBinLocation,
+               physicalStock: stockNum
+             });
+          }
+        } else {
+          // Standard SKU
+          processedItems.push({
+            articleNumber: trimmedSku,
+            warehouse,
+            binLocation,
+            isDefaultBinLocation,
+            physicalStock: stockNum
+          });
+        }
+      }
+
+      // Add aggregated Base SKUs to the list
+      for (const baseSku in baseSkuStock) {
+        processedItems.push({
+          articleNumber: baseSku,
+          ...baseSkuStock[baseSku]
+        });
       }
       
-      console.log(`Extracted ${extractedData.length} valid data rows.`);
+      console.log(`Processed ${parsedData.length} rows into ${processedItems.length} items (incl. generated SKUs).`);
 
+
+      if (processedItems.length === 0) {
+        throw new Error("No valid data rows found after processing.");
+      }
+      
       // --- Sort by articleNumber --- 
-      extractedData.sort((a, b) => a.articleNumber.localeCompare(b.articleNumber));
-      console.log("Sorted data (first 10):", extractedData.slice(0, 10));
+      processedItems.sort((a, b) => a.articleNumber.localeCompare(b.articleNumber));
+      console.log("Sorted data (first 10):", processedItems.slice(0, 10));
 
       // Set state and persist
-      setRelativeStockData(extractedData);
-      await storeGenericData(RELATIVE_STOCK_TABLE_KEY, extractedData);
+      setRelativeStockData(processedItems);
+      await storeGenericData(RELATIVE_STOCK_TABLE_KEY, processedItems);
       console.log("Stored updated table data in IndexedDB");
 
     } catch (err) {
