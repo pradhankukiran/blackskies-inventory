@@ -159,21 +159,31 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     const normalizedSku = normalizeSkuForMapping(sku);
     // Get the total sales value from the map
     const totalSalesFromMap = salesMap[normalizedSku] || 0; 
-    // Calculate the average over 3 days
+    // Calculate the average over 3 days (from returns data if available)
     const avgSales3Days = totalSalesFromMap ? totalSalesFromMap / 3 : 0;
 
     // Get Refund Percentage from the refunds map
     const refundPercentageFromMap = refundsMap[normalizedSku] || 0;
     
-    // Calculate daily sales
-    const dailySales = parseFloat(item["Estimated\nSales\nVelocity"] || 0);
+    // Calculate daily sales: prefer Estimated Sales Velocity, fallback to returns-derived average
+    const estimatedVelocity = parseFloat(item["Estimated\nSales\nVelocity"] || 0);
+    const dailySales = (!isNaN(estimatedVelocity) && estimatedVelocity > 0)
+      ? estimatedVelocity
+      : (avgSales3Days || 0);
     
     return {
       SKU: sku,
       ASIN: item.ASIN || item.asin || '',
       "Product Name": item.Title || item.title || item["Product Name"] || '',
       "FBA Quantity": fbaQuantity,
-      "Internal Stock": parseInt(item["FBA prep. stock Prep center 1 stock"] || 0),
+      // Internal/prep-center stock can appear under slightly different headers; apply fallbacks
+      "Internal Stock": parseInt(
+        item["FBA prep. stock Prep center 1 stock"]
+        || item["FBA prep. stock"]
+        || item["Prep center 1 stock"]
+        || item["Internal Stock"]
+        || 0
+      ),
       "Recommended Quantity": Math.max(0, Math.round(
         dailySales * 
         coverageDays * 
