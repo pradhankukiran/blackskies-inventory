@@ -112,12 +112,17 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
               dailySales * 
               days * 
               (1 - (refundPercentage / 100)) * 
-              ((dailySales * 30) > 30 ? 1.2 : 1) - 
+              ((dailySales * 30) > 10 ? 1.2 : 1) - 
               totalStock
             );
-            
+
             // Ensure recommended quantity is not negative
             newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
+
+            // Enforce minimum of 1 if we have internal stock and no external FBA stock
+            if (newRecommendedQuantity === 0 && totalStock === 0 && (item["Internal Stock"] || 0) > 0) {
+              newRecommendedQuantity = 1;
+            }
             
             return {
               ...item,
@@ -140,12 +145,17 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             dailySales * 
             days * 
             (1 - (refundPercentage / 100)) * 
-            ((dailySales * 30) > 30 ? 1.2 : 1) - 
+            ((dailySales * 30) > 10 ? 1.2 : 1) - 
             totalStock
           );
-          
+
           // Ensure recommended quantity is not negative
           newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
+
+          // Enforce minimum of 1 if we have internal stock and no external FBA stock
+          if (newRecommendedQuantity === 0 && totalStock === 0 && (item["Internal Stock"] || 0) > 0) {
+            newRecommendedQuantity = 1;
+          }
           
           return {
             ...item,

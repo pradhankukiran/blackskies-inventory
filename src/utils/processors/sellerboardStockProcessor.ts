@@ -171,29 +171,41 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       ? estimatedVelocity
       : (avgSales3Days || 0);
     
+    // Internal/prep-center stock can appear under slightly different headers; apply fallbacks
+    const internalStock = parseInt(
+      item["FBA prep. stock Prep center 1 stock"]
+      || item["FBA prep. stock"]
+      || item["Prep center 1 stock"]
+      || item["Internal Stock"]
+      || 0
+    );
+
+    const totalFbaStock = fbaQuantity + sentToFBAValue + reservedUnits;
+
+    // Base recommendation
+    let recommendedQty = Math.max(0, Math.round(
+      dailySales * 
+      coverageDays * 
+      (1 - (refundPercentageFromMap / 100)) * 
+      ((dailySales * 30) > 10 ? 1.2 : 1)  - 
+      totalFbaStock
+    ));
+
+    // Enforce minimum of 1 if we have internal stock and no external FBA stock
+    if (recommendedQty === 0 && totalFbaStock === 0 && internalStock > 0) {
+      recommendedQty = 1;
+    }
+
     return {
       SKU: sku,
       ASIN: item.ASIN || item.asin || '',
       "Product Name": item.Title || item.title || item["Product Name"] || '',
       "FBA Quantity": fbaQuantity,
-      // Internal/prep-center stock can appear under slightly different headers; apply fallbacks
-      "Internal Stock": parseInt(
-        item["FBA prep. stock Prep center 1 stock"]
-        || item["FBA prep. stock"]
-        || item["Prep center 1 stock"]
-        || item["Internal Stock"]
-        || 0
-      ),
-      "Recommended Quantity": Math.max(0, Math.round(
-        dailySales * 
-        coverageDays * 
-        (1 - (refundPercentageFromMap / 100)) * 
-        ((dailySales * 30) > 10 ? 1.2 : 1)  - 
-        (fbaQuantity + sentToFBAValue + reservedUnits)
-      )),
+      "Internal Stock": internalStock,
+      "Recommended Quantity": recommendedQty,
       "Units In Transit": sentToFBAValue,
       "Reserved Units": reservedUnits,
-      "Total Stock": fbaQuantity + sentToFBAValue + reservedUnits,
+      "Total Stock": totalFbaStock,
       "Avg. Daily Sales": dailySales,
       "Avg. Total Sales (30 Days)": dailySales * 30,
       "Avg. Return Rate (%)": refundPercentageFromMap,
