@@ -132,11 +132,12 @@ function calculateRecommendedStock(
   coverageDays: number,
   currentStock: number = 0,
   statusCluster: string = 'Live',
-  pricePoint: number = 0
+  zfsStock: number = 0
 ): number {
-  // If there are no sales, return 0 recommended stock
+  // If there are no sales, apply minimum stock rule for Live products with zero FBA stock
   if (salesData.totalSales === 0) {
-    return 0;
+    // Only apply minimum stock rule to Live products with zero ZFS stock
+    return (statusCluster === 'Live' && zfsStock === 0) ? 1 : 0;
   }
 
   // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
@@ -294,8 +295,11 @@ export function calculateStockRecommendations(
     const zfsTotal = safeNumber(stockItem["ZFS Quantity"]) + safeNumber(stockItem["ZFS Pending Shipment"]);
     const currentStock = safeNumber(stockItem["Available Stock"]);
     
-    // If no sales data or zero sales, set default values
+    // If no sales data or zero sales, apply minimum stock rule for Live products
     if (!salesData || salesData.totalSales === 0) {
+      const statusCluster = stockItem["Status Cluster"] || 'Live';
+      const recommendedStock = (statusCluster === 'Live' && zfsTotal === 0) ? 1 : 0;
+      
       recommendations.push({
         articleId: stockItem.SKU,
         ean: stockItem.EAN,
@@ -303,14 +307,14 @@ export function calculateStockRecommendations(
         partnerVariantSize: stockItem.partner_variant_size || 'N/A',
         recommendedDays: coverageDays,
         averageDailySales: 0,
-        recommendedStock: zfsTotal === 0 ? 1 : 0, // Set to 1 if no ZFS stock
+        recommendedStock: recommendedStock,
         totalSales: 0,
         averageReturnRate: 0,
         firstSaleDate: '',
         statusDescription: stockItem["Status Description"],
         zfsTotal,
         sellablePFStock: currentStock,
-        statusCluster: stockItem["Status Cluster"],
+        statusCluster: statusCluster,
         category: '',
         markets: '',
         countryAllocations: {},
@@ -349,7 +353,7 @@ export function calculateStockRecommendations(
       coverageDays,
       currentStock,
       statusCluster,
-      pricePoint
+      zfsTotal
     );
 
     // Calculate final recommended stock by subtracting current ZFS stock
