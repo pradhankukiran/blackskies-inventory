@@ -159,8 +159,8 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     const normalizedSku = normalizeSkuForMapping(sku);
     // Get the total sales value from the map
     const totalSalesFromMap = salesMap[normalizedSku] || 0; 
-    // Calculate the average over 3 days (from returns data if available)
-    const avgSales3Days = totalSalesFromMap ? totalSalesFromMap / 3 : 0;
+    // Calculate the average daily sales over 30 days (from returns data if available)
+    const avgDailySales = totalSalesFromMap ? totalSalesFromMap / 30 : 0;
 
     // Get Refund Percentage from the refunds map
     const refundPercentageFromMap = refundsMap[normalizedSku] || 0;
@@ -169,7 +169,7 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
     const estimatedVelocity = parseFloat(item["Estimated\nSales\nVelocity"] || 0);
     const dailySales = (!isNaN(estimatedVelocity) && estimatedVelocity > 0)
       ? estimatedVelocity
-      : (avgSales3Days || 0);
+      : (avgDailySales || 0);
     
     // Internal/prep-center stock can appear under slightly different headers; apply fallbacks
     const internalStock = parseInt(
@@ -228,11 +228,11 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
   // Find a few SKUs for debugging
   const sampleSKUs = Object.keys(salesMap).slice(0, 3);
   if (sampleSKUs.length > 0) {
-    console.log('Sample sales data (30 days total / 3 = avg):', 
+    console.log('Sample sales data (30 days total / 30 = daily avg):', 
       sampleSKUs.map(sku => ({
         SKU: sku,
         TotalSales: salesMap[sku],
-        AvgSales: salesMap[sku] / 3
+        AvgDailySales: salesMap[sku] / 30
       }))
     );
   }
