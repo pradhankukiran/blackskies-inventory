@@ -1,4 +1,3 @@
-import { ArticleRecommendation } from './sales';
 import { ProcessedSellerboardStock } from './processors';
 
 export interface ParsedData {

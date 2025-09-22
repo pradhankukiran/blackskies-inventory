@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface CoverageDaysSelectorProps {
   value: number;
   onChange: (days: number) => void;

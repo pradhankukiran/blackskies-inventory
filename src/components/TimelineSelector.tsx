@@ -1,4 +1,3 @@
-import React from "react";
 import { TimelineType } from "@/types/common";
 
 interface TimelineSelectorProps {

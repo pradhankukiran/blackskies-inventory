@@ -21,6 +21,7 @@ interface StoredData {
   timeline?: 'none' | '30days' | '6months';
   coverageDays?: number;
   rawReturnsData?: any[] | null; // Store raw returns data for recalculation when coverage period changes
+  blacklist?: string[];
 }
 
 interface SerializedFile {
@@ -72,6 +73,23 @@ const serializeFile = async (file: File): Promise<SerializedFile> => {
 const deserializeToFile = (serialized: SerializedFile): File => {
   return new File([serialized.data], serialized.name, { type: serialized.type });
 };
+
+const createEmptyParsedData = (): ParsedData => ({
+  internal: [],
+  zfs: [],
+  zfsShipments: [],
+  zfsShipmentsReceived: [],
+  skuEanMapper: [],
+  zfsSales: [],
+  integrated: [],
+  sellerboardStock: []
+});
+
+const createDefaultStoredData = (): StoredData => ({
+  parsedData: createEmptyParsedData(),
+  recommendations: [],
+  blacklist: []
+});
 
 const serializeFiles = async (files: FileState): Promise<Record<string, SerializedFile | SerializedFile[] | null | string>> => {
   const serialized: Record<string, SerializedFile | SerializedFile[] | null | string> = {};
@@ -296,6 +314,24 @@ export const storeData = async (data: StoredData, storeType: 'zfs' | 'fba' = 'zf
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(new Error('Transaction aborted'));
   });
+};
+
+export const storeBlacklist = async (blacklist: string[], storeType: 'zfs' | 'fba' = 'zfs'): Promise<void> => {
+  const existing = await getStoredData(storeType);
+  const data = existing ? { ...existing } : createDefaultStoredData();
+  data.blacklist = [...blacklist];
+  if (!data.parsedData) {
+    data.parsedData = createEmptyParsedData();
+  }
+  if (!data.recommendations) {
+    data.recommendations = [];
+  }
+  await storeData(data, storeType);
+};
+
+export const getBlacklist = async (storeType: 'zfs' | 'fba' = 'zfs'): Promise<string[]> => {
+  const existing = await getStoredData(storeType);
+  return existing?.blacklist ? [...existing.blacklist] : [];
 };
 
 export const getStoredData = async (storeType?: 'zfs' | 'fba'): Promise<StoredData | null> => {

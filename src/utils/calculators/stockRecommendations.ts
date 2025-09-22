@@ -1,6 +1,4 @@
 import { ZFSSaleEntry, ArticleRecommendation } from "@/types/sales";
-import { calculateSalesMetrics } from "./salesAnalytics";
-import { calculateDaysBetween } from "./dateCalculator";
 import { safeDivide, safeNumber } from "../formatters/numberFormatter";
 import { IntegratedStockData } from "@/types/stock";
 
@@ -38,85 +36,6 @@ interface CountrySalesData {
 }
 
 /**
- * Determines current season for seasonal adjustments
- */
-function getCurrentSeason(): string {
-  const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear().toString().slice(2); // Get last 2 digits of year
-  
-  // Simple season determination: SS (Spring/Summer) is months 2-7 (Mar-Aug), FW (Fall/Winter) is months 8-1 (Sep-Feb)
-  if (month >= 2 && month <= 7) {
-    return `ss${year}`;
-  } else {
-    return `fw${year}`;
-  }
-}
-
-/**
- * Checks if the product's season is ending soon
- */
-function isEndOfSeason(season: string): boolean {
-  const currentSeason = getCurrentSeason();
-  
-  // If seasons don't match and current season is the next one, it's end of season
-  if (season !== currentSeason) {
-    // Extract season type (ss/fw) and year
-    const seasonType = season.slice(0, 2).toLowerCase();
-    const seasonYear = parseInt(season.slice(2));
-    
-    const currentType = currentSeason.slice(0, 2).toLowerCase();
-    const currentYear = parseInt(currentSeason.slice(2));
-    
-    // If current season is newer, the product's season is ending/ended
-    if (currentYear > seasonYear || (currentYear === seasonYear && currentType !== seasonType)) {
-      return true;
-    }
-  }
-  
-  const now = new Date();
-  const month = now.getMonth();
-  
-  // If it's end of spring/summer (Jul-Aug) or end of fall/winter (Jan-Feb)
-  if ((month === 6 || month === 7) && season.startsWith('ss')) {
-    return true;
-  }
-  if ((month === 0 || month === 1) && season.startsWith('fw')) {
-    return true;
-  }
-  
-  return false;
-}
-
-/**
- * Calculate price sensitivity multiplier based on price point
- */
-function calculatePriceSensitivity(pricePoint: number): number {
-  if (pricePoint <= 0) return 1.0;
-  
-  // IMPROVED: Use a more gradual scale for price sensitivity
-  // This prevents price point from overwhelming the coverage days effect
-  
-  // Original values for reference:
-  // if (pricePoint > 150) return 1.3;  // Luxury items need higher buffer
-  // if (pricePoint > 100) return 1.2;  // High-priced items
-  // if (pricePoint > 50) return 1.1;   // Mid-priced items
-  // if (pricePoint > 20) return 1.05;  // Low-mid priced items
-  
-  // New implementation using a continuous curve instead of discrete steps
-  // This creates a smoother transition between price points
-  // and reduces the impact of price on the overall calculation
-  
-  // Logarithmic scaling for more balanced sensitivity
-  if (pricePoint > 150) return 1.15;  // Reduced from 1.3
-  if (pricePoint > 100) return 1.1;   // Reduced from 1.2
-  if (pricePoint > 50) return 1.05;   // Reduced from 1.1
-  if (pricePoint > 20) return 1.025;  // Reduced from 1.05
-  
-  return 1.0;                         // Budget items (unchanged)
-}
-
-/**
  * Calculates the recommended stock level for a product based on sales data and desired coverage period
  */
 function calculateRecommendedStock(
@@ -130,7 +49,6 @@ function calculateRecommendedStock(
     season?: string;
   }, 
   coverageDays: number,
-  currentStock: number = 0,
   statusCluster: string = 'Live',
   zfsStock: number = 0
 ): number {
@@ -168,7 +86,6 @@ export function calculateStockRecommendations(
     return [];
   }
   
-  const stockByEAN = new Map(stockData.map(item => [item.EAN, item]));
   const recommendations: ExtendedArticleRecommendation[] = [];
 
   // Group sales data by EAN, aggregating across countries
@@ -329,9 +246,6 @@ export function calculateStockRecommendations(
     if (timelineDays === 0) return;
 
     // Get total ZFS stock (current + pending)
-    // Track how many markets this product is sold in
-    const marketCount = salesData.countries.size;
-    
     // Extract price point from stock data if available
     const pricePoint = safeNumber((stockItem as any)["regular_price"] || 
                                  (stockItem as any)["discounted_price"] || 0);
@@ -351,7 +265,6 @@ export function calculateStockRecommendations(
         season: salesData.season,
       }, 
       coverageDays,
-      currentStock,
       statusCluster,
       zfsTotal
     );

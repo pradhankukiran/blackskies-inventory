@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { FileUploadGrid } from "./FileUploadGrid";
 import { FileUploadSection } from "./FileUploadSection";
 import { StockTable } from "./StockTable";
@@ -14,9 +14,10 @@ import { FBAStockTable } from "./FBAStockTable";
 import { parseFile } from "@/utils/fileParser";
 import { processSellerboardStock } from "@/utils/processors/sellerboardStockProcessor";
 import { ProcessedSellerboardStock } from "@/types/processors";
-import { storeFiles, getFiles, storeData, getStoredData, clearFiles, clearStoredData, storeGenericData, getGenericData, clearGenericData } from '@/lib/indexedDB';
+import { storeFiles, getFiles, storeData, getStoredData, clearFiles, clearStoredData, storeGenericData, getGenericData, clearGenericData, storeBlacklist, getBlacklist } from '@/lib/indexedDB';
 import { FileState, ParsedData } from "@/types/stock";
 import RelativeStockTable from "./RelativeStockTable";
+import BlacklistModal from "./BlacklistModal";
 
 interface TabContentProps {
   files: any;
@@ -34,6 +35,8 @@ interface TabContentProps {
   setError: any;
   showTabs: boolean;
   tabsRef: any;
+  onOpenBlacklist: () => void;
+  blacklistCount: number;
 }
 
 const ZFSContent: React.FC<TabContentProps> = ({
@@ -52,6 +55,8 @@ const ZFSContent: React.FC<TabContentProps> = ({
   setError,
   showTabs,
   tabsRef,
+  onOpenBlacklist,
+  blacklistCount,
 }) => {
   const tabs = [
     {
@@ -101,6 +106,17 @@ const ZFSContent: React.FC<TabContentProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
             Reset Files
+          </button>
+          <button
+            onClick={onOpenBlacklist}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Manage Blacklist
+            {blacklistCount > 0 && (
+              <span className="inline-flex items-center justify-center rounded-full bg-green-600 px-2 text-xs font-semibold text-white">
+                {blacklistCount}
+              </span>
+            )}
           </button>
           {showTabs && (
             <button
@@ -152,6 +168,8 @@ interface FBAContentProps {
   }>>;
   resetFiles: () => void;
   clearTables: () => void;
+  blacklist: string[];
+  onOpenBlacklist: () => void;
 }
 
 const FBAContent: React.FC<FBAContentProps> = ({ 
@@ -160,14 +178,18 @@ const FBAContent: React.FC<FBAContentProps> = ({
   fbaData, 
   setFbaData,
   resetFiles,
-  clearTables
+  clearTables,
+  blacklist,
+  onOpenBlacklist
 }) => {
-  const [timeline] = useState<TimelineType>("30days");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [showTabs, setShowTabs] = useState(fbaData.sellerboardStock.length > 0);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const blacklistSet = useMemo(() => new Set(blacklist.map((sku) => sku.trim().toUpperCase())), [blacklist]);
+  const filteredSellerboardStock = useMemo(() => (
+    fbaData.sellerboardStock.filter((item) => !blacklistSet.has((item.SKU || '').trim().toUpperCase()))
+  ), [fbaData.sellerboardStock, blacklistSet]);
 
   // Load saved files and data from IndexedDB on component mount
   useEffect(() => {
@@ -189,7 +211,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
             setFbaData({
               sellerboardStock: savedData.parsedData.sellerboardStock,
             });
-            setShowTabs(savedData.parsedData.sellerboardStock.length > 0);
           }
         }
       } catch (err) {
@@ -201,9 +222,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
   }, [setFbaFiles, setFbaData]);
 
   // Update showTabs when fbaData changes
-  useEffect(() => {
-    setShowTabs(fbaData.sellerboardStock.length > 0);
-  }, [fbaData]);
+  const showTabs = filteredSellerboardStock.length > 0;
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -242,7 +261,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
     }
   };
 
-  const handleRemoveFile = async (fileName: string, type: string) => {
+  const handleRemoveFile = async (_fileName: string, type: string) => {
     const updatedFiles = {
       ...fbaFiles,
       [type]: null,
@@ -316,6 +335,21 @@ const FBAContent: React.FC<FBAContentProps> = ({
             });
           }
         }
+
+        const normalizeSkuValue = (value: any) =>
+          typeof value === 'string' ? value.trim().toUpperCase() : '';
+        const filteredSellerboardData = Array.isArray(sellerboardData)
+          ? sellerboardData.filter((row: Record<string, any>) => {
+              const sku = normalizeSkuValue(row?.SKU ?? row?.sku);
+              return !blacklistSet.has(sku);
+            })
+          : [];
+        const filteredSalesReturnsData = Array.isArray(salesReturnsData)
+          ? salesReturnsData.filter((row: Record<string, any>) => {
+              const sku = normalizeSkuValue(row?.SKU ?? row?.sku);
+              return !blacklistSet.has(sku);
+            })
+          : null;
         
         // Get coverage days from IndexedDB or use default
         let coverageDays = 14; // Default value
@@ -328,13 +362,13 @@ const FBAContent: React.FC<FBAContentProps> = ({
           console.error("Error loading coverage days:", err);
         }
         
-        const processedSellerboardData = processSellerboardStock(sellerboardData, salesReturnsData, coverageDays);
+        const processedSellerboardData = processSellerboardStock(filteredSellerboardData, filteredSalesReturnsData, coverageDays)
+          .filter((item) => !blacklistSet.has((item.SKU || '').trim().toUpperCase()));
         
         // Update local state
         setFbaData({
           sellerboardStock: processedSellerboardData,
         });
-        setShowTabs(processedSellerboardData.length > 0);
         
         // Store in IndexedDB with 'fba' storeType
         try {
@@ -354,7 +388,8 @@ const FBAContent: React.FC<FBAContentProps> = ({
             parsedData: parsedDataObj, 
             recommendations: [],
             coverageDays: coverageDays, // Save coverage days with the stored data
-            rawReturnsData: salesReturnsData // Store the raw returns data for recalculations
+            rawReturnsData: filteredSalesReturnsData,
+            blacklist: Array.from(blacklistSet)
           }, 'fba'); // Pass 'fba' as storeType
         } catch (err) {
           console.error("Error storing parsed data:", err);
@@ -383,8 +418,8 @@ const FBAContent: React.FC<FBAContentProps> = ({
       id: "stock",
       label: "FBA Stock Overview & Recommendation",
       content:
-        fbaData.sellerboardStock.length > 0 ? (
-          <FBAStockTable data={fbaData.sellerboardStock} />
+        filteredSellerboardStock.length > 0 ? (
+          <FBAStockTable data={filteredSellerboardStock} />
         ) : null,
     },
     // Add more tabs here in the future like recommendations if needed
@@ -445,6 +480,17 @@ const FBAContent: React.FC<FBAContentProps> = ({
               <RotateCcw className="w-4 h-4" />
               Reset Files
             </button>
+            <button
+              onClick={onOpenBlacklist}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Manage Blacklist
+              {blacklist.length > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-green-600 px-2 text-xs font-semibold text-white">
+                  {blacklist.length}
+                </span>
+              )}
+            </button>
             {showTabs && (
               <button
                 onClick={clearTables}
@@ -501,6 +547,8 @@ const IntegratedStockParser: React.FC = () => {
     return (localStorage.getItem("activeTab") as "zfs" | "fba") || "zfs";
   });
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
+  const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
+  const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
   
   // Add state for export overlay
   const [showExportOverlay, setShowExportOverlay] = useState(false);
@@ -536,6 +584,33 @@ const IntegratedStockParser: React.FC = () => {
   }>({
     sellerboardStock: [],
   });
+  const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
+  const fbaBlacklistRef = useRef<string[]>([]);
+  useEffect(() => {
+    fbaBlacklistRef.current = fbaBlacklist;
+  }, [fbaBlacklist]);
+
+  const addFbaToBlacklist = (value: string) => {
+    const normalized = value.trim().toUpperCase();
+    if (!normalized) return;
+    setFbaBlacklist((prev) => {
+      if (prev.includes(normalized)) {
+        return prev;
+      }
+      const updated = [...prev, normalized];
+      storeBlacklist(updated, 'fba').catch(() => {});
+      return updated;
+    });
+  };
+
+  const removeFbaFromBlacklist = (value: string) => {
+    const normalized = value.trim().toUpperCase();
+    setFbaBlacklist((prev) => {
+      const updated = prev.filter((sku) => sku !== normalized);
+      storeBlacklist(updated, 'fba').catch(() => {});
+      return updated;
+    });
+  };
 
   const {
     files,
@@ -551,12 +626,55 @@ const IntegratedStockParser: React.FC = () => {
     setTimeline,
     resetFiles,
     clearTables,
-    resetAll,
     setError,
+    blacklist: zfsBlacklist,
+    addToBlacklist: addZfsToBlacklist,
+    removeFromBlacklist: removeZfsFromBlacklist,
   } = useFileProcessing();
 
+  const zfsBlacklistSet = useMemo(() => new Set(zfsBlacklist.map((sku) => sku.trim().toUpperCase())), [zfsBlacklist]);
+
+  const filteredParsedData = useMemo(() => ({
+    ...parsedData,
+    integrated: parsedData.integrated.filter((item) => {
+      const sku = typeof item?.SKU === 'string' ? item.SKU.trim().toUpperCase() : '';
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(sku) && !zfsBlacklistSet.has(ean);
+    }),
+    zfs: parsedData.zfs.filter((item: any) => {
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : (typeof item?.ean === 'string' ? item.ean.trim().toUpperCase() : '');
+      return !zfsBlacklistSet.has(ean);
+    }),
+    zfsShipments: parsedData.zfsShipments.filter((item: any) => {
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(ean);
+    }),
+    zfsShipmentsReceived: parsedData.zfsShipmentsReceived.filter((item: any) => {
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(ean);
+    }),
+    skuEanMapper: parsedData.skuEanMapper.filter((item: any) => {
+      const sku = typeof item?.SKU === 'string' ? item.SKU.trim().toUpperCase() : '';
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(sku) && !zfsBlacklistSet.has(ean);
+    }),
+    zfsSales: parsedData.zfsSales.filter((item: any) => {
+      const ean = typeof item?.EAN === 'string' ? item.EAN.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(ean);
+    })
+  }), [parsedData, zfsBlacklistSet]);
+
+  const filteredRecommendations = useMemo(
+    () => recommendations.filter((item) => {
+      const sku = typeof item?.articleId === 'string' ? item.articleId.trim().toUpperCase() : '';
+      const ean = typeof item?.ean === 'string' ? item.ean.trim().toUpperCase() : '';
+      return !zfsBlacklistSet.has(sku) && !zfsBlacklistSet.has(ean);
+    }),
+    [recommendations, zfsBlacklistSet]
+  );
+
   const showTabs =
-    parsedData.integrated.length > 0 || recommendations.length > 0;
+    filteredParsedData.integrated.length > 0 || filteredRecommendations.length > 0;
 
   // Load data for both tabs on component mount
   useEffect(() => {
@@ -578,6 +696,15 @@ const IntegratedStockParser: React.FC = () => {
               sellerboardStock: savedFbaData.parsedData.sellerboardStock,
             });
           }
+          if (Array.isArray(savedFbaData.blacklist)) {
+            const normalized = savedFbaData.blacklist.map((sku) => sku.trim().toUpperCase()).filter(Boolean);
+            setFbaBlacklist(normalized);
+          }
+        } else {
+          const storedBlacklist = await getBlacklist('fba');
+          if (storedBlacklist.length > 0) {
+            setFbaBlacklist(storedBlacklist.map((sku) => sku.trim().toUpperCase()).filter(Boolean));
+          }
         }
       } catch (err) {
         console.error("Error loading saved FBA data:", err);
@@ -596,17 +723,6 @@ const IntegratedStockParser: React.FC = () => {
     }
   }, [isProcessing, showTabs, setShouldScroll, setHasProcessed]);
 
-  // Update reset functions to specify storeType
-  const clearAllData = async () => {
-    try {
-      await clearFiles(); // This will now clear both ZFS and FBA files
-      await clearStoredData(); // This will now clear both ZFS and FBA data
-      console.log("All data cleared from IndexedDB");
-    } catch (err) {
-      console.error("Error clearing all data:", err);
-    }
-  };
-
   // Update resetFiles to only clear ZFS data
   const resetZFSFiles = async () => {
     resetFiles(); // Original ZFS reset logic - this already has storeType 'zfs'
@@ -615,6 +731,9 @@ const IntegratedStockParser: React.FC = () => {
     try {
       await clearFiles('zfs');
       await clearStoredData('zfs');
+      if (zfsBlacklist.length > 0) {
+        await storeBlacklist(zfsBlacklist, 'zfs');
+      }
       console.log("ZFS data cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing ZFS data:", err);
@@ -649,7 +768,8 @@ const IntegratedStockParser: React.FC = () => {
           sellerboardStock: []
         },
         recommendations: [],
-        coverageDays: 14 // Reset to default value
+        coverageDays: 14,
+        blacklist: Array.from(fbaBlacklistRef.current)
       }, 'fba');
       
       console.log("FBA data cleared from IndexedDB");
@@ -680,7 +800,8 @@ const IntegratedStockParser: React.FC = () => {
             zfsSales: [],
             integrated: [],
             sellerboardStock: []
-          }
+          },
+          blacklist: Array.from(fbaBlacklistRef.current)
         }, 'fba');
         console.log("FBA tables cleared from IndexedDB");
       }
@@ -969,6 +1090,24 @@ const IntegratedStockParser: React.FC = () => {
   return (
     <>
       <LoadingOverlay isLoading={isProcessing || isLoadingPersistedData} message={processingStatus || (isLoadingPersistedData ? 'Loading data...' : '')} />
+      <BlacklistModal
+        isOpen={showZfsBlacklistModal}
+        title="ZFS Blacklisted SKUs"
+        items={zfsBlacklist}
+        onClose={() => setShowZfsBlacklistModal(false)}
+        onAdd={addZfsToBlacklist}
+        onRemove={removeZfsFromBlacklist}
+        description="Blacklisted SKUs or EANs are ignored during ZFS processing and hidden from all tables and exports."
+      />
+      <BlacklistModal
+        isOpen={showFbaBlacklistModal}
+        title="FBA Blacklisted SKUs"
+        items={fbaBlacklist}
+        onClose={() => setShowFbaBlacklistModal(false)}
+        onAdd={addFbaToBlacklist}
+        onRemove={removeFbaFromBlacklist}
+        description="Blacklisted SKUs are removed from FBA calculations and will not appear in the recommendations."
+      />
       
       {/* Relative Stock Export Overlay */}
       {showExportOverlay && (
@@ -1091,8 +1230,8 @@ const IntegratedStockParser: React.FC = () => {
             {activeTab === "zfs" ? (
               <ZFSContent
                 files={files}
-                parsedData={parsedData}
-                recommendations={recommendations}
+                parsedData={filteredParsedData}
+                recommendations={filteredRecommendations}
                 timeline={timeline}
                 error={error}
                 isProcessing={isProcessing}
@@ -1105,6 +1244,8 @@ const IntegratedStockParser: React.FC = () => {
                 setError={setError}
                 showTabs={showTabs}
                 tabsRef={tabsRef}
+                onOpenBlacklist={() => setShowZfsBlacklistModal(true)}
+                blacklistCount={zfsBlacklist.length}
               />
             ) : (
               <FBAContent 
@@ -1114,6 +1255,8 @@ const IntegratedStockParser: React.FC = () => {
                 setFbaData={setFbaData}
                 resetFiles={resetFBAFiles}
                 clearTables={clearFBATables}
+                blacklist={fbaBlacklist}
+                onOpenBlacklist={() => setShowFbaBlacklistModal(true)}
               />
             )}
           </CardContent>

@@ -1,4 +1,3 @@
-import React from 'react';
 import IntegratedStockParser from './components/IntegratedStockParser';
 
 function App() {

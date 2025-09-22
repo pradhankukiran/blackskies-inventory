@@ -23,7 +23,18 @@ const processFileWithProgress = async (
 
 self.onmessage = async (e) => {
   try {
-    const { files, timeline } = e.data;
+    const { files, timeline, blacklist = [] } = e.data as {
+      files: typeof e.data.files;
+      timeline: typeof e.data.timeline;
+      blacklist?: string[];
+    };
+    const normalizedBlacklist = Array.isArray(blacklist)
+      ? blacklist
+          .map((entry) => (typeof entry === 'string' ? entry.trim().toUpperCase() : ''))
+          .filter(Boolean)
+      : [];
+    const blacklistedSkus = new Set<string>(normalizedBlacklist);
+    const blacklistedEans = new Set<string>(normalizedBlacklist);
     
     // Process files with progress tracking
     const internal = await processFileWithProgress(
@@ -60,30 +71,103 @@ self.onmessage = async (e) => {
       'Loading SKU-EAN mapping data',
       files.skuEanMapper
     );
-    
-    const zfsSales = await processFileWithProgress(
+
+    const normalizeSkuValue = (value: any) => typeof value === 'string' ? value.trim().toUpperCase() : '';
+    const normalizeEanValue = (value: any) => typeof value === 'string' ? value.trim().toUpperCase() : '';
+
+    const filteredSkuEanMapper = Array.isArray(skuEanMapper)
+      ? skuEanMapper.filter((item: Record<string, any>) => {
+          const sku = normalizeSkuValue(item?.SKU ?? item?.sku);
+          const ean = normalizeEanValue(item?.EAN ?? item?.ean);
+          if (sku && blacklistedSkus.has(sku) && ean) {
+            blacklistedEans.add(ean);
+          }
+          if (ean && blacklistedEans.has(ean) && sku) {
+            blacklistedSkus.add(sku);
+          }
+          return !blacklistedSkus.has(sku) && !blacklistedEans.has(ean);
+        })
+      : [];
+
+    const filteredInternal = Array.isArray(internal)
+      ? internal.filter((item: Record<string, any>) => {
+          const sku = normalizeSkuValue(item?.articleNumber ?? item?.SKU ?? item?.sku);
+          return !blacklistedSkus.has(sku);
+        })
+      : [];
+
+    const filteredZfs = Array.isArray(zfs)
+      ? zfs.filter((item: Record<string, any>) => {
+          const ean = normalizeEanValue(item?.EAN ?? item?.ean);
+          return !blacklistedEans.has(ean);
+        })
+      : [];
+
+    const filteredShipments = Array.isArray(zfsShipments)
+      ? zfsShipments.map((shipment: any[]) =>
+          Array.isArray(shipment)
+            ? shipment.filter((row: Record<string, any>) => {
+                const ean = normalizeEanValue(row?.EAN ?? row?.ean);
+                return !blacklistedEans.has(ean);
+              })
+            : []
+        )
+      : [];
+
+    const filteredShipmentsReceived = Array.isArray(zfsShipmentsReceived)
+      ? zfsShipmentsReceived.map((shipment: any[]) =>
+          Array.isArray(shipment)
+            ? shipment.filter((row: Record<string, any>) => {
+                const ean = normalizeEanValue(row?.EAN ?? row?.ean);
+                return !blacklistedEans.has(ean);
+              })
+            : []
+        )
+      : [];
+
+    const zfsSalesRaw = await processFileWithProgress(
       'Processing sales data',
       files.zfsSales
     );
 
+    const filteredZfsSales = Array.isArray(zfsSalesRaw)
+      ? zfsSalesRaw.filter((item: Record<string, any>) => {
+          const ean = normalizeEanValue(item?.EAN ?? item?.ean);
+          return !blacklistedEans.has(ean);
+        })
+      : [];
+
     self.postMessage({ type: 'status', message: 'Flattening shipment data' });
-    const flattenedShipments = zfsShipments.flat();
-    const flattenedReceived = zfsShipmentsReceived.flat();
+    const flattenedShipments = filteredShipments.flat();
+    const flattenedReceived = filteredShipmentsReceived.flat();
     
     self.postMessage({ type: 'status', message: 'Integrating stock data' });
     const integrated = processAndIntegrateData(
-      internal,
-      zfs,
+      filteredInternal,
+      filteredZfs,
       flattenedShipments,
       flattenedReceived,
-      skuEanMapper
+      filteredSkuEanMapper
     );
 
-    const processedSales = zfsSales.length > 0 ? processZFSSales(zfsSales) : [];
+    const processedSales = filteredZfsSales.length > 0 ? processZFSSales(filteredZfsSales) : [];
+
+    const filteredIntegrated = Array.isArray(integrated)
+      ? integrated.filter((item: Record<string, any>) => {
+          const sku = normalizeSkuValue(item?.SKU);
+          const ean = normalizeEanValue(item?.EAN);
+          return !blacklistedSkus.has(sku) && !blacklistedEans.has(ean);
+        })
+      : [];
+
+    const filteredProcessedSales = processedSales.filter((item: Record<string, any>) => {
+      const ean = normalizeEanValue(item?.EAN);
+      return !blacklistedEans.has(ean);
+    });
     
     self.postMessage({ type: 'status', message: 'Calculating stock recommendations' });
-    const stockRecommendations = processedSales.length > 0
-      ? calculateStockRecommendations(processedSales, integrated, 1, timeline)
+    const stockRecommendations = filteredProcessedSales.length > 0
+      ? calculateStockRecommendations(filteredProcessedSales, filteredIntegrated, 1, timeline)
       : [];
     
     self.postMessage({ type: 'status', message: 'Finalizing results' });
@@ -92,13 +176,13 @@ self.onmessage = async (e) => {
       type: 'complete',
       success: true,
       data: {
-        internal,
-        zfs,
+        internal: filteredInternal,
+        zfs: filteredZfs,
         zfsShipments: flattenedShipments,
         zfsShipmentsReceived: flattenedReceived,
-        skuEanMapper,
-        zfsSales: processedSales,
-        integrated,
+        skuEanMapper: filteredSkuEanMapper,
+        zfsSales: filteredProcessedSales,
+        integrated: filteredIntegrated,
         recommendations: stockRecommendations
       }
     });

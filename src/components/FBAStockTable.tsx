@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { X, Search } from "lucide-react";
 import { ProcessedSellerboardStock } from "@/types/processors";
 import { usePagination } from "@/hooks/usePagination";
@@ -6,7 +6,6 @@ import { ExportButton } from "./ExportButton";
 import { Pagination } from "./ui/pagination";
 import { CoverageDaysSelector } from "./CoverageDaysSelector";
 import { getStoredData, storeData } from "@/lib/indexedDB";
-import { processSellerboardStock } from "@/utils/processors/sellerboardStockProcessor";
 
 interface FBAStockTableProps {
   data: ProcessedSellerboardStock[];
@@ -82,21 +81,6 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
     try {
       const savedData = await getStoredData('fba');
       if (savedData?.parsedData?.sellerboardStock) {
-        // Get the raw data that was used to generate the current recommendations
-        const originalData = savedData.parsedData.sellerboardStock.map(item => ({
-          ...item,
-          // Add all original fields that are needed for recalculation
-          SKU: item.SKU,
-          "Estimated\nSales\nVelocity": item["Avg. Daily Sales"]
-        }));
-
-        // Get returns data if available
-        let returnsData: any[] | null = null;
-        // Access rawReturnsData safely (it might not exist in the type)
-        if (savedData && 'rawReturnsData' in savedData && Array.isArray(savedData.rawReturnsData)) {
-          returnsData = savedData.rawReturnsData;
-        }
-
         // Instead of reprocessing everything, calculate only the new recommended quantities
         setDisplayData(prevData => {
           return prevData.map(item => {
@@ -171,7 +155,8 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             ...savedData.parsedData,
             sellerboardStock: updatedStoredData
           },
-          coverageDays: days
+          coverageDays: days,
+          blacklist: savedData.blacklist || []
         }, 'fba');
       } else {
         // If no processed data exists yet, just save the coverage days
@@ -187,7 +172,8 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             sellerboardStock: []
           },
           recommendations: savedData?.recommendations || [],
-          coverageDays: days
+          coverageDays: days,
+          blacklist: savedData?.blacklist || []
         }, 'fba');
       }
     } catch (err) {
