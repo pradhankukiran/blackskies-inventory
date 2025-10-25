@@ -1,4 +1,4 @@
-# BlackSkies Inventory Management
+# Blackskies Inventory Management
 
 A demand planning tool for inventory management and stock recommendations, built with React, TypeScript, and Tailwind CSS.
 
@@ -23,3 +23,4 @@ The application processes these files to provide:
 1. Upload your inventory files using the file upload interface
 2. Click "Process Files" to generate the integrated stock overview and recommendations
 3. View and analyze the results in the tabbed interface
+
