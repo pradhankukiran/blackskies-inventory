@@ -83,7 +83,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {error && (
         <Alert variant="destructive">
           <AlertTitle>{error}</AlertTitle>
@@ -98,22 +98,22 @@ const ZFSContent: React.FC<TabContentProps> = ({
         onTimelineChange={setTimeline}
       />
 
-      <div className="flex justify-between">
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-3">
           <button
             onClick={resetFiles}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
           >
             <RotateCcw className="w-4 h-4" />
             Reset Files
           </button>
           <button
             onClick={onOpenBlacklist}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
           >
             Manage Blacklist
             {blacklistCount > 0 && (
-              <span className="inline-flex items-center justify-center rounded-full bg-green-600 px-2 text-xs font-semibold text-white">
+              <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-xs font-semibold text-white min-w-[20px]">
                 {blacklistCount}
               </span>
             )}
@@ -121,7 +121,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
           {showTabs && (
             <button
               onClick={clearTables}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-700 bg-white border-2 border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200"
             >
               Clear Tables
             </button>
@@ -136,7 +136,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
             processFiles(timeline);
           }}
           disabled={isProcessing || (files.zfsSales && timeline === "none")}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:shadow-md"
         >
           Process Files
         </button>
@@ -428,7 +428,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
   return (
     <>
       <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
-      <div className="space-y-6">
+      <div className="space-y-4">
         {error && (
           <div className="bg-red-50 p-4 rounded-md border border-red-100">
             <div className="flex">
@@ -455,7 +455,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FileUploadSection
             title="Sellerboard Export"
             onChange={(e) => handleFileChange(e, "sellerboardExport")}
@@ -471,22 +471,22 @@ const FBAContent: React.FC<FBAContentProps> = ({
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
         </div>
-        <div className="flex justify-between">
-          <div className="flex gap-2">
+        <div className="flex justify-between items-center">
+          <div className="flex gap-3">
             <button
               onClick={resetFiles}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
             >
               <RotateCcw className="w-4 h-4" />
               Reset Files
             </button>
             <button
               onClick={onOpenBlacklist}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
             >
               Manage Blacklist
               {blacklist.length > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-green-600 px-2 text-xs font-semibold text-white">
+                <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-xs font-semibold text-white min-w-[20px]">
                   {blacklist.length}
                 </span>
               )}
@@ -494,7 +494,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
             {showTabs && (
               <button
                 onClick={clearTables}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50"
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-700 bg-white border-2 border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200"
               >
                 Clear Tables
               </button>
@@ -502,7 +502,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
           </div>
           <button
             onClick={() => processFiles()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg"
           >
             Process Files
           </button>
@@ -1108,21 +1108,33 @@ const IntegratedStockParser: React.FC = () => {
         onRemove={removeFbaFromBlacklist}
         description="Blacklisted SKUs are removed from FBA calculations and will not appear in the recommendations."
       />
+
+      {/* Modern Header */}
+      <div className="bg-white py-6 mb-6">
+        <div className="container mx-auto px-4 relative flex items-center">
+          <img
+            src="/Blackskies-Logo.png"
+            alt="Blackskies Logo"
+            className="h-12"
+          />
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 absolute left-1/2 -translate-x-1/2">Inventory Management</h1>
+        </div>
+      </div>
       
       {/* Relative Stock Export Overlay */}
       {showExportOverlay && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 relative flex flex-col max-h-[90vh]"> {/* Increased max-width for two columns */}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-50 rounded-lg w-full max-w-4xl p-6 relative flex flex-col max-h-[90vh]">
             <button
-              onClick={handleCloseOverlay} // Use handler
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10" // Ensure button is on top
+              onClick={handleCloseOverlay}
+              className="absolute top-6 right-6 text-gray-500 hover:text-gray-900 hover:bg-white rounded-full p-1.5 transition-colors z-10"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            <h2 className="text-lg font-medium mb-4 flex-shrink-0">Create Stock Deduction File for Shopware</h2>
+            <h2 className="text-xl font-bold mb-6 flex-shrink-0 text-gray-900">Create Stock Deduction File for Shopware</h2>
 
             <div className="flex-grow overflow-y-auto space-y-4"> {/* Make content area scrollable */}
               {processingExport ? (
@@ -1137,8 +1149,8 @@ const IntegratedStockParser: React.FC = () => {
                   </Alert>
                    <div className="flex justify-end mt-4">
                      <button
-                      onClick={handleCloseOverlay} // Use handler
-                      className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                      onClick={handleCloseOverlay}
+                      className="inline-flex justify-center py-2.5 px-5 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all"
                     >
                       Close
                     </button>
@@ -1159,15 +1171,15 @@ const IntegratedStockParser: React.FC = () => {
                   />
                   <div className="flex justify-end space-x-3 mt-4">
                     <button
-                      onClick={handleCloseOverlay} // Use handler
-                      className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                      onClick={handleCloseOverlay}
+                      className="inline-flex justify-center py-2.5 px-5 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={processExportFile}
-                      disabled={!exportFile || processingExport} // Disable during processing
-                      className="inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!exportFile || processingExport}
+                      className="inline-flex justify-center py-2.5 px-6 border border-transparent rounded-lg text-sm font-semibold text-white bg-black hover:bg-gray-800 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:shadow-md"
                     >
                       Process
                     </button>
@@ -1179,54 +1191,49 @@ const IntegratedStockParser: React.FC = () => {
         </div>
       )}
 
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-center mb-4">
+      <div className="container mx-auto px-4 pb-6">
+        {/* Relative Stock Export Button */}
+        <div className="flex justify-center mb-6">
+          <button
+            className="px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-full hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleOpenOverlay}
+            title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
+            disabled={isLoadingPersistedData}
+          >
+            Relative Stock Export
+          </button>
+        </div>
+
+        {/* Main Card */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          {/* Modern Tabs */}
+          <div className="bg-gray-50 px-6 pt-6 pb-4">
+            <div className="flex justify-center gap-3">
               <button
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                onClick={handleOpenOverlay} // Use new handler to open
-                title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
-                disabled={isLoadingPersistedData} // Disable while loading
+                onClick={() => setActiveTab("zfs")}
+                className={`px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200 ${
+                  activeTab === "zfs"
+                    ? "bg-black text-white shadow-md"
+                    : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
               >
-                Relative Stock Export
+                ZFS
+              </button>
+              <button
+                onClick={() => setActiveTab("fba")}
+                className={`px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200 ${
+                  activeTab === "fba"
+                    ? "bg-black text-white shadow-md"
+                    : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                FBA
               </button>
             </div>
-            <div className="border-b border-gray-200">
-              <nav
-                className="-mb-px flex space-x-8 justify-center"
-                aria-label="Tabs"
-              >
-                <button
-                  onClick={() => {
-                    // Only update the active tab, don't reset any state
-                    setActiveTab("zfs");
-                  }}
-                  className={`whitespace-nowrap py-4 px-6 border-b-2 font-bold text-lg ${
-                    activeTab === "zfs"
-                      ? "border-green-500 text-green-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  ZFS
-                </button>
-                <button
-                  onClick={() => {
-                    // Only update the active tab, don't reset any state
-                    setActiveTab("fba");
-                  }}
-                  className={`whitespace-nowrap py-4 px-6 border-b-2 font-bold text-lg ${
-                    activeTab === "fba"
-                      ? "border-green-500 text-green-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  FBA
-                </button>
-              </nav>
-            </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+
+          {/* Content Area */}
+          <div className="p-6">
             {activeTab === "zfs" ? (
               <ZFSContent
                 files={files}
@@ -1259,8 +1266,8 @@ const IntegratedStockParser: React.FC = () => {
                 onOpenBlacklist={() => setShowFbaBlacklistModal(true)}
               />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </>
   );

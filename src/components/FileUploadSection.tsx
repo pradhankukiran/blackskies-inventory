@@ -75,35 +75,35 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-          {additionalControls}
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+            {additionalControls}
+          </div>
         </div>
-      </div>
-      <div className="p-4">
+
         <div className="flex justify-center items-center w-full">
           <label
-            className={`flex flex-col items-center justify-center w-full h-32 border-2 rounded-lg cursor-pointer transition-all duration-300 ease-in-out ${
+            className={`flex flex-col items-center justify-center w-full h-32 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
               isDragging
-                ? "border-green-500 bg-green-50 scale-105 border-solid"
-                : "border-gray-300 bg-gray-50 border-dashed"
-            } hover:bg-gray-100`}
+                ? "border-black bg-gray-50 border-solid"
+                : "border-gray-200 bg-gray-50 border-dashed"
+            } hover:bg-gray-100 hover:border-gray-300`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
           >
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <div className="flex flex-col items-center justify-center">
               <Upload
-                className={`w-8 h-8 mb-3 transition-colors duration-300 ${
-                  isDragging ? "text-green-500" : "text-gray-400"
+                className={`w-9 h-9 mb-2 transition-colors duration-200 ${
+                  isDragging ? "text-black" : "text-gray-400"
                 }`}
               />
-              <p className="mb-2 text-sm text-gray-500">
-                <span className="font-semibold">Click to upload</span> or drag
-                and drop
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">Click to upload</span> or drag and drop
               </p>
             </div>
             <input
@@ -117,25 +117,25 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         </div>
 
         {files.length > 0 && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-3 space-y-1.5">
             {files.map((file: File, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between px-3 py-2 text-sm rounded-md bg-green-50 border border-green-200"
+                className="flex items-center justify-between px-3 py-2.5 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors duration-200"
               >
-                <div className="flex items-center space-x-2">
-                  <span className="font-medium text-green-700">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <span className="font-medium text-gray-900 truncate text-sm">
                     {file.name}
                   </span>
-                  <span className="text-green-600 text-xs">
+                  <span className="text-gray-500 text-sm flex-shrink-0">
                     ({(file.size / 1024).toFixed(1)} KB)
                   </span>
                 </div>
                 <button
                   onClick={() => onRemove(file.name)}
-                  className="p-1 hover:bg-green-100 rounded-full transition-colors"
+                  className="p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0 ml-2"
                 >
-                  <X size={16} className="text-green-600" />
+                  <X size={16} className="text-gray-600" />
                 </button>
               </div>
             ))}

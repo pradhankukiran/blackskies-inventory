@@ -22,8 +22,8 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
   onTimelineChange,
 }) => {
   return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FileUploadSection
           title="Internal Stocks"
           onChange={(e) => onFileChange(e, "internal")}
@@ -38,7 +38,7 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FileUploadSection
           title="ZFS Shipment"
           onChange={(e) => onFileChange(e, "zfsShipments")}
@@ -55,7 +55,7 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FileUploadSection
           title="SKU-EAN Mapper"
           onChange={(e) => onFileChange(e, "skuEanMapper")}
@@ -75,6 +75,6 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           }
         />
       </div>
-    </>
+    </div>
   );
 };
