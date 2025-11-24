@@ -244,7 +244,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
       const fileState: FileState = {
         internal: null,
         fba: null,
-        zfs: null,
+        zfs: [],
         zfsShipments: [],
         zfsShipmentsReceived: [],
         skuEanMapper: null,
@@ -254,7 +254,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
         fbaSales: null,
         storeType: 'fba'
       };
-      
+
       await storeFiles(fileState);
     } catch (err) {
       console.error("Error storing files:", err);
@@ -266,7 +266,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
       ...fbaFiles,
       [type]: null,
     };
-    
+
     setFbaFiles(updatedFiles);
 
     // Update in IndexedDB
@@ -274,7 +274,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
       const fileState: FileState = {
         internal: null,
         fba: null,
-        zfs: null,
+        zfs: [],
         zfsShipments: [],
         zfsShipmentsReceived: [],
         skuEanMapper: null,
@@ -284,7 +284,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
         fbaSales: null,
         storeType: 'fba'
       };
-      
+
       await storeFiles(fileState);
     } catch (err) {
       console.error("Error updating files:", err);

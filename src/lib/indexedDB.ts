@@ -116,7 +116,7 @@ const deserializeFiles = (serialized: Record<string, SerializedFile | Serialized
   const deserialized: FileState = {
     internal: null,
     fba: null,
-    zfs: null,
+    zfs: [],
     zfsShipments: [],
     zfsShipmentsReceived: [],
     skuEanMapper: null,
@@ -124,17 +124,22 @@ const deserializeFiles = (serialized: Record<string, SerializedFile | Serialized
     sellerboardExport: null,
     sellerboardReturns: null,
     fbaSales: null,
-    storeType: serialized.storeType && typeof serialized.storeType === 'string' ? 
+    storeType: serialized.storeType && typeof serialized.storeType === 'string' ?
       (serialized.storeType as 'zfs' | 'fba') : undefined
   };
 
   for (const [key, value] of Object.entries(serialized)) {
     if (key === 'storeType') continue; // Skip storeType as we've already handled it
-    
+
     if (Array.isArray(value)) {
       deserialized[key as keyof FileState] = value.map(deserializeToFile) as any;
     } else if (value && typeof value !== 'string') {
-      deserialized[key as keyof FileState] = deserializeToFile(value) as any;
+      // Handle migration: if zfs was a single file in old data, convert it to an array
+      if (key === 'zfs') {
+        deserialized.zfs = [deserializeToFile(value)];
+      } else {
+        deserialized[key as keyof FileState] = deserializeToFile(value) as any;
+      }
     }
   }
 
@@ -152,7 +157,7 @@ export const storeFiles = async (files: FileState): Promise<void> => {
   console.log("Files being stored:", {
     hasInternal: !!files.internal,
     hasFba: !!files.fba,
-    hasZfs: !!files.zfs,
+    zfsCount: files.zfs.length,
     zfsShipmentsCount: files.zfsShipments.length,
     zfsShipmentsReceivedCount: files.zfsShipmentsReceived.length,
     hasSkuEanMapper: !!files.skuEanMapper,
@@ -232,7 +237,7 @@ const getFilesByKey = async (db: IDBDatabase, key: string): Promise<FileState | 
       console.log("Files retrieved:", {
         hasInternal: !!files.internal,
         hasFba: !!files.fba,
-        hasZfs: !!files.zfs,
+        zfsCount: files.zfs.length,
         zfsShipmentsCount: files.zfsShipments.length,
         zfsShipmentsReceivedCount: files.zfsShipmentsReceived.length,
         hasSkuEanMapper: !!files.skuEanMapper,

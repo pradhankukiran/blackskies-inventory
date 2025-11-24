@@ -14,7 +14,7 @@ export interface ParsedData {
 export interface FileState {
   internal: File | null;
   fba: File | null;
-  zfs: File | null;
+  zfs: File[];
   zfsShipments: File[];
   zfsShipmentsReceived: File[];
   skuEanMapper: File | null;

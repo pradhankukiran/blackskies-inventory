@@ -78,10 +78,11 @@ export const parseXLSXFile = (file: File, onProgress?: (progress: number) => voi
         const worksheet = workbook.Sheets[firstSheetName];
         
         if (onProgress) onProgress(80); // Worksheet selected
-        
+
         // Start converting to JSON
         if (onProgress) onProgress(85);
-        const results = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: '' });
+        // Use raw: true to preserve large numbers (like EANs) as strings instead of converting to scientific notation
+        const results = XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: '' });
         
         // Calculate processing progress based on data size
         const rowCount = results.length;

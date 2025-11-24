@@ -1,4 +1,4 @@
-import { parseCSVFile } from '@/utils/fileParser';
+import { parseFile } from '@/utils/fileParser';
 import { processAndIntegrateData } from '@/utils/dataIntegration';
 import { processZFSSales } from '@/utils/processors/zfsSalesProcessor';
 import { calculateStockRecommendations } from '@/utils/calculators/stockRecommendations';
@@ -10,10 +10,10 @@ const processFileWithProgress = async (
   defaultValue: any[] = []
 ) => {
   self.postMessage({ type: 'status', message });
-  
+
   if (!file) return defaultValue;
-  
-  return parseCSVFile(file, (progress) => {
+
+  return parseFile(file, (progress) => {
     self.postMessage({
       type: 'status',
       message: `${message} (${Math.round(progress)}%)`
@@ -41,15 +41,23 @@ self.onmessage = async (e) => {
       'Loading internal stock data',
       files.internal
     );
-    
-    const zfs = await processFileWithProgress(
-      'Loading ZFS stock data',
-      files.zfs
-    );
-    
+
+    // Process multiple ZFS stock files in parallel
+    let zfsFiles: any[][] = [];
+    if (files.zfs.length > 0) {
+      self.postMessage({ type: 'status', message: 'Processing ZFS stock files' });
+      const zfsPromises = files.zfs.map((file: File, i: number) =>
+        processFileWithProgress(
+          `Processing ZFS stock file ${i + 1}/${files.zfs.length}`,
+          file
+        )
+      );
+      zfsFiles = await Promise.all(zfsPromises);
+    }
+
     // Process multiple shipment files in parallel
     self.postMessage({ type: 'status', message: 'Processing ZFS shipment files' });
-    const zfsShipmentsPromises = files.zfsShipments.map((file: File, i: number) => 
+    const zfsShipmentsPromises = files.zfsShipments.map((file: File, i: number) =>
       processFileWithProgress(
         `Processing ZFS shipment file ${i + 1}/${files.zfsShipments.length}`,
         file
@@ -96,8 +104,10 @@ self.onmessage = async (e) => {
         })
       : [];
 
-    const filteredZfs = Array.isArray(zfs)
-      ? zfs.filter((item: Record<string, any>) => {
+    // Flatten and filter ZFS files
+    const flattenedZfs = zfsFiles.flat();
+    const filteredZfs = Array.isArray(flattenedZfs)
+      ? flattenedZfs.filter((item: Record<string, any>) => {
           const ean = normalizeEanValue(item?.EAN ?? item?.ean);
           return !blacklistedEans.has(ean);
         })

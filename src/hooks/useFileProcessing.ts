@@ -17,7 +17,7 @@ export function useFileProcessing() {
   const [files, setFiles] = useState<FileState>({
     internal: null,
     fba: null,
-    zfs: null,
+    zfs: [],
     zfsShipments: [],
     zfsShipmentsReceived: [],
     skuEanMapper: null,
@@ -247,7 +247,7 @@ export function useFileProcessing() {
     setFiles({
       internal: null,
       fba: null,
-      zfs: null,
+      zfs: [],
       zfsShipments: [],
       zfsShipmentsReceived: [],
       skuEanMapper: null,

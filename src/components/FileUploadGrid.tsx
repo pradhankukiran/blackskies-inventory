@@ -34,7 +34,8 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           title="ZFS Stocks"
           onChange={(e) => onFileChange(e, "zfs")}
           onRemove={(name) => onFileRemove(name, "zfs")}
-          files={files.zfs ? [files.zfs] : []}
+          files={files.zfs}
+          multiple
         />
       </div>
 
