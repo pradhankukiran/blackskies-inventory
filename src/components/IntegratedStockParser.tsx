@@ -1111,13 +1111,23 @@ const IntegratedStockParser: React.FC = () => {
 
       {/* Modern Header */}
       <div className="bg-white py-6 mb-6">
-        <div className="container mx-auto px-4 relative flex items-center">
+        <div className="container mx-auto px-4 relative flex items-center justify-between">
           <img
             src="/Blackskies-Logo.png"
             alt="Blackskies Logo"
             className="h-12"
           />
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 absolute left-1/2 -translate-x-1/2">Inventory Management</h1>
+          
+          <a 
+            href="https://blackskies-accountant.vercel.app/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-sm hover:shadow-md z-10"
+          >
+            Go to Accountant
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          </a>
         </div>
       </div>
       
