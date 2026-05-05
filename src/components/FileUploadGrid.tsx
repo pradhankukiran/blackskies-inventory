@@ -29,6 +29,7 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           onChange={(e) => onFileChange(e, "internal")}
           onRemove={(name) => onFileRemove(name, "internal")}
           files={files.internal ? [files.internal] : []}
+          syncedFromShopify={files.internal?.name === "shopify-internal-stocks.csv"}
         />
         <FileUploadSection
           title="ZFS Stocks"
@@ -62,6 +63,7 @@ export const FileUploadGrid: React.FC<FileUploadGridProps> = ({
           onChange={(e) => onFileChange(e, "skuEanMapper")}
           onRemove={(name) => onFileRemove(name, "skuEanMapper")}
           files={files.skuEanMapper ? [files.skuEanMapper] : []}
+          syncedFromShopify={files.skuEanMapper?.name === "shopify-sku-ean.csv"}
         />
         <FileUploadSection
           title="ZFS Sales"

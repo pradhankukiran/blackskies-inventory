@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Upload } from "lucide-react";
+import { X, Upload, Download } from "lucide-react";
 
 interface FileUploadSectionProps {
   title: string;
@@ -9,6 +9,7 @@ interface FileUploadSectionProps {
   multiple?: boolean;
   additionalControls?: React.ReactNode;
   acceptedFileTypes?: string;
+  syncedFromShopify?: boolean;
 }
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
@@ -19,6 +20,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   multiple = false,
   additionalControls,
   acceptedFileTypes = ".csv,.tsv,.txt",
+  syncedFromShopify = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -44,6 +46,17 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
+  };
+
+  const handleDownload = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -80,6 +93,12 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         <div className="flex items-center justify-between mb-3 gap-3">
           <div className="flex items-center gap-3">
             <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+            {syncedFromShopify && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-emerald-800 bg-emerald-100 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                from Shopify
+              </span>
+            )}
             {additionalControls}
           </div>
         </div>
@@ -130,10 +149,20 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                   <span className="text-gray-500 text-sm flex-shrink-0">
                     ({(file.size / 1024).toFixed(1)} KB)
                   </span>
+                  {syncedFromShopify && (
+                    <button
+                      onClick={() => handleDownload(file)}
+                      className="p-1 hover:bg-gray-200 transition-colors flex-shrink-0"
+                      title="Download CSV"
+                    >
+                      <Download size={16} className="text-gray-600" />
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => onRemove(file.name)}
-                  className="p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0 ml-2"
+                  className="p-1.5 hover:bg-gray-200 transition-colors flex-shrink-0 ml-2"
+                  title="Remove"
                 >
                   <X size={16} className="text-gray-600" />
                 </button>

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { FileUploadGrid } from "./FileUploadGrid";
@@ -540,12 +541,30 @@ function useScrollToResults() {
 // Define keys for persistence
 const RELATIVE_STOCK_FILE_KEY = 'relativeStockFile';
 const RELATIVE_STOCK_TABLE_KEY = 'relativeStockTable';
+const SHOPIFY_SYNC_META_KEY = 'shopifySyncMeta';
+
+type ShopifySyncMeta = {
+  lastSyncedAt: string;
+  internalCount: number;
+  mapperCount: number;
+  locationName: string;
+};
+
+function timeAgo(timestamp: string): string {
+  const ms = Date.now() - new Date(timestamp).getTime();
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const day = Math.floor(hr / 24);
+  return `${day} day${day === 1 ? '' : 's'} ago`;
+}
 
 const IntegratedStockParser: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"zfs" | "fba">(() => {
-    // Load the saved tab from localStorage, default to "zfs" if not found
-    return (localStorage.getItem("activeTab") as "zfs" | "fba") || "zfs";
-  });
+  const location = useLocation();
+  const onZfsRoute = location.pathname === '/zfs' || location.pathname === '/';
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
   const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
   const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
@@ -564,11 +583,6 @@ const IntegratedStockParser: React.FC = () => {
   const [processingExport, setProcessingExport] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isLoadingPersistedData, setIsLoadingPersistedData] = useState(true); // Loading state
-  
-  // Save active tab to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem("activeTab", activeTab);
-  }, [activeTab]);
   
   // Add state for FBA tab
   const [fbaFiles, setFbaFiles] = useState<{
@@ -622,6 +636,7 @@ const IntegratedStockParser: React.FC = () => {
     processingStatus,
     handleFileChange,
     handleRemoveFile,
+    setFile,
     processFiles,
     setTimeline,
     resetFiles,
@@ -631,6 +646,73 @@ const IntegratedStockParser: React.FC = () => {
     addToBlacklist: addZfsToBlacklist,
     removeFromBlacklist: removeZfsFromBlacklist,
   } = useFileProcessing();
+
+  const [isShopifySyncing, setIsShopifySyncing] = useState(false);
+  const [shopifySyncMeta, setShopifySyncMeta] = useState<ShopifySyncMeta | null>(() => {
+    try {
+      const raw = localStorage.getItem(SHOPIFY_SYNC_META_KEY);
+      return raw ? (JSON.parse(raw) as ShopifySyncMeta) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleShopifySync = async () => {
+    setIsShopifySyncing(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/shopify/sync');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Sync failed (${res.status})`);
+      }
+      const data = await res.json();
+
+      const csvEscape = (val: unknown) => {
+        const s = String(val ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      const internalCsv = ['SKU,Title,Lager']
+        .concat(
+          (data.internal as Array<{ SKU: string; Title: string; Lager: number }>).map(
+            (r) => `${csvEscape(r.SKU)},${csvEscape(r.Title)},${r.Lager}`
+          )
+        )
+        .join('\n');
+
+      const mapperCsv = ['SKU,EAN']
+        .concat(
+          (data.skuEanMapper as Array<{ SKU: string; EAN: string }>).map(
+            (r) => `${csvEscape(r.SKU)},${csvEscape(r.EAN)}`
+          )
+        )
+        .join('\n');
+
+      const internalFile = new File([internalCsv], 'shopify-internal-stocks.csv', { type: 'text/csv' });
+      const mapperFile = new File([mapperCsv], 'shopify-sku-ean.csv', { type: 'text/csv' });
+
+      setFile('internal', internalFile);
+      setFile('skuEanMapper', mapperFile);
+
+      const meta: ShopifySyncMeta = {
+        lastSyncedAt: typeof data.syncedAt === 'string' ? data.syncedAt : new Date().toISOString(),
+        internalCount: data.counts?.internal ?? (Array.isArray(data.internal) ? data.internal.length : 0),
+        mapperCount: data.counts?.skuEanMapper ?? (Array.isArray(data.skuEanMapper) ? data.skuEanMapper.length : 0),
+        locationName: typeof data.locationName === 'string' ? data.locationName : 'Lager',
+      };
+      setShopifySyncMeta(meta);
+      try {
+        localStorage.setItem(SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
+      } catch {
+        /* ignore quota errors */
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Shopify sync failed');
+    } finally {
+      setIsShopifySyncing(false);
+    }
+  };
 
   const zfsBlacklistSet = useMemo(() => new Set(zfsBlacklist.map((sku) => sku.trim().toUpperCase())), [zfsBlacklist]);
 
@@ -1110,16 +1192,72 @@ const IntegratedStockParser: React.FC = () => {
       />
 
       {/* Modern Header */}
-      <div className="bg-white py-6 mb-6">
-        <div className="container mx-auto px-4 relative flex items-center justify-between">
-          <img
-            src="/Blackskies-Logo.png"
-            alt="Blackskies Logo"
-            className="h-12"
-          />
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 absolute left-1/2 -translate-x-1/2">Inventory Management</h1>
-          
+      <div className="bg-white py-6 mb-6 border-b border-gray-200">
+        <div className="container mx-auto pl-4 pr-10 relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <img
+              src="/Blackskies-Logo.png"
+              alt="Blackskies Logo"
+              className="h-16"
+            />
+            <h1 className="text-2xl font-normal tracking-tight text-gray-900">Inventory Management</h1>
+          </div>
 
+          {/* Tabs (centered) */}
+          <nav className="absolute left-1/2 -translate-x-1/2 flex gap-8">
+            <NavLink
+              to="/zfs"
+              className={({ isActive }) =>
+                `px-3 py-4 text-lg font-semibold transition-colors border-b-2 ${
+                  isActive
+                    ? "text-gray-900 border-gray-900"
+                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                }`
+              }
+            >
+              ZFS
+            </NavLink>
+            <NavLink
+              to="/fba"
+              className={({ isActive }) =>
+                `px-3 py-4 text-lg font-semibold transition-colors border-b-2 ${
+                  isActive
+                    ? "text-gray-900 border-gray-900"
+                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                }`
+              }
+            >
+              FBA
+            </NavLink>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {onZfsRoute && (
+              <div className="relative">
+                <button
+                  onClick={handleShopifySync}
+                  disabled={isShopifySyncing}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-base font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                >
+                  {isShopifySyncing ? 'Syncing…' : 'Sync from Shopify'}
+                </button>
+                {shopifySyncMeta && (
+                  <span className="absolute right-0 top-full mt-1 text-xs text-gray-500 whitespace-nowrap">
+                    Last synced {timeAgo(shopifySyncMeta.lastSyncedAt)}
+                  </span>
+                )}
+              </div>
+            )}
+            <button
+              className="px-5 py-2 text-sm font-semibold text-white bg-black rounded-full hover:bg-gray-800 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleOpenOverlay}
+              title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
+              disabled={isLoadingPersistedData}
+            >
+              Relative Stock Export
+            </button>
+          </div>
         </div>
       </div>
       
@@ -1194,49 +1332,13 @@ const IntegratedStockParser: React.FC = () => {
       )}
 
       <div className="container mx-auto px-4 pb-6">
-        {/* Relative Stock Export Button */}
-        <div className="flex justify-center mb-6">
-          <button
-            className="px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-full hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleOpenOverlay}
-            title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
-            disabled={isLoadingPersistedData}
-          >
-            Relative Stock Export
-          </button>
-        </div>
-
         {/* Main Card */}
-        <div className="bg-gray-50 rounded-xl overflow-hidden">
-          {/* Modern Tabs */}
-          <div className="bg-gray-50 px-6 pt-6 pb-4">
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => setActiveTab("zfs")}
-                className={`px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200 ${
-                  activeTab === "zfs"
-                    ? "bg-black text-white shadow-md"
-                    : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
-              >
-                ZFS
-              </button>
-              <button
-                onClick={() => setActiveTab("fba")}
-                className={`px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200 ${
-                  activeTab === "fba"
-                    ? "bg-black text-white shadow-md"
-                    : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
-              >
-                FBA
-              </button>
-            </div>
-          </div>
-
+        <div className="bg-gray-50 overflow-hidden">
           {/* Content Area */}
           <div className="p-6">
-            {activeTab === "zfs" ? (
+            <Routes>
+              <Route path="/" element={<Navigate to="/zfs" replace />} />
+              <Route path="/zfs" element={
               <ZFSContent
                 files={files}
                 parsedData={filteredParsedData}
@@ -1256,8 +1358,9 @@ const IntegratedStockParser: React.FC = () => {
                 onOpenBlacklist={() => setShowZfsBlacklistModal(true)}
                 blacklistCount={zfsBlacklist.length}
               />
-            ) : (
-              <FBAContent 
+              } />
+              <Route path="/fba" element={
+              <FBAContent
                 fbaFiles={fbaFiles}
                 setFbaFiles={setFbaFiles}
                 fbaData={fbaData}
@@ -1267,7 +1370,9 @@ const IntegratedStockParser: React.FC = () => {
                 blacklist={fbaBlacklist}
                 onOpenBlacklist={() => setShowFbaBlacklistModal(true)}
               />
-            )}
+              } />
+              <Route path="*" element={<Navigate to="/zfs" replace />} />
+            </Routes>
           </div>
         </div>
       </div>

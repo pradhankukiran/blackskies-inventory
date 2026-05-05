@@ -183,42 +183,62 @@ export function useFileProcessing() {
     };
   }, []);
 
+  const persistFiles = (next: FileState) => {
+    storeFiles(next).catch((err) => {
+      console.error('Failed to persist files to IndexedDB:', err);
+    });
+  };
+
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
     type: keyof FileState
   ) => {
     const newFiles = event.target.files;
     if (!newFiles) return;
-    
-    const storeType = type.startsWith('zfs') ? 'zfs' : 'fba';
 
-    if (Array.isArray(files[type])) {
-      setFiles((prev) => ({
+    setFiles((prev) => {
+      const next: FileState = Array.isArray(prev[type])
+        ? {
+            ...prev,
+            storeType: 'zfs',
+            [type]: [...(prev[type] as File[]), ...Array.from(newFiles)],
+          }
+        : {
+            ...prev,
+            storeType: 'zfs',
+            [type]: newFiles[0],
+          };
+      persistFiles(next);
+      return next;
+    });
+  };
+
+  const setFile = (type: keyof FileState, file: File | null) => {
+    setFiles((prev) => {
+      const next: FileState = {
         ...prev,
-        storeType,
-        [type]: [...(prev[type] as File[]), ...Array.from(newFiles)],
-      }));
-    } else {
-      setFiles((prev) => ({
-        ...prev,
-        storeType,
-        [type]: newFiles[0],
-      }));
-    }
+        storeType: 'zfs',
+        [type]: file,
+      };
+      persistFiles(next);
+      return next;
+    });
   };
 
   const handleRemoveFile = (fileName: string, type: keyof FileState) => {
-    if (Array.isArray(files[type])) {
-      setFiles((prev) => ({
-        ...prev,
-        [type]: (prev[type] as File[]).filter((f) => f.name !== fileName),
-      }));
-    } else {
-      setFiles((prev) => ({
-        ...prev,
-        [type]: null,
-      }));
-    }
+    setFiles((prev) => {
+      const next: FileState = Array.isArray(prev[type])
+        ? {
+            ...prev,
+            [type]: (prev[type] as File[]).filter((f) => f.name !== fileName),
+          }
+        : {
+            ...prev,
+            [type]: null,
+          };
+      persistFiles(next);
+      return next;
+    });
   };
 
   const processFiles = async (timeline: TimelineType) => {
@@ -340,6 +360,7 @@ export function useFileProcessing() {
     processingStatus,
     handleFileChange,
     handleRemoveFile,
+    setFile,
     processFiles,
     setTimeline: handleTimelineChange,
     resetFiles,
