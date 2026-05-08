@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { FileUploadGrid } from "./FileUploadGrid";
 import { FileUploadSection } from "./FileUploadSection";
 import { StockTable } from "./StockTable";
