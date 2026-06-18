@@ -47,10 +47,12 @@ function calculateRecommendedStock(
     conversionRate: number;
     category?: string;
     season?: string;
-  }, 
+  },
   coverageDays: number,
   statusCluster: string = 'Live',
-  zfsStock: number = 0
+  zfsStock: number = 0,
+  safetyFactor: number = 0,
+  trendFactor: number = 0
 ): number {
   // If there are no sales, apply minimum stock rule for Live products with zero FBA stock
   if (salesData.totalSales === 0) {
@@ -58,16 +60,20 @@ function calculateRecommendedStock(
     return (statusCluster === 'Live' && zfsStock === 0) ? 1 : 0;
   }
 
-  // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate)
+  // Apply the formula: (Total Sales / Timeline) × Coverage Period × (1 - Return Rate) × (1 + safety) × (1 + trend)
   const dailySales = safeDivide(salesData.totalSales, salesData.timelineDays);
   const returnRateMultiplier = 1 - (salesData.returnRate / 100);
-  let recommendedStock = Math.round(dailySales * coverageDays * returnRateMultiplier);
-  
+  const safetyMultiplier = 1 + (safetyFactor / 100);
+  const trendMultiplier = 1 + (trendFactor / 100);
+  let recommendedStock = Math.round(
+    dailySales * coverageDays * returnRateMultiplier * safetyMultiplier * trendMultiplier
+  );
+
   // Apply multiplier for high-selling items
   if (salesData.totalSales > 5) {
     recommendedStock = Math.round(recommendedStock * 1.2);
   }
-  
+
   return recommendedStock;
 }
 
@@ -78,14 +84,16 @@ export function calculateStockRecommendations(
   salesData: ExtendedZFSSaleEntry[],
   stockData: IntegratedStockData[],
   coverageDays: number = 14,  // Coverage period in days
-  timeline: 'none' | '30days' | '6months' = '30days'  // Sales timeline selection
+  timeline: 'none' | '30days' | '6months' = '30days',  // Sales timeline selection
+  safetyFactor: number = 0,    // Safety buffer % (multiplicative)
+  trendFactor: number = 0      // Trend / seasonality % (multiplicative)
 ): ExtendedArticleRecommendation[] {
   // Get timeline days from selection
   const timelineDays = TIMELINE_DAYS[timeline];
   if (timelineDays === 0 || !stockData.length) {
     return [];
   }
-  
+
   const recommendations: ExtendedArticleRecommendation[] = [];
 
   // Group sales data by EAN, aggregating across countries
@@ -112,28 +120,28 @@ export function calculateStockRecommendations(
 
     const existing = salesByEAN.get(ean);
     // Convert string values to numbers
-    const daysOnline = typeof sale['Days online'] === 'string' ? 
-      parseInt(sale['Days online']) || 0 : 
+    const daysOnline = typeof sale['Days online'] === 'string' ?
+      parseInt(sale['Days online']) || 0 :
       sale['Days online'] || 0;
-    const soldArticles = typeof sale['Sold articles'] === 'string' ? 
-      parseInt(sale['Sold articles']) || 0 : 
+    const soldArticles = typeof sale['Sold articles'] === 'string' ?
+      parseInt(sale['Sold articles']) || 0 :
       sale['Sold articles'] || 0;
-    const returnRate = typeof sale['Return rate (%)'] === 'string' ? 
-      parseFloat(sale['Return rate (%)']) || 0 : 
+    const returnRate = typeof sale['Return rate (%)'] === 'string' ?
+      parseFloat(sale['Return rate (%)']) || 0 :
       sale['Return rate (%)'] || 0;
-    const pdpViews = typeof sale['PDP views'] === 'string' ? 
-      parseInt(sale['PDP views']) || 0 : 
+    const pdpViews = typeof sale['PDP views'] === 'string' ?
+      parseInt(sale['PDP views']) || 0 :
       sale['PDP views'] || 0;
-    const conversionRate = typeof sale['Conversion rate (%)'] === 'string' ? 
-      parseFloat(sale['Conversion rate (%)']) || 0 : 
+    const conversionRate = typeof sale['Conversion rate (%)'] === 'string' ?
+      parseFloat(sale['Conversion rate (%)']) || 0 :
       sale['Conversion rate (%)'] || 0;
     const category = sale.Category || '';
     const country = sale.Country || '';
     const season = (sale as any).season || '';
-    
+
     // Find the last actual sale date rather than using current date
-    const saleDate = sale['Date of last sale'] ? 
-      sale['Date of last sale'] : 
+    const saleDate = sale['Date of last sale'] ?
+      sale['Date of last sale'] :
       (soldArticles > 0 ? new Date().toISOString().split('T')[0] : '');
 
     // Create country sales data object
@@ -167,7 +175,7 @@ export function calculateStockRecommendations(
       // Add country to the set of countries
       if (country) {
         existing.countries.add(country);
-        
+
         // Update or add country-specific sales data
         if (existing.countrySales.has(country)) {
           const existingCountryData = existing.countrySales.get(country)!;
@@ -176,7 +184,7 @@ export function calculateStockRecommendations(
           // Update conversion rate as weighted average
           const totalCountryViews = existingCountryData.pdpViews;
           existingCountryData.conversionRate = totalCountryViews > 0 ?
-            ((existingCountryData.conversionRate * (totalCountryViews - pdpViews)) + 
+            ((existingCountryData.conversionRate * (totalCountryViews - pdpViews)) +
              (conversionRate * pdpViews)) / totalCountryViews :
             Math.max(existingCountryData.conversionRate, conversionRate);
         } else {
@@ -188,7 +196,7 @@ export function calculateStockRecommendations(
       if (country) {
         countrySalesMap.set(country, countrySalesData);
       }
-      
+
       salesByEAN.set(ean, {
         totalSales: soldArticles,
         daysOnline: daysOnline,
@@ -211,12 +219,12 @@ export function calculateStockRecommendations(
     const salesData = salesByEAN.get(stockItem.EAN);
     const zfsTotal = safeNumber(stockItem["ZFS Quantity"]) + safeNumber(stockItem["ZFS Pending Shipment"]);
     const currentStock = safeNumber(stockItem["Available Stock"]);
-    
+
     // If no sales data or zero sales, apply minimum stock rule for Live products
     if (!salesData || salesData.totalSales === 0) {
       const statusCluster = stockItem["Status Cluster"] || 'Live';
       const recommendedStock = (statusCluster === 'Live' && zfsTotal === 0) ? 1 : 0;
-      
+
       recommendations.push({
         articleId: stockItem.SKU,
         ean: stockItem.EAN,
@@ -247,15 +255,15 @@ export function calculateStockRecommendations(
 
     // Get total ZFS stock (current + pending)
     // Extract price point from stock data if available
-    const pricePoint = safeNumber((stockItem as any)["regular_price"] || 
+    const pricePoint = safeNumber((stockItem as any)["regular_price"] ||
                                  (stockItem as any)["discounted_price"] || 0);
-    
+
     // Extract status cluster
     const statusCluster = stockItem["Status Cluster"] || 'Live';
-    
+
     // Calculate recommended stock considering current inventory, status, and price
     let recommendedStock = calculateRecommendedStock(
-      { 
+      {
         totalSales: salesData.totalSales,
         timelineDays: timelineDays,
         returnRate: salesData.returnRate,
@@ -263,56 +271,58 @@ export function calculateStockRecommendations(
         conversionRate: salesData.conversionRate,
         category: salesData.category,
         season: salesData.season,
-      }, 
+      },
       coverageDays,
       statusCluster,
-      zfsTotal
+      zfsTotal,
+      safetyFactor,
+      trendFactor
     );
 
     // Calculate final recommended stock by subtracting current ZFS stock
     const finalRecommendedStock = Math.max(0, recommendedStock - zfsTotal);
-    
+
     // If ZFS stock is 0, recommended stock is 0, but we have sellable PF stock, set to 1
-    const adjustedRecommendedStock = zfsTotal === 0 && finalRecommendedStock === 0 && currentStock > 0 
-      ? 1 
+    const adjustedRecommendedStock = zfsTotal === 0 && finalRecommendedStock === 0 && currentStock > 0
+      ? 1
       : finalRecommendedStock;
-    
+
     // Calculate country-specific stock allocations based on sales distribution
     const countryAllocations: Record<string, number> = {};
-    
+
     if (adjustedRecommendedStock > 0 && salesData.countrySales.size > 0) {
       let totalCountrySales = 0;
       salesData.countrySales.forEach(data => totalCountrySales += data.totalSales);
-      
+
       // Default allocation for countries with zero sales but listed product
       const defaultAllocation = Math.max(1, Math.floor(adjustedRecommendedStock / salesData.countrySales.size));
-      
+
       // Allocate based on sales proportion, with minimum of 1 unit per country
       salesData.countrySales.forEach((data, country) => {
         if (totalCountrySales > 0 && data.totalSales > 0) {
-          countryAllocations[country] = Math.max(1, 
+          countryAllocations[country] = Math.max(1,
             Math.round((data.totalSales / totalCountrySales) * adjustedRecommendedStock)
           );
         } else {
           countryAllocations[country] = defaultAllocation;
         }
       });
-      
+
       // Ensure the total allocated stock matches the recommended stock
       let allocatedTotal = Object.values(countryAllocations).reduce((sum, val) => sum + val, 0);
       const difference = adjustedRecommendedStock - allocatedTotal;
-      
+
       // Adjust for any rounding differences by adding/removing from highest sales countries
       if (difference !== 0) {
         const countriesByAllocation = Object.entries(countryAllocations)
           .sort((a, b) => b[1] - a[1]);
-        
+
         let remaining = Math.abs(difference);
         let index = 0;
-        
+
         while (remaining > 0 && index < countriesByAllocation.length) {
           const [country, allocation] = countriesByAllocation[index];
-          
+
           if (difference > 0) {
             // Add to allocation
             countryAllocations[country] += 1;
@@ -320,7 +330,7 @@ export function calculateStockRecommendations(
             // Remove from allocation (ensuring at least 1 unit remains)
             countryAllocations[country] -= 1;
           }
-          
+
           remaining--;
           index = (index + 1) % countriesByAllocation.length;
         }
@@ -360,7 +370,7 @@ export function calculateStockRecommendations(
   }, { totalStock: 0, count: 0 });
 
   if (coverageStats.count > 0) {
-    
+
   }
 
   // Sort by total sales descending, then by average daily sales

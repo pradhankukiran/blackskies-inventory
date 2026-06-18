@@ -12,11 +12,11 @@ interface TabsProps {
 
 export function Tabs({ tabs, id = "default-tabs" }: TabsProps) {
   const storageKey = `activeTab-${id}`;
-  
+
   // Initialize state from localStorage or use the first tab
   const [activeTab, setActiveTab] = React.useState(() => {
     if (tabs.length === 0) return "";
-    
+
     const savedTab = localStorage.getItem(storageKey);
     // Check if the saved tab still exists in the current tabs
     if (savedTab && tabs.some(tab => tab.id === savedTab)) {
@@ -24,7 +24,7 @@ export function Tabs({ tabs, id = "default-tabs" }: TabsProps) {
     }
     return tabs[0]?.id;
   });
-  
+
   // Save the active tab to localStorage whenever it changes
   React.useEffect(() => {
     if (activeTab) {
@@ -52,7 +52,7 @@ export function Tabs({ tabs, id = "default-tabs" }: TabsProps) {
           ))}
         </nav>
       </div>
-      <div className="mt-6 max-w-7xl mx-auto h-[calc(100vh-100px)] overflow-hidden">
+      <div className="mt-6 w-full h-[calc(100vh-100px)] overflow-hidden">
         {tabs.find((tab) => tab.id === activeTab)?.content}
       </div>
     </div>

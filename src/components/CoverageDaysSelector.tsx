@@ -1,13 +1,18 @@
 interface CoverageDaysSelectorProps {
   value: number;
   onChange: (days: number) => void;
+  label?: string;
 }
 
-export function CoverageDaysSelector({ value, onChange }: CoverageDaysSelectorProps) {
+export function CoverageDaysSelector({
+  value,
+  onChange,
+  label = "Coverage Period:",
+}: CoverageDaysSelectorProps) {
   return (
     <div className="flex items-center gap-2">
       <label htmlFor="coverage-days" className="text-sm font-medium text-gray-700">
-        Coverage Period:
+        {label}
       </label>
       <select
         id="coverage-days"

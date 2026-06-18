@@ -5,7 +5,13 @@ import { usePagination } from "@/hooks/usePagination";
 import { ExportButton } from "./ExportButton";
 import { Pagination } from "./ui/pagination";
 import { CoverageDaysSelector } from "./CoverageDaysSelector";
-import { getStoredData, storeData } from "@/lib/indexedDB";
+import { FactorAdjuster } from "./FactorAdjuster";
+import {
+  loadFbaSettings,
+  saveFbaSafetyFactor,
+  saveFbaSellerboardStock,
+  saveFbaTrendFactor
+} from "@/lib/appPersistence";
 
 interface FBAStockTableProps {
   data: ProcessedSellerboardStock[];
@@ -31,22 +37,65 @@ const COLUMNS = [
 // Display columns (excluding Product Name)
 const DISPLAY_COLUMNS = COLUMNS.filter(column => column.key !== "Product Name");
 
+// Recalculate a single item using the FBA formula (mirrors sellerboardStockProcessor)
+function recalcItem(
+  item: ProcessedSellerboardStock,
+  days: number,
+  safety: number,
+  trend: number
+): ProcessedSellerboardStock {
+  const dailySales = item["Avg. Daily Sales"] || 0;
+  const refundPercentage = item["Avg. Return Rate (%)"] || 0;
+  const fbaQuantity = item["FBA Quantity"] || 0;
+  const unitsInTransit = item["Units In Transit"] || 0;
+  const reservedUnits = item["Reserved Units"] || 0;
+  const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
+
+  let newRecommendedQuantity = Math.round(
+    dailySales *
+      days *
+      (1 - refundPercentage / 100) *
+      (1 + safety / 100) *
+      (1 + trend / 100) *
+      ((dailySales * 30) > 10 ? 1.2 : 1) -
+      totalStock
+  );
+
+  newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
+
+  if (
+    newRecommendedQuantity === 0 &&
+    totalStock === 0 &&
+    (item["Internal Stock"] || 0) > 0
+  ) {
+    newRecommendedQuantity = 1;
+  }
+
+  return {
+    ...item,
+    "Recommended Quantity": newRecommendedQuantity,
+    "Coverage Period (Days)": days,
+  };
+}
+
 export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
   const [searchSku, setSearchSku] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [coverageDays, setCoverageDays] = useState(14);
+  const [safetyFactor, setSafetyFactor] = useState(0);
+  const [trendFactor, setTrendFactor] = useState(0);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [displayData, setDisplayData] = useState<ProcessedSellerboardStock[]>(data);
 
-  // Update initial data once
+  // Re-apply factors whenever the data prop or any setting changes
   useEffect(() => {
-    // Initialize display data from the props
-    setDisplayData(data);
-  }, [data]);
+    setDisplayData(data.map((item) => recalcItem(item, coverageDays, safetyFactor, trendFactor)));
+  }, [data, coverageDays, safetyFactor, trendFactor]);
 
   const filteredData = useMemo(() => {
     if (!searchSku) return displayData;
-    return displayData.filter(item => 
+    return displayData.filter(item =>
       item.SKU.toLowerCase().includes(searchSku.toLowerCase()) ||
       item.ASIN.toLowerCase().includes(searchSku.toLowerCase())
     );
@@ -57,128 +106,72 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
     ITEMS_PER_PAGE
   );
 
-  // Load coverage days from IndexedDB when component mounts
+  // Load recommendation settings from persistence when component mounts
   useEffect(() => {
-    const loadCoverageDays = async () => {
+    let cancelled = false;
+
+    const loadSettings = async () => {
       try {
-        const savedData = await getStoredData('fba');
-        if (savedData?.coverageDays) {
-          setCoverageDays(savedData.coverageDays);
+        const settings = await loadFbaSettings();
+        if (!cancelled) {
+          setCoverageDays(settings.coverageDays);
+          setSafetyFactor(settings.safetyFactor);
+          setTrendFactor(settings.trendFactor);
         }
       } catch (err) {
-        console.error("Error loading coverage days:", err);
+        console.error("Error loading FBA recommendation settings:", err);
+      } finally {
+        if (!cancelled) {
+          setSettingsLoaded(true);
+        }
       }
     };
-    
-    loadCoverageDays();
+
+    loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Efficient coverage days change handler - save to IndexedDB and recalculate recommendations
-  const handleCoverageDaysChange = async (days: number) => {
-    setCoverageDays(days);
-    
-    // Recalculate the recommended quantities with the new coverage days
-    try {
-      const savedData = await getStoredData('fba');
-      if (savedData?.parsedData?.sellerboardStock) {
-        // Instead of reprocessing everything, calculate only the new recommended quantities
-        setDisplayData(prevData => {
-          return prevData.map(item => {
-            const dailySales = item["Avg. Daily Sales"] || 0;
-            const refundPercentage = item["Avg. Return Rate (%)"] || 0;
-            const fbaQuantity = item["FBA Quantity"] || 0;
-            const unitsInTransit = item["Units In Transit"] || 0;
-            const reservedUnits = item["Reserved Units"] || 0;
-            const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
-            
-            // Calculate new recommended quantity using the same formula as in sellerboardStockProcessor
-            let newRecommendedQuantity = Math.round(
-              dailySales * 
-              days * 
-              (1 - (refundPercentage / 100)) * 
-              ((dailySales * 30) > 10 ? 1.2 : 1) - 
-              totalStock
-            );
-
-            // Ensure recommended quantity is not negative
-            newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
-
-            // Enforce minimum of 1 if we have internal stock and no external FBA stock
-            if (newRecommendedQuantity === 0 && totalStock === 0 && (item["Internal Stock"] || 0) > 0) {
-              newRecommendedQuantity = 1;
-            }
-            
-            return {
-              ...item,
-              "Recommended Quantity": newRecommendedQuantity,
-              "Coverage Period (Days)": days
-            };
-          });
-        });
-        
-        // Update only the recommended quantity in the stored data
-        const updatedStoredData = savedData.parsedData.sellerboardStock.map(item => {
-          const dailySales = item["Avg. Daily Sales"] || 0;
-          const refundPercentage = item["Avg. Return Rate (%)"] || 0;
-          const fbaQuantity = item["FBA Quantity"] || 0;
-          const unitsInTransit = item["Units In Transit"] || 0;
-          const reservedUnits = item["Reserved Units"] || 0;
-          const totalStock = fbaQuantity + unitsInTransit + reservedUnits;
-          
-          let newRecommendedQuantity = Math.round(
-            dailySales * 
-            days * 
-            (1 - (refundPercentage / 100)) * 
-            ((dailySales * 30) > 10 ? 1.2 : 1) - 
-            totalStock
-          );
-
-          // Ensure recommended quantity is not negative
-          newRecommendedQuantity = Math.max(0, newRecommendedQuantity);
-
-          // Enforce minimum of 1 if we have internal stock and no external FBA stock
-          if (newRecommendedQuantity === 0 && totalStock === 0 && (item["Internal Stock"] || 0) > 0) {
-            newRecommendedQuantity = 1;
-          }
-          
-          return {
-            ...item,
-            "Recommended Quantity": newRecommendedQuantity,
-            "Coverage Period (Days)": days
-          };
-        });
-        
-        // Store the updated data
-        await storeData({
-          ...savedData,
-          parsedData: {
-            ...savedData.parsedData,
-            sellerboardStock: updatedStoredData
-          },
-          coverageDays: days,
-          blacklist: savedData.blacklist || []
-        }, 'fba');
-      } else {
-        // If no processed data exists yet, just save the coverage days
-        await storeData({
-          parsedData: savedData?.parsedData || {
-            internal: [],
-            zfs: [],
-            zfsShipments: [],
-            zfsShipmentsReceived: [],
-            skuEanMapper: [],
-            zfsSales: [],
-            integrated: [],
-            sellerboardStock: []
-          },
-          recommendations: savedData?.recommendations || [],
-          coverageDays: days,
-          blacklist: savedData?.blacklist || []
-        }, 'fba');
-      }
-    } catch (err) {
-      console.error("Error updating with new coverage days:", err);
+  // Persist factors immediately when they change
+  useEffect(() => {
+    if (settingsLoaded) {
+      saveFbaSafetyFactor(safetyFactor);
     }
+  }, [safetyFactor, settingsLoaded]);
+
+  useEffect(() => {
+    if (settingsLoaded) {
+      saveFbaTrendFactor(trendFactor);
+    }
+  }, [trendFactor, settingsLoaded]);
+
+  // Persist coverage days + recalculated stock to IndexedDB when any input changes
+  const persistRecalc = async (days: number, safety: number, trend: number) => {
+    try {
+      const updatedStoredData = data.map((item) =>
+        recalcItem(item, days, safety, trend)
+      );
+      await saveFbaSellerboardStock(updatedStoredData, days);
+    } catch (err) {
+      console.error('Error persisting FBA recalc:', err);
+    }
+  };
+
+  const handleCoverageDaysChange = (days: number) => {
+    setCoverageDays(days);
+    persistRecalc(days, safetyFactor, trendFactor);
+  };
+
+  const handleSafetyFactorChange = (value: number) => {
+    setSafetyFactor(value);
+    persistRecalc(coverageDays, value, trendFactor);
+  };
+
+  const handleTrendFactorChange = (value: number) => {
+    setTrendFactor(value);
+    persistRecalc(coverageDays, safetyFactor, value);
   };
 
   useEffect(() => {
@@ -190,19 +183,25 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
-        <div className="text-sm text-gray-700">
-          {filteredData.length} items with {coverageDays} days coverage
-        </div>
-        <ExportButton
-          data={displayData}
-          label="Export FBA Stock Overview & Recommendation"
-          filename="fba-stock-data"
-        />
-      </div>
+    <div className="h-full flex flex-col">
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
+            <FactorAdjuster label="Safety Factor" value={safetyFactor} onChange={handleSafetyFactorChange} />
+            <FactorAdjuster label="Trend Factor" value={trendFactor} onChange={handleTrendFactorChange} />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="text-sm text-gray-700">
+              {filteredData.length} items with {coverageDays} days coverage
+            </div>
+            <ExportButton
+              data={displayData}
+              label="Export FBA Stock Overview & Recommendation"
+              filename="fba-stock-data"
+            />
+          </div>
+        </div>
         <div className="overflow-auto flex-1">
           <table className="w-full border-collapse">
             <thead className="sticky top-0 bg-white z-10">
@@ -317,4 +316,4 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
       </div>
     </div>
   );
-}; 
+};
