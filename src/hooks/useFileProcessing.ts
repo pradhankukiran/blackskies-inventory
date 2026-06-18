@@ -2,16 +2,22 @@ import { useState, useEffect, useRef } from 'react';
 import { ParsedData, FileState } from '@/types/stock';
 import { ArticleRecommendation } from '@/types/sales';
 import { TimelineType } from '@/types/common';
-import { 
-  storeFiles, 
-  getFiles, 
-  clearFiles, 
-  getStoredData, 
-  storeData, 
+import {
+  storeFiles,
+  getFiles,
+  clearFiles,
+  getStoredData,
   clearStoredData,
   storeBlacklist,
   getBlacklist
 } from '@/lib/indexedDB';
+import {
+  clearZfsTablesData,
+  clearZfsSettings,
+  readZfsTimelineFallback,
+  saveZfsProcessingResult,
+  saveZfsTimeline
+} from '@/lib/appPersistence';
 
 export function useFileProcessing() {
   const [files, setFiles] = useState<FileState>({
@@ -51,45 +57,22 @@ export function useFileProcessing() {
 
   // Initialize timeline from localStorage if available
   const [timeline, setTimeline] = useState<TimelineType>(() => {
-    const savedTimeline = localStorage.getItem('zfsTimeline');
-    return (savedTimeline as TimelineType) || 'none';
+    return readZfsTimelineFallback();
   });
+  const timelineRef = useRef<TimelineType>(timeline);
   const [worker, setWorker] = useState<Worker | null>(null);
+
+  useEffect(() => {
+    timelineRef.current = timeline;
+  }, [timeline]);
 
   // Wrap the setTimeline function to save to IndexedDB
   const handleTimelineChange = async (newTimeline: TimelineType) => {
     setTimeline(newTimeline);
+    timelineRef.current = newTimeline;
     
-    // Save the timeline to localStorage for persistence across tab changes
-    localStorage.setItem('zfsTimeline', newTimeline);
-    
-    // Save the updated timeline to IndexedDB
     try {
-      const savedData = await getStoredData('zfs');
-      if (savedData) {
-        await storeData({
-          ...savedData,
-          timeline: newTimeline,
-          blacklist: blacklistRef.current
-        }, 'zfs');
-      } else {
-        await storeData({
-          parsedData: {
-            internal: [],
-            zfs: [],
-            zfsShipments: [],
-            zfsShipmentsReceived: [],
-            skuEanMapper: [],
-            zfsSales: [],
-            integrated: [],
-            sellerboardStock: []
-          },
-          recommendations: [],
-          timeline: newTimeline,
-          coverageDays: 14,
-          blacklist: blacklistRef.current
-        }, 'zfs');
-      }
+      await saveZfsTimeline(newTimeline, blacklistRef.current);
     } catch (err) {
       console.error("Error saving timeline:", err);
     }
@@ -108,6 +91,7 @@ export function useFileProcessing() {
         }
         if (savedData.timeline) {
           setTimeline(savedData.timeline);
+          timelineRef.current = savedData.timeline;
         }
         if (savedData.blacklist) {
           setBlacklist(savedData.blacklist.map((sku) => sku.trim().toUpperCase()).filter(Boolean));
@@ -157,13 +141,21 @@ export function useFileProcessing() {
             sellerboardStock: data.sellerboardStock || []
           });
           try {
-            const currentBlacklist = blacklistRef.current;
-            await storeData({ 
-              parsedData: data, 
+            await saveZfsProcessingResult({
+              parsedData: {
+                internal: data.internal,
+                zfs: data.zfs,
+                zfsShipments: data.zfsShipments,
+                zfsShipmentsReceived: data.zfsShipmentsReceived,
+                skuEanMapper: data.skuEanMapper,
+                zfsSales: data.zfsSales,
+                integrated: data.integrated,
+                sellerboardStock: data.sellerboardStock || []
+              },
               recommendations: data.recommendations,
-              timeline: timeline,
-              blacklist: currentBlacklist
-            }, 'zfs');
+              timeline: timelineRef.current,
+              blacklist: blacklistRef.current
+            });
           } catch (error) {
             // Silently handle storage errors
           }
@@ -252,6 +244,7 @@ export function useFileProcessing() {
       setError(null);
       setProcessingStatus('Initializing...');
       // Use the current timeline value from state and also update it
+      timelineRef.current = timeline;
       handleTimelineChange(timeline);
       const currentBlacklist = blacklistRef.current;
       worker.postMessage({ files, timeline, blacklist: currentBlacklist });
@@ -263,7 +256,7 @@ export function useFileProcessing() {
     }
   };
 
-  const resetFiles = () => {
+  const resetFiles = async () => {
     setFiles({
       internal: null,
       fba: null,
@@ -277,32 +270,30 @@ export function useFileProcessing() {
       fbaSales: null,
       storeType: 'zfs',
     });
-    clearTables();
-    // Reset timeline to 'none'
+    setParsedData({
+      internal: [],
+      zfs: [],
+      zfsShipments: [],
+      zfsShipmentsReceived: [],
+      skuEanMapper: [],
+      zfsSales: [],
+      integrated: [],
+      sellerboardStock: []
+    });
+    setRecommendations([]);
     setTimeline('none');
-    // Also clear from localStorage
-    localStorage.removeItem('zfsTimeline');
-    
-    // Update stored data to reset coverageDays to default value
-    getStoredData('zfs').then(savedData => {
-      if (savedData) {
-        storeData({
-          ...savedData,
-          timeline: 'none',
-          coverageDays: 14,
-          blacklist: blacklistRef.current
-        }, 'zfs').catch(() => {});
-      } else if (blacklist.length > 0) {
-        storeBlacklist(blacklistRef.current, 'zfs').catch(() => {});
-      }
-    }).catch(() => {});
+    timelineRef.current = 'none';
+    clearZfsSettings();
 
-    clearFiles('zfs').catch(() => {});
-    clearStoredData('zfs').then(() => {
+    try {
+      await clearFiles('zfs');
+      await clearStoredData('zfs');
       if (blacklistRef.current.length > 0) {
-        storeBlacklist(blacklistRef.current, 'zfs').catch(() => {});
+        await storeBlacklist(blacklistRef.current, 'zfs');
       }
-    }).catch(() => {});
+    } catch (err) {
+      console.error("Error resetting ZFS persistence:", err);
+    }
   };
 
   const clearTables = () => {
@@ -318,33 +309,13 @@ export function useFileProcessing() {
     });
     setRecommendations([]);
     
-    // Clear data from storage while preserving timeline
-    getStoredData('zfs').then(savedData => {
-      if (savedData) {
-        storeData({
-          ...savedData,
-          parsedData: {
-            internal: [],
-            zfs: [],
-            zfsShipments: [],
-            zfsShipmentsReceived: [],
-            skuEanMapper: [],
-            zfsSales: [],
-            integrated: [],
-            sellerboardStock: []
-          },
-          recommendations: []
-        }, 'zfs').catch(err => {
-          console.error("Error updating stored data:", err);
-        });
-      }
-    }).catch(err => {
-      console.error("Error retrieving stored data:", err);
+    clearZfsTablesData().catch(err => {
+      console.error("Error clearing stored ZFS table data:", err);
     });
   };
 
   const resetAll = async () => {
-    resetFiles();
+    await resetFiles();
     clearTables();
     setError(null);
     setProcessingStatus('');

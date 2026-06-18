@@ -15,7 +15,7 @@ const FBA_DATA_KEY = 'currentFbaData';
 
 let dbInstance: IDBDatabase | null = null;
 
-interface StoredData {
+export interface StoredData {
   parsedData: ParsedData;
   recommendations: ArticleRecommendation[];
   timeline?: 'none' | '30days' | '6months';
