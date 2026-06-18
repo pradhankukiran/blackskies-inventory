@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { FileUploadGrid } from "./FileUploadGrid";
@@ -13,8 +13,21 @@ import { TimelineType } from "@/types/common";
 import { FBAStockTable } from "./FBAStockTable";
 import { parseFile } from "@/utils/fileParser";
 import { processSellerboardStock } from "@/utils/processors/sellerboardStockProcessor";
+import { calculateStockRecommendations } from "@/utils/calculators/stockRecommendations";
 import { ProcessedSellerboardStock } from "@/types/processors";
-import { storeFiles, getFiles, storeData, getStoredData, clearFiles, clearStoredData, storeGenericData, getGenericData, clearGenericData, storeBlacklist, getBlacklist } from '@/lib/indexedDB';
+import { ArticleRecommendation } from "@/types/sales";
+import { storeFiles, getFiles, getStoredData, clearFiles, storeGenericData, getGenericData, clearGenericData, storeBlacklist, getBlacklist } from '@/lib/indexedDB';
+import {
+  clearZfsSettings,
+  clearFbaTablesData,
+  loadFbaSettings,
+  loadZfsSettings,
+  resetFbaData,
+  saveFbaProcessedData,
+  saveZfsCoverageDays,
+  saveZfsSafetyFactor,
+  saveZfsTrendFactor
+} from '@/lib/appPersistence';
 import { FileState, ParsedData } from "@/types/stock";
 import RelativeStockTable from "./RelativeStockTable";
 import BlacklistModal from "./BlacklistModal";
@@ -37,6 +50,13 @@ interface TabContentProps {
   tabsRef: any;
   onOpenBlacklist: () => void;
   blacklistCount: number;
+  zfsRecommendationSettingsLoaded: boolean;
+  zfsCoverageDays: number;
+  zfsSafetyFactor: number;
+  zfsTrendFactor: number;
+  onZfsCoverageDaysChange: (days: number) => void;
+  onZfsSafetyFactorChange: (value: number) => void;
+  onZfsTrendFactorChange: (value: number) => void;
 }
 
 const ZFSContent: React.FC<TabContentProps> = ({
@@ -57,7 +77,29 @@ const ZFSContent: React.FC<TabContentProps> = ({
   tabsRef,
   onOpenBlacklist,
   blacklistCount,
+  zfsRecommendationSettingsLoaded,
+  zfsCoverageDays,
+  zfsSafetyFactor,
+  zfsTrendFactor,
+  onZfsCoverageDaysChange,
+  onZfsSafetyFactorChange,
+  onZfsTrendFactorChange,
 }) => {
+  const hasAnyZfsInput =
+    Boolean(files.internal) ||
+    Boolean(files.skuEanMapper) ||
+    Boolean(files.zfsSales) ||
+    (Array.isArray(files.zfs) && files.zfs.length > 0) ||
+    (Array.isArray(files.zfsShipments) && files.zfsShipments.length > 0) ||
+    (Array.isArray(files.zfsShipmentsReceived) && files.zfsShipmentsReceived.length > 0);
+  const isTimelineMissing = Boolean(files.zfsSales) && timeline === "none";
+  const isProcessDisabled = isProcessing || !hasAnyZfsInput || isTimelineMissing;
+  const processButtonLabel = !hasAnyZfsInput
+    ? "Upload Files"
+    : isTimelineMissing
+      ? "Select Timeline"
+      : "Process Files";
+
   const tabs = [
     {
       id: "stock",
@@ -71,12 +113,17 @@ const ZFSContent: React.FC<TabContentProps> = ({
       id: "recommendations",
       label: "ZFS Stock Recommendation",
       content:
-        recommendations.length > 0 ? (
+        zfsRecommendationSettingsLoaded && recommendations.length > 0 ? (
           <RecommendationsTable
             recommendations={recommendations}
             stockData={parsedData.integrated}
-            parsedData={parsedData}
             timeline={timeline}
+            coverageDays={zfsCoverageDays}
+            safetyFactor={zfsSafetyFactor}
+            trendFactor={zfsTrendFactor}
+            onCoverageDaysChange={onZfsCoverageDaysChange}
+            onSafetyFactorChange={onZfsSafetyFactorChange}
+            onTrendFactorChange={onZfsTrendFactorChange}
           />
         ) : null,
     },
@@ -129,16 +176,27 @@ const ZFSContent: React.FC<TabContentProps> = ({
         </div>
         <button
           onClick={() => {
+            if (!hasAnyZfsInput) {
+              setError("Please upload at least one ZFS file before processing");
+              return;
+            }
             if (files.zfsSales && timeline === "none") {
               setError("Please select a timeline for the sales file");
               return;
             }
             processFiles(timeline);
           }}
-          disabled={isProcessing || (files.zfsSales && timeline === "none")}
+          disabled={isProcessDisabled}
+          title={
+            !hasAnyZfsInput
+              ? "Upload at least one file before processing"
+              : isTimelineMissing
+                ? "Select a timeline for the ZFS Sales file"
+                : "Process uploaded ZFS files"
+          }
           className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:shadow-md"
         >
-          Process Files
+          {processButtonLabel}
         </button>
       </div>
 
@@ -172,10 +230,10 @@ interface FBAContentProps {
   onOpenBlacklist: () => void;
 }
 
-const FBAContent: React.FC<FBAContentProps> = ({ 
-  fbaFiles, 
-  setFbaFiles, 
-  fbaData, 
+const FBAContent: React.FC<FBAContentProps> = ({
+  fbaFiles,
+  setFbaFiles,
+  fbaData,
   setFbaData,
   resetFiles,
   clearTables,
@@ -191,36 +249,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
     fbaData.sellerboardStock.filter((item) => !blacklistSet.has((item.SKU || '').trim().toUpperCase()))
   ), [fbaData.sellerboardStock, blacklistSet]);
 
-  // Load saved files and data from IndexedDB on component mount
-  useEffect(() => {
-    const loadSavedData = async () => {
-      try {
-        // Load saved files - specify 'fba' as the storeType
-        const savedFiles = await getFiles('fba');
-        if (savedFiles) {
-          setFbaFiles({
-            sellerboardExport: savedFiles.sellerboardExport,
-            sellerboardReturns: savedFiles.sellerboardReturns,
-          });
-        }
-
-        // Load saved parsed data - specify 'fba' as the storeType
-        const savedData = await getStoredData('fba');
-        if (savedData?.parsedData) {
-          if (savedData.parsedData.sellerboardStock?.length > 0) {
-            setFbaData({
-              sellerboardStock: savedData.parsedData.sellerboardStock,
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error loading saved data:", err);
-      }
-    };
-
-    loadSavedData();
-  }, [setFbaFiles, setFbaData]);
-
   // Update showTabs when fbaData changes
   const showTabs = filteredSellerboardStock.length > 0;
 
@@ -230,12 +258,12 @@ const FBAContent: React.FC<FBAContentProps> = ({
   ) => {
     const newFiles = event.target.files;
     if (!newFiles) return;
-    
+
     const updatedFiles = {
       ...fbaFiles,
       [type]: newFiles[0],
     };
-    
+
     setFbaFiles(updatedFiles);
 
     // Store in IndexedDB
@@ -302,7 +330,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
         const sellerboardData = await parseFile(fbaFiles.sellerboardExport, (progress) => {
           setProcessingStatus(`Processing Sellerboard export (${Math.round(progress)}%)...`);
         });
-        
+
         // Process Sellerboard Sales + Returns if available
         let salesReturnsData = null;
         if (fbaFiles.sellerboardReturns) {
@@ -310,10 +338,10 @@ const FBAContent: React.FC<FBAContentProps> = ({
           salesReturnsData = await parseFile(fbaFiles.sellerboardReturns, (progress) => {
             setProcessingStatus(`Processing Sellerboard Sales + Returns (${Math.round(progress)}%)...`);
           });
-          
+
           // Log sellerboard returns data for debugging
           console.log("Parsed sellerboard returns data:", salesReturnsData);
-          
+
           // Log specific fields for debugging sales and returns values
           if (salesReturnsData && salesReturnsData.length > 0) {
             // Find an entry with SKU for better logging
@@ -325,7 +353,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
               EMPTY_22: sampleItem.__EMPTY_22,
               undefined_22: sampleItem.undefined_22,
               // Keys that might contain sales data
-              allKeys: Object.keys(sampleItem).filter(key => 
+              allKeys: Object.keys(sampleItem).filter(key =>
                 key.includes('22') || key.includes('Totals') || key.includes('Sales')
               ),
               // Return rate fields
@@ -350,26 +378,21 @@ const FBAContent: React.FC<FBAContentProps> = ({
               return !blacklistSet.has(sku);
             })
           : null;
-        
-        // Get coverage days from IndexedDB or use default
-        let coverageDays = 14; // Default value
-        try {
-          const savedData = await getStoredData('fba');
-          if (savedData?.coverageDays) {
-            coverageDays = savedData.coverageDays;
-          }
-        } catch (err) {
-          console.error("Error loading coverage days:", err);
-        }
-        
-        const processedSellerboardData = processSellerboardStock(filteredSellerboardData, filteredSalesReturnsData, coverageDays)
+
+        const {
+          coverageDays,
+          safetyFactor,
+          trendFactor,
+        } = await loadFbaSettings();
+
+        const processedSellerboardData = processSellerboardStock(filteredSellerboardData, filteredSalesReturnsData, coverageDays, safetyFactor, trendFactor)
           .filter((item) => !blacklistSet.has((item.SKU || '').trim().toUpperCase()));
-        
+
         // Update local state
         setFbaData({
           sellerboardStock: processedSellerboardData,
         });
-        
+
         // Store in IndexedDB with 'fba' storeType
         try {
           // Create a ParsedData object
@@ -383,18 +406,17 @@ const FBAContent: React.FC<FBAContentProps> = ({
             integrated: [],
             sellerboardStock: processedSellerboardData,
           };
-          
-          await storeData({ 
-            parsedData: parsedDataObj, 
-            recommendations: [],
-            coverageDays: coverageDays, // Save coverage days with the stored data
+
+          await saveFbaProcessedData({
+            parsedData: parsedDataObj,
+            coverageDays,
             rawReturnsData: filteredSalesReturnsData,
             blacklist: Array.from(blacklistSet)
-          }, 'fba'); // Pass 'fba' as storeType
+          });
         } catch (err) {
           console.error("Error storing parsed data:", err);
         }
-        
+
         // Scroll to results after processing
         setTimeout(() => {
           tabsRef.current?.scrollIntoView({
@@ -567,22 +589,22 @@ const IntegratedStockParser: React.FC = () => {
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
   const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
   const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
-  
+
   // Add state for export overlay
   const [showExportOverlay, setShowExportOverlay] = useState(false);
   const [exportFile, setExportFile] = useState<File | null>(null);
   // State for overlay content
   const [relativeStockData, setRelativeStockData] = useState<{
      articleNumber: string;
-     warehouse?: string; 
-     binLocation?: string; 
-     isDefaultBinLocation?: boolean; 
-     physicalStock: number; 
+     warehouse?: string;
+     binLocation?: string;
+     isDefaultBinLocation?: boolean;
+     physicalStock: number;
   }[]>([]);
   const [processingExport, setProcessingExport] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isLoadingPersistedData, setIsLoadingPersistedData] = useState(true); // Loading state
-  
+
   // Add state for FBA tab
   const [fbaFiles, setFbaFiles] = useState<{
     sellerboardExport: File | null;
@@ -591,7 +613,7 @@ const IntegratedStockParser: React.FC = () => {
     sellerboardExport: null,
     sellerboardReturns: null,
   });
-  
+
   const [fbaData, setFbaData] = useState<{
     sellerboardStock: ProcessedSellerboardStock[];
   }>({
@@ -645,6 +667,11 @@ const IntegratedStockParser: React.FC = () => {
     addToBlacklist: addZfsToBlacklist,
     removeFromBlacklist: removeZfsFromBlacklist,
   } = useFileProcessing();
+
+  const [zfsRecommendationSettingsLoaded, setZfsRecommendationSettingsLoaded] = useState(false);
+  const [zfsCoverageDays, setZfsCoverageDays] = useState(14);
+  const [zfsSafetyFactor, setZfsSafetyFactor] = useState(0);
+  const [zfsTrendFactor, setZfsTrendFactor] = useState(0);
 
   const [isShopifySyncing, setIsShopifySyncing] = useState(false);
   const [shopifySyncMeta, setShopifySyncMeta] = useState<ShopifySyncMeta | null>(() => {
@@ -754,6 +781,99 @@ const IntegratedStockParser: React.FC = () => {
     [recommendations, zfsBlacklistSet]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadZfsRecommendationSettings = async () => {
+      try {
+        const settings = await loadZfsSettings();
+        if (!cancelled) {
+          setZfsCoverageDays(settings.coverageDays);
+          setZfsSafetyFactor(settings.safetyFactor);
+          setZfsTrendFactor(settings.trendFactor);
+        }
+      } catch (err) {
+        console.error("Error loading ZFS recommendation settings:", err);
+      } finally {
+        if (!cancelled) {
+          setZfsRecommendationSettingsLoaded(true);
+        }
+      }
+    };
+
+    loadZfsRecommendationSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (zfsRecommendationSettingsLoaded) {
+      saveZfsSafetyFactor(zfsSafetyFactor);
+    }
+  }, [zfsSafetyFactor, zfsRecommendationSettingsLoaded]);
+
+  useEffect(() => {
+    if (zfsRecommendationSettingsLoaded) {
+      saveZfsTrendFactor(zfsTrendFactor);
+    }
+  }, [zfsTrendFactor, zfsRecommendationSettingsLoaded]);
+
+  const persistZfsCoverageDays = useCallback(async (days: number) => {
+    try {
+      await saveZfsCoverageDays(days);
+    } catch (err) {
+      console.error("Error saving ZFS coverage days:", err);
+    }
+  }, []);
+
+  const handleZfsCoverageDaysChange = useCallback((days: number) => {
+    setZfsCoverageDays(days);
+    void persistZfsCoverageDays(days);
+  }, [persistZfsCoverageDays]);
+
+  const handleZfsSafetyFactorChange = useCallback((value: number) => {
+    setZfsSafetyFactor(value);
+  }, []);
+
+  const handleZfsTrendFactorChange = useCallback((value: number) => {
+    setZfsTrendFactor(value);
+  }, []);
+
+  const zfsRecommendationsForDisplay = useMemo<ArticleRecommendation[]>(() => {
+    if (!zfsRecommendationSettingsLoaded || filteredRecommendations.length === 0) {
+      return [];
+    }
+
+    if (timeline === 'none') {
+      return filteredRecommendations;
+    }
+
+    try {
+      return calculateStockRecommendations(
+        filteredParsedData.zfsSales,
+        filteredParsedData.integrated,
+        Math.max(Number(zfsCoverageDays), 1),
+        timeline,
+        zfsSafetyFactor,
+        zfsTrendFactor
+      );
+    } catch (err) {
+      console.error("Error recalculating ZFS recommendations:", err);
+      return filteredRecommendations;
+    }
+  }, [
+    zfsRecommendationSettingsLoaded,
+    filteredRecommendations,
+    filteredParsedData.zfsSales,
+    filteredParsedData.integrated,
+    timeline,
+    zfsCoverageDays,
+    zfsSafetyFactor,
+    zfsTrendFactor,
+  ]);
+
   const showTabs =
     filteredParsedData.integrated.length > 0 || filteredRecommendations.length > 0;
 
@@ -806,21 +926,13 @@ const IntegratedStockParser: React.FC = () => {
 
   // Update resetFiles to only clear ZFS data
   const resetZFSFiles = async () => {
-    resetFiles(); // Original ZFS reset logic - this already has storeType 'zfs'
-    
-    // Clear only ZFS data from IndexedDB
-    try {
-      await clearFiles('zfs');
-      await clearStoredData('zfs');
-      if (zfsBlacklist.length > 0) {
-        await storeBlacklist(zfsBlacklist, 'zfs');
-      }
-      console.log("ZFS data cleared from IndexedDB");
-    } catch (err) {
-      console.error("Error clearing ZFS data:", err);
-    }
+    await resetFiles();
+    setZfsCoverageDays(14);
+    setZfsSafetyFactor(0);
+    setZfsTrendFactor(0);
+    clearZfsSettings();
   };
-  
+
   // Update FBA reset to only clear FBA data
   const resetFBAFiles = async () => {
     // Clear FBA state
@@ -831,28 +943,13 @@ const IntegratedStockParser: React.FC = () => {
     setFbaData({
       sellerboardStock: [],
     });
-    
+
     // Clear only FBA data from IndexedDB
     try {
       await clearFiles('fba');
-      
-      // Reset stored data but maintain default coverage days
-      await storeData({
-        parsedData: {
-          internal: [],
-          zfs: [],
-          zfsShipments: [],
-          zfsShipmentsReceived: [],
-          skuEanMapper: [],
-          zfsSales: [],
-          integrated: [],
-          sellerboardStock: []
-        },
-        recommendations: [],
-        coverageDays: 14,
-        blacklist: Array.from(fbaBlacklistRef.current)
-      }, 'fba');
-      
+
+      await resetFbaData(Array.from(fbaBlacklistRef.current));
+
       console.log("FBA data cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing FBA data:", err);
@@ -865,27 +962,11 @@ const IntegratedStockParser: React.FC = () => {
     setFbaData({
       sellerboardStock: [],
     });
-    
+
     // Clear only FBA data from storage while preserving files
     try {
-      const savedData = await getStoredData('fba');
-      if (savedData) {
-        await storeData({
-          ...savedData,
-          parsedData: {
-            internal: [],
-            zfs: [],
-            zfsShipments: [],
-            zfsShipmentsReceived: [],
-            skuEanMapper: [],
-            zfsSales: [],
-            integrated: [],
-            sellerboardStock: []
-          },
-          blacklist: Array.from(fbaBlacklistRef.current)
-        }, 'fba');
-        console.log("FBA tables cleared from IndexedDB");
-      }
+      await clearFbaTablesData(Array.from(fbaBlacklistRef.current));
+      console.log("FBA tables cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing FBA tables:", err);
     }
@@ -924,7 +1005,7 @@ const IntegratedStockParser: React.FC = () => {
              warehouse?: string;
              binLocation?: string;
              isDefaultBinLocation?: boolean;
-             physicalStock: number; 
+             physicalStock: number;
           }[]);
         } else if (storedTableData) {
           console.warn("Persisted table data has incorrect structure. Clearing.");
@@ -946,12 +1027,12 @@ const IntegratedStockParser: React.FC = () => {
     const file = event.target.files?.[0];
     if (file) {
       setExportFile(file);
-      setRelativeStockData([]); 
+      setRelativeStockData([]);
       setExportError(null);
       try {
         await storeGenericData(RELATIVE_STOCK_FILE_KEY, file);
         console.log("Stored export file in IndexedDB");
-        await clearGenericData(RELATIVE_STOCK_TABLE_KEY); 
+        await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
       } catch (err) {
         console.error("Error storing export file:", err);
       }
@@ -959,7 +1040,7 @@ const IntegratedStockParser: React.FC = () => {
   };
 
   // Handle file removal for export using generic functions
-  const handleExportFileRemove = async () => { 
+  const handleExportFileRemove = async () => {
     setExportFile(null);
     setRelativeStockData([]);
     setExportError(null);
@@ -991,14 +1072,14 @@ const IntegratedStockParser: React.FC = () => {
       }
 
       const headers = Object.keys(parsedData[0]);
-      
-      // --- Define expected column headers (Only required ones now) --- 
+
+      // --- Define expected column headers (Only required ones now) ---
       const expectedHeaders = {
           sku: ["Partner Variant Size", "SKU"],
           stock: ["Recommended Stock", "Recommended Quantity"],
       };
 
-      // --- Find actual column names used in the file --- 
+      // --- Find actual column names used in the file ---
       const findHeader = (possibleNames: string[]): string | null => {
           for (const name of possibleNames) {
               if (headers.includes(name)) return name;
@@ -1010,7 +1091,7 @@ const IntegratedStockParser: React.FC = () => {
       const stockColumn = findHeader(expectedHeaders.stock);
       // No longer need to find warehouse, binLocation, isDefault columns
 
-      // --- Validate required columns --- 
+      // --- Validate required columns ---
       if (!skuColumn || !stockColumn) {
            const missing = [!skuColumn ? "SKU/Partner Variant Size" : null, !stockColumn ? "Recommended Stock/Quantity" : null].filter(Boolean).join(' and ');
            throw new Error(`Required columns (${missing}) not found in the file.`);
@@ -1018,18 +1099,18 @@ const IntegratedStockParser: React.FC = () => {
       console.log("Found required columns:", { skuColumn, stockColumn });
 
       // --- Process rows, handling SET SKUs and aggregating ---
-      const processedItems: { 
-        articleNumber: string; 
-        warehouse?: string; 
-        binLocation?: string; 
-        isDefaultBinLocation?: boolean; 
-        physicalStock: number; 
+      const processedItems: {
+        articleNumber: string;
+        warehouse?: string;
+        binLocation?: string;
+        isDefaultBinLocation?: boolean;
+        physicalStock: number;
       }[] = [];
-      const baseSkuStock: Record<string, { 
-          warehouse?: string; 
-          binLocation?: string; 
-          isDefaultBinLocation?: boolean; 
-          physicalStock: number; 
+      const baseSkuStock: Record<string, {
+          warehouse?: string;
+          binLocation?: string;
+          isDefaultBinLocation?: boolean;
+          physicalStock: number;
       }> = {};
 
       for (const row of parsedData) {
@@ -1050,7 +1131,7 @@ const IntegratedStockParser: React.FC = () => {
           if (parts.length === 2) {
             const prefix = parts[0];
             const suffix = parts[1];
-            
+
             // Generate Variant SKU
             const variantSku = `${prefix}-${suffix}`;
             processedItems.push({
@@ -1058,7 +1139,7 @@ const IntegratedStockParser: React.FC = () => {
               warehouse,
               binLocation,
               isDefaultBinLocation,
-              physicalStock: stockNum 
+              physicalStock: stockNum
             });
 
             // Generate Base SKU and aggregate stock
@@ -1067,11 +1148,11 @@ const IntegratedStockParser: React.FC = () => {
             const baseSku = `${prefix}-${baseSuffix}`;
 
             if (!baseSkuStock[baseSku]) {
-              baseSkuStock[baseSku] = { 
-                warehouse, 
-                binLocation, 
-                isDefaultBinLocation, 
-                physicalStock: 0 
+              baseSkuStock[baseSku] = {
+                warehouse,
+                binLocation,
+                isDefaultBinLocation,
+                physicalStock: 0
               };
             }
             baseSkuStock[baseSku].physicalStock += stockNum;
@@ -1105,15 +1186,15 @@ const IntegratedStockParser: React.FC = () => {
           ...baseSkuStock[baseSku]
         });
       }
-      
+
       console.log(`Processed ${parsedData.length} rows into ${processedItems.length} items (incl. generated SKUs).`);
 
 
       if (processedItems.length === 0) {
         throw new Error("No valid data rows found after processing.");
       }
-      
-      // --- Sort by articleNumber --- 
+
+      // --- Sort by articleNumber ---
       processedItems.sort((a, b) => a.articleNumber.localeCompare(b.articleNumber));
       console.log("Sorted data (first 10):", processedItems.slice(0, 10));
 
@@ -1158,7 +1239,7 @@ const IntegratedStockParser: React.FC = () => {
        setExportError(null);
     }
   };
-  
+
   // Open Overlay function
   const handleOpenOverlay = () => {
     // Reset transient states
@@ -1259,7 +1340,7 @@ const IntegratedStockParser: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Relative Stock Export Overlay */}
       {showExportOverlay && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1341,7 +1422,7 @@ const IntegratedStockParser: React.FC = () => {
               <ZFSContent
                 files={files}
                 parsedData={filteredParsedData}
-                recommendations={filteredRecommendations}
+                recommendations={zfsRecommendationsForDisplay}
                 timeline={timeline}
                 error={error}
                 isProcessing={isProcessing}
@@ -1352,10 +1433,17 @@ const IntegratedStockParser: React.FC = () => {
                 resetFiles={resetZFSFiles}
                 clearTables={clearTables}
                 setError={setError}
-                showTabs={showTabs}
+                showTabs={showTabs && (zfsRecommendationSettingsLoaded || filteredRecommendations.length === 0)}
                 tabsRef={tabsRef}
                 onOpenBlacklist={() => setShowZfsBlacklistModal(true)}
                 blacklistCount={zfsBlacklist.length}
+                zfsRecommendationSettingsLoaded={zfsRecommendationSettingsLoaded}
+                zfsCoverageDays={zfsCoverageDays}
+                zfsSafetyFactor={zfsSafetyFactor}
+                zfsTrendFactor={zfsTrendFactor}
+                onZfsCoverageDaysChange={handleZfsCoverageDaysChange}
+                onZfsSafetyFactorChange={handleZfsSafetyFactorChange}
+                onZfsTrendFactorChange={handleZfsTrendFactorChange}
               />
               } />
               <Route path="/fba" element={
