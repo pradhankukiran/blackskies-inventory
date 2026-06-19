@@ -2,7 +2,8 @@ import { TimelineType } from '@/types/common';
 import { ParsedData } from '@/types/stock';
 import { ArticleRecommendation } from '@/types/sales';
 import { ProcessedSellerboardStock } from '@/types/processors';
-import { getStoredData, storeData, StoredData } from './indexedDB';
+import { RetaggingDecisionResult } from '@/types/retagging';
+import { clearGenericData, getGenericData, getStoredData, storeData, storeGenericData, StoredData } from './indexedDB';
 
 export interface RecommendationSettings {
   coverageDays: number;
@@ -26,6 +27,38 @@ const ZFS_SAFETY_FACTOR_KEY = 'zfsSafetyFactor';
 const ZFS_TREND_FACTOR_KEY = 'zfsTrendFactor';
 const FBA_SAFETY_FACTOR_KEY = 'fbaSafetyFactor';
 const FBA_TREND_FACTOR_KEY = 'fbaTrendFactor';
+const RETAGGING_SALES_FILE_KEY = 'retaggingSalesPerformanceFile';
+const RETAGGING_INVENTORY_FILE_KEY = 'retaggingZfsInventoryFile';
+const RETAGGING_SHOPIFY_STOCK_FILE_KEY = 'retaggingShopifyStockFile';
+const RETAGGING_STATE_KEY = 'retaggingDecisionState';
+
+export interface RetaggingUiState {
+  sarThreshold: number;
+  nmvThreshold: number;
+  searchTerm: string;
+  actionFilter: string;
+  eligibilityFilter: string;
+  showMissingOnly: boolean;
+  hasProcessed: boolean;
+  result: RetaggingDecisionResult | null;
+}
+
+export interface RetaggingPersistedState extends RetaggingUiState {
+  salesPerformanceFile: File | null;
+  zfsInventoryFile: File | null;
+  shopifyStockFile: File | null;
+}
+
+const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
+  sarThreshold: 85,
+  nmvThreshold: 1000,
+  searchTerm: '',
+  actionFilter: 'all',
+  eligibilityFilter: 'all',
+  showMissingOnly: false,
+  hasProcessed: false,
+  result: null,
+};
 
 const createEmptyParsedData = (): ParsedData => ({
   internal: [],
@@ -209,4 +242,77 @@ export const clearFbaTablesData = async (blacklist: string[]) => {
     recommendations: existing?.recommendations || [],
     blacklist,
   }, 'fba');
+};
+
+export const loadRetaggingState = async (): Promise<RetaggingPersistedState> => {
+  const [salesPerformanceFile, zfsInventoryFile, shopifyStockFile, state] = await Promise.all([
+    getGenericData(RETAGGING_SALES_FILE_KEY),
+    getGenericData(RETAGGING_INVENTORY_FILE_KEY),
+    getGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
+    getGenericData(RETAGGING_STATE_KEY),
+  ]);
+
+  return {
+    ...DEFAULT_RETAGGING_STATE,
+    ...(state || {}),
+    salesPerformanceFile: salesPerformanceFile instanceof File ? salesPerformanceFile : null,
+    zfsInventoryFile: zfsInventoryFile instanceof File ? zfsInventoryFile : null,
+    shopifyStockFile: shopifyStockFile instanceof File ? shopifyStockFile : null,
+  };
+};
+
+export const saveRetaggingSalesPerformanceFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(RETAGGING_SALES_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(RETAGGING_SALES_FILE_KEY);
+};
+
+export const saveRetaggingZfsInventoryFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(RETAGGING_INVENTORY_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(RETAGGING_INVENTORY_FILE_KEY);
+};
+
+export const saveRetaggingShopifyStockFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY);
+};
+
+export const saveRetaggingUiState = async (state: Partial<RetaggingUiState>) => {
+  const existing = await getGenericData(RETAGGING_STATE_KEY);
+  await storeGenericData(RETAGGING_STATE_KEY, {
+    ...DEFAULT_RETAGGING_STATE,
+    ...(existing || {}),
+    ...state,
+  });
+};
+
+export const clearRetaggingResult = async () => {
+  const existing = await getGenericData(RETAGGING_STATE_KEY);
+  await storeGenericData(RETAGGING_STATE_KEY, {
+    ...DEFAULT_RETAGGING_STATE,
+    ...(existing || {}),
+    result: null,
+    hasProcessed: false,
+    searchTerm: '',
+    actionFilter: 'all',
+    eligibilityFilter: 'all',
+    showMissingOnly: false,
+  });
+};
+
+export const resetRetaggingState = async () => {
+  await Promise.all([
+    clearGenericData(RETAGGING_SALES_FILE_KEY),
+    clearGenericData(RETAGGING_INVENTORY_FILE_KEY),
+    clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
+    clearGenericData(RETAGGING_STATE_KEY),
+  ]);
 };

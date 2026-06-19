@@ -18,11 +18,14 @@ import { ProcessedSellerboardStock } from "@/types/processors";
 import { ArticleRecommendation } from "@/types/sales";
 import { storeFiles, getFiles, getStoredData, clearFiles, storeGenericData, getGenericData, clearGenericData, storeBlacklist, getBlacklist } from '@/lib/indexedDB';
 import {
+  clearRetaggingResult,
   clearZfsSettings,
   clearFbaTablesData,
+  loadRetaggingState,
   loadFbaSettings,
   loadZfsSettings,
   resetFbaData,
+  saveRetaggingShopifyStockFile,
   saveFbaProcessedData,
   saveZfsCoverageDays,
   saveZfsSafetyFactor,
@@ -31,6 +34,7 @@ import {
 import { FileState, ParsedData } from "@/types/stock";
 import RelativeStockTable from "./RelativeStockTable";
 import BlacklistModal from "./BlacklistModal";
+import { RetaggingDecisionTool } from "./RetaggingDecisionTool";
 
 interface TabContentProps {
   files: any;
@@ -160,7 +164,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
           >
             Manage Blacklist
             {blacklistCount > 0 && (
-              <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-xs font-semibold text-white min-w-[20px]">
+              <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-sm font-semibold text-white min-w-[20px]">
                 {blacklistCount}
               </span>
             )}
@@ -508,7 +512,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
             >
               Manage Blacklist
               {blacklist.length > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-xs font-semibold text-white min-w-[20px]">
+                <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-sm font-semibold text-white min-w-[20px]">
                   {blacklist.length}
                 </span>
               )}
@@ -562,13 +566,27 @@ function useScrollToResults() {
 // Define keys for persistence
 const RELATIVE_STOCK_FILE_KEY = 'relativeStockFile';
 const RELATIVE_STOCK_TABLE_KEY = 'relativeStockTable';
-const SHOPIFY_SYNC_META_KEY = 'shopifySyncMeta';
+const LEGACY_SHOPIFY_SYNC_META_KEY = 'shopifySyncMeta';
+const ZFS_SHOPIFY_SYNC_META_KEY = 'zfsShopifySyncMeta';
+const RETAGGING_SHOPIFY_SYNC_META_KEY = 'retaggingShopifySyncMeta';
 
 type ShopifySyncMeta = {
   lastSyncedAt: string;
   internalCount: number;
   mapperCount: number;
   locationName: string;
+};
+
+const readShopifySyncMeta = (...keys: string[]): ShopifySyncMeta | null => {
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw) as ShopifySyncMeta;
+    } catch {
+      /* ignore malformed persisted metadata */
+    }
+  }
+  return null;
 };
 
 function timeAgo(timestamp: string): string {
@@ -586,6 +604,8 @@ function timeAgo(timestamp: string): string {
 const IntegratedStockParser: React.FC = () => {
   const location = useLocation();
   const onZfsRoute = location.pathname === '/zfs' || location.pathname === '/';
+  const onRetaggingRoute = location.pathname === '/retagging';
+  const canSyncShopify = onZfsRoute || onRetaggingRoute;
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
   const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
   const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
@@ -619,6 +639,9 @@ const IntegratedStockParser: React.FC = () => {
   }>({
     sellerboardStock: [],
   });
+  const [retaggingShopifyStockFile, setRetaggingShopifyStockFile] = useState<File | null>(null);
+  const [isRetaggingShopifyStockLoading, setIsRetaggingShopifyStockLoading] = useState(true);
+  const [retaggingShopifySyncError, setRetaggingShopifySyncError] = useState<string | null>(null);
   const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
   const fbaBlacklistRef = useRef<string[]>([]);
   useEffect(() => {
@@ -674,18 +697,32 @@ const IntegratedStockParser: React.FC = () => {
   const [zfsTrendFactor, setZfsTrendFactor] = useState(0);
 
   const [isShopifySyncing, setIsShopifySyncing] = useState(false);
-  const [shopifySyncMeta, setShopifySyncMeta] = useState<ShopifySyncMeta | null>(() => {
-    try {
-      const raw = localStorage.getItem(SHOPIFY_SYNC_META_KEY);
-      return raw ? (JSON.parse(raw) as ShopifySyncMeta) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [zfsShopifySyncMeta, setZfsShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
+    readShopifySyncMeta(ZFS_SHOPIFY_SYNC_META_KEY, LEGACY_SHOPIFY_SYNC_META_KEY)
+  );
+  const [retaggingShopifySyncMeta, setRetaggingShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
+    readShopifySyncMeta(RETAGGING_SHOPIFY_SYNC_META_KEY)
+  );
+  const activeShopifySyncMeta = onRetaggingRoute ? retaggingShopifySyncMeta : zfsShopifySyncMeta;
+
+  const clearZfsShopifySyncMeta = () => {
+    setZfsShopifySyncMeta(null);
+    localStorage.removeItem(ZFS_SHOPIFY_SYNC_META_KEY);
+    localStorage.removeItem(LEGACY_SHOPIFY_SYNC_META_KEY);
+  };
+
+  const clearRetaggingShopifySyncMeta = () => {
+    setRetaggingShopifySyncMeta(null);
+    localStorage.removeItem(RETAGGING_SHOPIFY_SYNC_META_KEY);
+  };
 
   const handleShopifySync = async () => {
     setIsShopifySyncing(true);
-    setError(null);
+    if (onRetaggingRoute) {
+      setRetaggingShopifySyncError(null);
+    } else {
+      setError(null);
+    }
     try {
       const res = await fetch('/api/shopify/sync');
       if (!res.ok) {
@@ -718,23 +755,39 @@ const IntegratedStockParser: React.FC = () => {
       const internalFile = new File([internalCsv], 'shopify-internal-stocks.csv', { type: 'text/csv' });
       const mapperFile = new File([mapperCsv], 'shopify-sku-ean.csv', { type: 'text/csv' });
 
-      setFile('internal', internalFile);
-      setFile('skuEanMapper', mapperFile);
-
       const meta: ShopifySyncMeta = {
         lastSyncedAt: typeof data.syncedAt === 'string' ? data.syncedAt : new Date().toISOString(),
         internalCount: data.counts?.internal ?? (Array.isArray(data.internal) ? data.internal.length : 0),
         mapperCount: data.counts?.skuEanMapper ?? (Array.isArray(data.skuEanMapper) ? data.skuEanMapper.length : 0),
         locationName: typeof data.locationName === 'string' ? data.locationName : 'Lager',
       };
-      setShopifySyncMeta(meta);
-      try {
-        localStorage.setItem(SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
-      } catch {
-        /* ignore quota errors */
+
+      if (onRetaggingRoute) {
+        setRetaggingShopifyStockFile(internalFile);
+        await saveRetaggingShopifyStockFile(internalFile);
+        await clearRetaggingResult();
+        setRetaggingShopifySyncMeta(meta);
+        try {
+          localStorage.setItem(RETAGGING_SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
+        } catch {
+          /* ignore quota errors */
+        }
+      } else {
+        setFile('internal', internalFile);
+        setFile('skuEanMapper', mapperFile);
+        setZfsShopifySyncMeta(meta);
+        try {
+          localStorage.setItem(ZFS_SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
+        } catch {
+          /* ignore quota errors */
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Shopify sync failed');
+      if (onRetaggingRoute) {
+        setRetaggingShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
+      } else {
+        setError(err instanceof Error ? err.message : 'Shopify sync failed');
+      }
     } finally {
       setIsShopifySyncing(false);
     }
@@ -916,6 +969,77 @@ const IntegratedStockParser: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadRetaggingShopifyStock = async () => {
+      try {
+        const savedRetaggingState = await loadRetaggingState();
+        if (!cancelled) {
+          setRetaggingShopifyStockFile(savedRetaggingState.shopifyStockFile);
+        }
+      } catch (err) {
+        console.error("Error loading Retagging Shopify stock file:", err);
+      } finally {
+        if (!cancelled) {
+          setIsRetaggingShopifyStockLoading(false);
+        }
+      }
+    };
+
+    loadRetaggingShopifyStock();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRetaggingShopifyStockFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setRetaggingShopifyStockFile(file);
+    setRetaggingShopifySyncError(null);
+    clearRetaggingShopifySyncMeta();
+    try {
+      await saveRetaggingShopifyStockFile(file);
+      await clearRetaggingResult();
+    } catch (err) {
+      console.error("Error saving Retagging Shopify stock file:", err);
+      setRetaggingShopifySyncError("Could not save Retagging Shopify stock file");
+    }
+  };
+
+  const handleRetaggingShopifyStockFileRemove = async () => {
+    setRetaggingShopifyStockFile(null);
+    setRetaggingShopifySyncError(null);
+    clearRetaggingShopifySyncMeta();
+    try {
+      await saveRetaggingShopifyStockFile(null);
+      await clearRetaggingResult();
+    } catch (err) {
+      console.error("Error removing Retagging Shopify stock file:", err);
+      setRetaggingShopifySyncError("Could not remove Retagging Shopify stock file");
+    }
+  };
+
+  const handleZfsFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    type: keyof FileState
+  ) => {
+    if (type === "internal" || type === "skuEanMapper") {
+      clearZfsShopifySyncMeta();
+    }
+    handleFileChange(event, type);
+  };
+
+  const handleZfsRemoveFile = (fileName: string, type: keyof FileState) => {
+    if (type === "internal" || type === "skuEanMapper") {
+      clearZfsShopifySyncMeta();
+    }
+    handleRemoveFile(fileName, type);
+  };
+
+  useEffect(() => {
     if (isProcessing) {
       setShouldScroll(true);
       setHasProcessed(false);
@@ -930,6 +1054,7 @@ const IntegratedStockParser: React.FC = () => {
     setZfsCoverageDays(14);
     setZfsSafetyFactor(0);
     setZfsTrendFactor(0);
+    clearZfsShopifySyncMeta();
     clearZfsSettings();
   };
 
@@ -1273,22 +1398,21 @@ const IntegratedStockParser: React.FC = () => {
 
       {/* Modern Header */}
       <div className="bg-white py-6 mb-6 border-b border-gray-200">
-        <div className="container mx-auto pl-4 pr-10 relative flex items-center justify-between">
+        <div className="container mx-auto flex flex-col items-center gap-4 px-4 lg:px-10 xl:flex-row xl:justify-between">
           <div className="flex items-center gap-4">
             <img
               src="/Blackskies-Logo.png"
               alt="Blackskies Logo"
-              className="h-16"
+              className="h-14 sm:h-16"
             />
-            <h1 className="text-2xl font-normal tracking-tight text-gray-900">Inventory Management</h1>
+            <h1 className="text-xl font-normal tracking-tight text-gray-900 sm:text-2xl">Inventory Management</h1>
           </div>
 
-          {/* Tabs (centered) */}
-          <nav className="absolute left-1/2 -translate-x-1/2 flex gap-8">
+          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-1 sm:gap-x-8" aria-label="Primary">
             <NavLink
               to="/zfs"
               className={({ isActive }) =>
-                `px-3 py-4 text-lg font-semibold transition-colors border-b-2 ${
+                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
                   isActive
                     ? "text-gray-900 border-gray-900"
                     : "text-gray-500 hover:text-gray-900 border-transparent"
@@ -1300,7 +1424,7 @@ const IntegratedStockParser: React.FC = () => {
             <NavLink
               to="/fba"
               className={({ isActive }) =>
-                `px-3 py-4 text-lg font-semibold transition-colors border-b-2 ${
+                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
                   isActive
                     ? "text-gray-900 border-gray-900"
                     : "text-gray-500 hover:text-gray-900 border-transparent"
@@ -1309,28 +1433,42 @@ const IntegratedStockParser: React.FC = () => {
             >
               FBA
             </NavLink>
+            <NavLink
+              to="/retagging"
+              className={({ isActive }) =>
+                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                  isActive
+                    ? "text-gray-900 border-gray-900"
+                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                }`
+              }
+            >
+              Retagging
+            </NavLink>
           </nav>
 
-          <div className="flex items-center gap-3">
-            {onZfsRoute && (
-              <div className="relative">
-                <button
-                  onClick={handleShopifySync}
-                  disabled={isShopifySyncing}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-base font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
-                >
-                  {isShopifySyncing ? 'Syncing…' : 'Sync from Shopify'}
-                </button>
-                {shopifySyncMeta && (
-                  <span className="absolute right-0 top-full mt-1 text-xs text-gray-500 whitespace-nowrap">
-                    Last synced {timeAgo(shopifySyncMeta.lastSyncedAt)}
-                  </span>
-                )}
-              </div>
-            )}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="relative">
+              <button
+                onClick={canSyncShopify ? handleShopifySync : undefined}
+                disabled={isShopifySyncing || !canSyncShopify}
+                className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 sm:px-5 sm:text-base"
+                title={
+                  canSyncShopify
+                    ? "Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                    : "Shopify sync is used by ZFS and Retagging"
+                }
+              >
+                {isShopifySyncing ? 'Syncing…' : 'Sync from Shopify'}
+              </button>
+              {canSyncShopify && activeShopifySyncMeta && (
+                <span className="absolute right-0 top-full mt-1 text-sm text-gray-500 whitespace-nowrap">
+                  Last synced {timeAgo(activeShopifySyncMeta.lastSyncedAt)}
+                </span>
+              )}
+            </div>
             <button
-              className="px-5 py-2 text-sm font-semibold text-white bg-black rounded-full hover:bg-gray-800 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              className="whitespace-nowrap rounded-full bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-gray-800 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
               onClick={handleOpenOverlay}
               title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
               disabled={isLoadingPersistedData}
@@ -1426,8 +1564,8 @@ const IntegratedStockParser: React.FC = () => {
                 timeline={timeline}
                 error={error}
                 isProcessing={isProcessing}
-                handleFileChange={handleFileChange}
-                handleRemoveFile={handleRemoveFile}
+                handleFileChange={handleZfsFileChange}
+                handleRemoveFile={handleZfsRemoveFile}
                 processFiles={processFiles}
                 setTimeline={setTimeline}
                 resetFiles={resetZFSFiles}
@@ -1456,6 +1594,15 @@ const IntegratedStockParser: React.FC = () => {
                 clearTables={clearFBATables}
                 blacklist={fbaBlacklist}
                 onOpenBlacklist={() => setShowFbaBlacklistModal(true)}
+              />
+              } />
+              <Route path="/retagging" element={
+              <RetaggingDecisionTool
+                shopifyStockFile={retaggingShopifyStockFile}
+                onShopifyStockFileChange={handleRetaggingShopifyStockFileChange}
+                onShopifyStockFileRemove={handleRetaggingShopifyStockFileRemove}
+                shopifySyncError={retaggingShopifySyncError}
+                isShopifyStockLoading={isRetaggingShopifyStockLoading}
               />
               } />
               <Route path="*" element={<Navigate to="/zfs" replace />} />
