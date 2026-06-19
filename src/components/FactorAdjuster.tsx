@@ -17,13 +17,13 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-600">
+      <label className="text-sm font-medium text-gray-600">
         {label}
       </label>
       <div className="flex items-end">
         <button
           type="button"
-          className={`px-3 py-1.5 text-xs font-medium border transition-colors ${
+          className={`px-3 py-1.5 text-sm font-medium border transition-colors ${
             value === 0
               ? "bg-black text-white border-black"
               : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
@@ -36,7 +36,7 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
           <button
             key={preset}
             type="button"
-            className={`px-3 py-1.5 text-xs font-medium border border-l-0 transition-colors ${
+            className={`px-3 py-1.5 text-sm font-medium border border-l-0 transition-colors ${
               value === preset
                 ? "bg-black text-white border-black"
                 : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
@@ -60,7 +60,7 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
             onChange(isNaN(v) ? 0 : v);
           }}
           placeholder="Custom"
-          className="w-24 border border-l-0 border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          className="w-24 border border-l-0 border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
           aria-label={`${label} custom percentage`}
         />
       </div>

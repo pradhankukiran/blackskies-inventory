@@ -94,7 +94,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           <div className="flex items-center gap-3">
             <h3 className="text-base font-semibold text-gray-900">{title}</h3>
             {syncedFromShopify && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-emerald-800 bg-emerald-100 rounded-full">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-sm font-medium text-emerald-800 bg-emerald-100 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 from Shopify
               </span>
@@ -121,7 +121,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                   isDragging ? "text-black" : "text-gray-400"
                 }`}
               />
-              <p className="text-sm text-gray-600">
+              <p className="px-2 text-center text-sm text-gray-600">
                 <span className="font-semibold text-gray-900">Click to upload</span> or drag and drop
               </p>
             </div>

@@ -34,7 +34,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
 
   const filteredData = useMemo(() => {
     if (!searchEan) return dataWithTotal;
-    return dataWithTotal.filter(item => 
+    return dataWithTotal.filter(item =>
       item.EAN.toLowerCase().includes(searchEan.toLowerCase())
     );
   }, [dataWithTotal, searchEan]);
@@ -66,7 +66,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
           <table className="w-full border-collapse">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
                       <div className="flex items-center w-full">
@@ -102,7 +102,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
                   </div>
                 </th>
                 {COLUMNS.slice(1).map((column) => (
-                  <th key={column.key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th key={column.key} className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
                     {column.label}
                   </th>
                 ))}

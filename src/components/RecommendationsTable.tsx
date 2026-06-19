@@ -89,7 +89,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
               <div className="text-sm font-semibold text-gray-900">
                 {recommendations.length.toLocaleString()} recommendations
               </div>
-              <div className="mt-0.5 text-xs text-gray-500">
+              <div className="mt-0.5 text-sm text-gray-500">
                 {coverageDays} days coverage · {timelineLabel} · Safety {safetyFactor}% · Demand {trendFactor}%
               </div>
             </div>
@@ -104,7 +104,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
           <table className="w-full border-collapse">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
                       <div className="flex items-center w-full">
@@ -139,16 +139,16 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                     )}
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Partner Variant Size</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Article Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status Description</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ZFS Total</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Recommended Stock</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sellable PF Stock</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg. Daily Sales</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Sales</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg. Return Rate (%)</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status Cluster</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Partner Variant Size</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Article Name</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Status Description</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">ZFS Total</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Recommended Stock</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Sellable PF Stock</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Avg. Daily Sales</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Total Sales</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Avg. Return Rate (%)</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Status Cluster</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">

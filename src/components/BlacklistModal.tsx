@@ -125,7 +125,7 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
               className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-black focus:outline-none transition-colors bg-white"
             />
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-gray-500">
+              <span className="text-sm text-gray-500">
                 Existing entries and duplicates are ignored automatically.
               </span>
               <div className="flex gap-2">
@@ -152,7 +152,7 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
               <ul className="divide-y divide-gray-200">
                 {sortedItems.map((sku) => (
                   <li key={sku} className="flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 transition-colors">
-                    <span className="font-mono text-xs sm:text-sm font-medium">{sku}</span>
+                    <span className="font-mono text-sm font-medium">{sku}</span>
                     <button
                       onClick={() => onRemove(sku)}
                       className="rounded-full p-1.5 text-red-500 transition-colors hover:bg-red-50"

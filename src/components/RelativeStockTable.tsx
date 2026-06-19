@@ -10,7 +10,7 @@ interface RelativeStockTableProps {
     warehouse?: string;
     binLocation?: string;
     isDefaultBinLocation?: boolean;
-    physicalStock: number; 
+    physicalStock: number;
   }[];
 }
 
@@ -41,7 +41,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
   useEffect(() => {
     setIsClient(true);
   }, []);
-  
+
   useEffect(() => {
     goToPage(1);
   }, [searchTerm, positiveStockData]);
@@ -65,7 +65,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
           {filteredData.length} {filteredData.length === 1 ? "item" : "items"} found
         </div>
         <ExportButton
-          data={filteredData} 
+          data={filteredData}
           label="Export Relative Stock"
           filename="relative-stock-data"
         />
@@ -77,7 +77,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
               <tr>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
@@ -115,25 +115,25 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Warehouse
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Bin Location
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-center text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Default Bin?
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Physical Stock
                 </th>
@@ -196,4 +196,4 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
   );
 };
 
-export default RelativeStockTable; 
+export default RelativeStockTable;
