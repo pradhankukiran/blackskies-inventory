@@ -77,7 +77,9 @@ export const exportData = (
     
   let transformedData: Record<string, any>[];
   
-  if (options.filename.includes('recommendations')) {
+  if (options.filename.includes('retagging')) {
+    transformedData = data as Record<string, any>[];
+  } else if (options.filename.includes('recommendations')) {
     transformedData = transformStockRecommendations(data as ArticleRecommendation[]);
   } else if (options.filename.includes('fba')) {
     transformedData = transformFBAStockOverview(data as ProcessedSellerboardStock[]);
