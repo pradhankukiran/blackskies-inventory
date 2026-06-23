@@ -24,6 +24,7 @@ import { FileUploadSection } from "./FileUploadSection";
 
 interface RetaggingDecisionToolProps {
   shopifyStockFile: File | null;
+  shopifySkuEanMapperFile: File | null;
   onShopifyStockFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onShopifyStockFileRemove: (fileName: string) => void;
   shopifySyncError?: string | null;
@@ -74,8 +75,12 @@ const ITEMS_PER_PAGE = 25;
 const getFileSignature = (file: File | null) =>
   file ? `${file.name}:${file.size}:${file.lastModified}` : null;
 
+const getShopifyInputSignature = (stockFile: File | null, mapperFile: File | null) =>
+  `${getFileSignature(stockFile) || "no-stock"}|${getFileSignature(mapperFile) || "no-mapper"}`;
+
 export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   shopifyStockFile,
+  shopifySkuEanMapperFile,
   onShopifyStockFileChange,
   onShopifyStockFileRemove,
   shopifySyncError = null,
@@ -99,7 +104,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   const [error, setError] = useState<string | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
-  const previousShopifyFileSignatureRef = useRef<string | null>(getFileSignature(shopifyStockFile));
+  const previousShopifyFileSignatureRef = useRef<string>(getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile));
   const hasInitializedShopifyFileRef = useRef(false);
   const tableDragRef = useRef({
     isDragging: false,
@@ -186,7 +191,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       return;
     }
 
-    const currentSignature = getFileSignature(shopifyStockFile);
+    const currentSignature = getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile);
     if (!hasInitializedShopifyFileRef.current) {
       previousShopifyFileSignatureRef.current = currentSignature;
       hasInitializedShopifyFileRef.current = true;
@@ -203,7 +208,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         });
       }
     }
-  }, [hasProcessed, isLoadingPersistedState, isShopifyStockLoading, result, shopifyStockFile]);
+  }, [hasProcessed, isLoadingPersistedState, isShopifyStockLoading, result, shopifySkuEanMapperFile, shopifyStockFile]);
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -311,11 +316,18 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         shopifyRows = await parseFile(shopifyStockFile);
       }
 
+      let shopifySkuEanRows: any[] = [];
+      if (shopifySkuEanMapperFile) {
+        setProcessingStatus("Parsing Shopify SKU/EAN mapper file...");
+        shopifySkuEanRows = await parseFile(shopifySkuEanMapperFile);
+      }
+
       setProcessingStatus("Calculating retagging decisions...");
       const processed = processRetaggingDecisions({
         salesRows,
         inventoryRows,
         shopifyStockRows: shopifyRows,
+        shopifySkuEanRows,
         config: {
           market: "DE",
           sarThreshold,

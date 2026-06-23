@@ -49,6 +49,21 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["Retagging score"]).toBeGreaterThan(0);
   });
 
+  it("matches Shopify stock by EAN through the SKU/EAN mapper", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [salesRow],
+      inventoryRows: [{ ...inventoryRow, partner_variant_size: "" }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "11" }],
+      shopifySkuEanRows: [{ SKU: "SKU-1", EAN: "4251812300001" }],
+      config,
+    });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].SKU).toBe("N/A");
+    expect(result.rows[0].EAN).toBe("4251812300001");
+    expect(result.rows[0]["Internal Shopify stock"]).toBe(11);
+  });
+
   it("marks eligibility as unknown when SAR is missing", () => {
     const result = processRetaggingDecisions({
       salesRows: [{ ...salesRow, "Avg. size availability rate": "" }],

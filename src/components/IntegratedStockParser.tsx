@@ -26,6 +26,7 @@ import {
   loadZfsSettings,
   resetFbaData,
   saveRetaggingShopifyStockFile,
+  saveRetaggingShopifySkuEanFile,
   saveFbaProcessedData,
   saveZfsCoverageDays,
   saveZfsSafetyFactor,
@@ -640,6 +641,7 @@ const IntegratedStockParser: React.FC = () => {
     sellerboardStock: [],
   });
   const [retaggingShopifyStockFile, setRetaggingShopifyStockFile] = useState<File | null>(null);
+  const [retaggingShopifySkuEanFile, setRetaggingShopifySkuEanFile] = useState<File | null>(null);
   const [isRetaggingShopifyStockLoading, setIsRetaggingShopifyStockLoading] = useState(true);
   const [retaggingShopifySyncError, setRetaggingShopifySyncError] = useState<string | null>(null);
   const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
@@ -764,7 +766,9 @@ const IntegratedStockParser: React.FC = () => {
 
       if (onRetaggingRoute) {
         setRetaggingShopifyStockFile(internalFile);
+        setRetaggingShopifySkuEanFile(mapperFile);
         await saveRetaggingShopifyStockFile(internalFile);
+        await saveRetaggingShopifySkuEanFile(mapperFile);
         await clearRetaggingResult();
         setRetaggingShopifySyncMeta(meta);
         try {
@@ -976,6 +980,7 @@ const IntegratedStockParser: React.FC = () => {
         const savedRetaggingState = await loadRetaggingState();
         if (!cancelled) {
           setRetaggingShopifyStockFile(savedRetaggingState.shopifyStockFile);
+          setRetaggingShopifySkuEanFile(savedRetaggingState.shopifySkuEanFile);
         }
       } catch (err) {
         console.error("Error loading Retagging Shopify stock file:", err);
@@ -998,10 +1003,12 @@ const IntegratedStockParser: React.FC = () => {
     if (!file) return;
 
     setRetaggingShopifyStockFile(file);
+    setRetaggingShopifySkuEanFile(null);
     setRetaggingShopifySyncError(null);
     clearRetaggingShopifySyncMeta();
     try {
       await saveRetaggingShopifyStockFile(file);
+      await saveRetaggingShopifySkuEanFile(null);
       await clearRetaggingResult();
     } catch (err) {
       console.error("Error saving Retagging Shopify stock file:", err);
@@ -1011,10 +1018,12 @@ const IntegratedStockParser: React.FC = () => {
 
   const handleRetaggingShopifyStockFileRemove = async () => {
     setRetaggingShopifyStockFile(null);
+    setRetaggingShopifySkuEanFile(null);
     setRetaggingShopifySyncError(null);
     clearRetaggingShopifySyncMeta();
     try {
       await saveRetaggingShopifyStockFile(null);
+      await saveRetaggingShopifySkuEanFile(null);
       await clearRetaggingResult();
     } catch (err) {
       console.error("Error removing Retagging Shopify stock file:", err);
@@ -1599,6 +1608,7 @@ const IntegratedStockParser: React.FC = () => {
               <Route path="/retagging" element={
               <RetaggingDecisionTool
                 shopifyStockFile={retaggingShopifyStockFile}
+                shopifySkuEanMapperFile={retaggingShopifySkuEanFile}
                 onShopifyStockFileChange={handleRetaggingShopifyStockFileChange}
                 onShopifyStockFileRemove={handleRetaggingShopifyStockFileRemove}
                 shopifySyncError={retaggingShopifySyncError}

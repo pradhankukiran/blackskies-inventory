@@ -42,6 +42,11 @@ interface ShopifyStockItem {
   stock: number;
 }
 
+interface ShopifySkuEanItem {
+  sku: string;
+  ean: string;
+}
+
 const UNKNOWN_ELIGIBILITY: RetaggingEligibility = "Unknown / missing data";
 
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -261,13 +266,34 @@ const normalizeShopifyRows = (rows: RawRow[]): ShopifyStockItem[] => {
     .filter((item) => item.sku || item.ean);
 };
 
-const buildShopifyMaps = (items: ShopifyStockItem[]) => {
+const normalizeShopifySkuEanRows = (rows: RawRow[]): ShopifySkuEanItem[] => {
+  return rows
+    .map((row) => ({
+      sku: normalizeId(getValue(row, ["SKU", "sku"])),
+      ean: normalizeId(getValue(row, ["EAN", "ean", "Barcode", "barcode"])),
+    }))
+    .filter((item) => item.sku && item.ean);
+};
+
+const buildShopifyMaps = (items: ShopifyStockItem[], skuEanItems: ShopifySkuEanItem[] = []) => {
   const bySku = new Map<string, ShopifyStockItem>();
   const byEan = new Map<string, ShopifyStockItem>();
   items.forEach((item) => {
     if (item.sku) bySku.set(item.sku, item);
     if (item.ean) byEan.set(item.ean, item);
   });
+
+  skuEanItems.forEach((mapping) => {
+    if (!mapping.ean || byEan.has(mapping.ean)) return;
+    const stockItem = bySku.get(mapping.sku);
+    if (stockItem) {
+      byEan.set(mapping.ean, {
+        ...stockItem,
+        ean: mapping.ean,
+      });
+    }
+  });
+
   return { bySku, byEan };
 };
 
@@ -507,19 +533,22 @@ export const processRetaggingDecisions = ({
   salesRows,
   inventoryRows,
   shopifyStockRows,
+  shopifySkuEanRows = [],
   config,
 }: {
   salesRows: RawRow[];
   inventoryRows: RawRow[];
   shopifyStockRows: RawRow[];
+  shopifySkuEanRows?: RawRow[];
   config: RetaggingDecisionConfig;
 }): RetaggingDecisionResult => {
   const warnings: string[] = [];
   const sales = normalizeSalesRows(salesRows, config);
   const inventory = normalizeInventoryRows(inventoryRows, config);
   const shopifyStock = normalizeShopifyRows(shopifyStockRows);
+  const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
   const salesByVariant = new Map(sales.map((item) => [item.articleVariant, item]));
-  const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock);
+  const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock, shopifySkuEan);
   const usedSalesKeys = new Set<string>();
 
   if (!sales.length) warnings.push("No DE sales rows were found in the Sales Performance detail-breakdown file.");

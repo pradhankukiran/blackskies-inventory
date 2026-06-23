@@ -30,6 +30,7 @@ const FBA_TREND_FACTOR_KEY = 'fbaTrendFactor';
 const RETAGGING_SALES_FILE_KEY = 'retaggingSalesPerformanceFile';
 const RETAGGING_INVENTORY_FILE_KEY = 'retaggingZfsInventoryFile';
 const RETAGGING_SHOPIFY_STOCK_FILE_KEY = 'retaggingShopifyStockFile';
+const RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY = 'retaggingShopifySkuEanFile';
 const RETAGGING_STATE_KEY = 'retaggingDecisionState';
 
 export interface RetaggingUiState {
@@ -47,6 +48,7 @@ export interface RetaggingPersistedState extends RetaggingUiState {
   salesPerformanceFile: File | null;
   zfsInventoryFile: File | null;
   shopifyStockFile: File | null;
+  shopifySkuEanFile: File | null;
 }
 
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
@@ -245,10 +247,11 @@ export const clearFbaTablesData = async (blacklist: string[]) => {
 };
 
 export const loadRetaggingState = async (): Promise<RetaggingPersistedState> => {
-  const [salesPerformanceFile, zfsInventoryFile, shopifyStockFile, state] = await Promise.all([
+  const [salesPerformanceFile, zfsInventoryFile, shopifyStockFile, shopifySkuEanFile, state] = await Promise.all([
     getGenericData(RETAGGING_SALES_FILE_KEY),
     getGenericData(RETAGGING_INVENTORY_FILE_KEY),
     getGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
+    getGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY),
     getGenericData(RETAGGING_STATE_KEY),
   ]);
 
@@ -258,6 +261,7 @@ export const loadRetaggingState = async (): Promise<RetaggingPersistedState> => 
     salesPerformanceFile: salesPerformanceFile instanceof File ? salesPerformanceFile : null,
     zfsInventoryFile: zfsInventoryFile instanceof File ? zfsInventoryFile : null,
     shopifyStockFile: shopifyStockFile instanceof File ? shopifyStockFile : null,
+    shopifySkuEanFile: shopifySkuEanFile instanceof File ? shopifySkuEanFile : null,
   };
 };
 
@@ -283,6 +287,14 @@ export const saveRetaggingShopifyStockFile = async (file: File | null) => {
     return;
   }
   await clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY);
+};
+
+export const saveRetaggingShopifySkuEanFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY);
 };
 
 export const saveRetaggingUiState = async (state: Partial<RetaggingUiState>) => {
@@ -313,6 +325,7 @@ export const resetRetaggingState = async () => {
     clearGenericData(RETAGGING_SALES_FILE_KEY),
     clearGenericData(RETAGGING_INVENTORY_FILE_KEY),
     clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
+    clearGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY),
     clearGenericData(RETAGGING_STATE_KEY),
   ]);
 };
