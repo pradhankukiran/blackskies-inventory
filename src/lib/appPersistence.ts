@@ -36,6 +36,8 @@ const RETAGGING_STATE_KEY = 'retaggingDecisionState';
 export interface RetaggingUiState {
   sarThreshold: number;
   nmvThreshold: number;
+  currentSeasonCode: string;
+  requiredDiscountThreshold: number;
   searchTerm: string;
   actionFilter: string;
   eligibilityFilter: string;
@@ -54,6 +56,8 @@ export interface RetaggingPersistedState extends RetaggingUiState {
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
   sarThreshold: 85,
   nmvThreshold: 1000,
+  currentSeasonCode: 'FS_26',
+  requiredDiscountThreshold: 20,
   searchTerm: '',
   actionFilter: 'all',
   eligibilityFilter: 'all',

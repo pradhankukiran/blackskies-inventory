@@ -87,6 +87,71 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["YRB eligibility"]).toBe("Not eligible");
   });
 
+  it("recommends no action for articles already classified as basics", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [salesRow],
+      inventoryRows: [{ ...inventoryRow, season: "spring_summer_basics" }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Current classification"]).toBe("SS_Basics");
+    expect(result.rows[0]["Season recommendation"]).toBe("Already SS_Basics / no action required");
+    expect(result.rows[0]["Suggested action"]).toBe("Already SS_Basics / no action required");
+  });
+
+  it("keeps replenishment as an operational note instead of the season recommendation", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [salesRow],
+      inventoryRows: [{ ...inventoryRow, sellable_zfs_stock: "0" }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Season recommendation"]).not.toBe("Manual review");
+    expect(result.rows[0]["Season recommendation"]).not.toBe("Replenish ZFS first");
+    expect(result.rows[0]["Operational note"]).toContain("Replenish ZFS first");
+  });
+
+  it("retags below-threshold NMV articles when the data is otherwise usable", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [{ ...salesRow, NMV: "100", "Sold articles": "4" }],
+      inventoryRows: [{ ...inventoryRow, season: "FS_26" }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["YRB eligibility"]).toBe("Not eligible");
+    expect(result.rows[0]["Season recommendation"]).toBe("Retag to next season");
+  });
+
+  it("does not suggest discount action when the required old-season discount is already met", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [{ ...salesRow, NMV: "700", "Sold articles": "10" }],
+      inventoryRows: [{ ...inventoryRow, season: "Spring-Summer 2025", regular_price: "100", discounted_price: "70" }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config: { ...config, currentSeasonCode: "FS_26", requiredDiscountThreshold: 20 },
+    });
+
+    expect(result.rows[0]["Season recommendation"]).toBe("Retag to next season");
+    expect(result.rows[0]["Operational note"]).toContain("Already discounted / no discount action required");
+    expect(result.rows[0]["Operational note"]).not.toContain("Discount required");
+  });
+
+  it("uses the first Zalando SAR value instead of averaging duplicate sales rows", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [
+        { ...salesRow, "Avg. size availability rate": "29.8%" },
+        { ...salesRow, "Avg. size availability rate": "65.8%" },
+      ],
+      inventoryRows: [inventoryRow],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Size Availability Rate / SAR"]).toBe(29.8);
+  });
+
   it("sends weak old-season sales to clearance", () => {
     const result = processRetaggingDecisions({
       salesRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],

@@ -54,6 +54,8 @@ const columns: Array<keyof RetaggingDecisionRow> = [
   "AW_Basics eligibility",
   "Retagging eligibility",
   "Retagging score",
+  "Season recommendation",
+  "Operational note",
   "Suggested action",
   "Reason / explanation",
   "Missing data / manual review note",
@@ -92,6 +94,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   });
   const [sarThreshold, setSarThreshold] = useState(85);
   const [nmvThreshold, setNmvThreshold] = useState(1000);
+  const [currentSeasonCode, setCurrentSeasonCode] = useState("FS_26");
+  const [requiredDiscountThreshold, setRequiredDiscountThreshold] = useState(20);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [eligibilityFilter, setEligibilityFilter] = useState("all");
@@ -135,6 +139,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         });
         setSarThreshold(persisted.sarThreshold);
         setNmvThreshold(persisted.nmvThreshold);
+        setCurrentSeasonCode(persisted.currentSeasonCode);
+        setRequiredDiscountThreshold(persisted.requiredDiscountThreshold);
         setSearchTerm(persisted.searchTerm);
         setActionFilter(persisted.actionFilter);
         setEligibilityFilter(persisted.eligibilityFilter);
@@ -165,6 +171,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     saveRetaggingUiState({
       sarThreshold,
       nmvThreshold,
+      currentSeasonCode,
+      requiredDiscountThreshold,
       searchTerm,
       actionFilter,
       eligibilityFilter,
@@ -178,8 +186,10 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     actionFilter,
     eligibilityFilter,
     hasProcessed,
+    currentSeasonCode,
     isLoadingPersistedState,
     nmvThreshold,
+    requiredDiscountThreshold,
     result,
     sarThreshold,
     searchTerm,
@@ -259,6 +269,16 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     clearStaleResult();
   };
 
+  const handleCurrentSeasonCodeChange = (value: string) => {
+    setCurrentSeasonCode(value);
+    clearStaleResult();
+  };
+
+  const handleRequiredDiscountThresholdChange = (value: number) => {
+    setRequiredDiscountThreshold(value);
+    clearStaleResult();
+  };
+
   const resetFiles = async () => {
     setFiles({
       salesPerformance: null,
@@ -270,6 +290,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     setResult(null);
     setSarThreshold(85);
     setNmvThreshold(1000);
+    setCurrentSeasonCode("FS_26");
+    setRequiredDiscountThreshold(20);
     setSearchTerm("");
     setActionFilter("all");
     setEligibilityFilter("all");
@@ -332,6 +354,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           market: "DE",
           sarThreshold,
           nmvThreshold,
+          currentSeasonCode,
+          requiredDiscountThreshold,
         },
       });
 
@@ -368,6 +392,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         row.EAN,
         row["Article name"],
         row.Category,
+        row["Season recommendation"],
+        row["Operational note"],
         row["Suggested action"],
       ].some((value) => String(value).toLowerCase().includes(search));
       const matchesAction = actionFilter === "all" || row["Suggested action"] === actionFilter;
@@ -479,7 +505,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           </span>
         </div>
 
-        <div className="grid gap-4 p-5 md:grid-cols-2">
+        <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className="block">
             <span className="text-sm font-medium text-gray-700">SAR threshold</span>
             <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
@@ -514,11 +540,40 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               />
             </div>
           </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Current active season</span>
+            <input
+              type="text"
+              value={currentSeasonCode}
+              onChange={(event) => handleCurrentSeasonCodeChange(event.target.value)}
+              placeholder="FS_26"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Required discount</span>
+            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={requiredDiscountThreshold}
+                onChange={(event) => handleRequiredDiscountThresholdChange(Number(event.target.value))}
+                className="w-full rounded-l-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+              />
+              <span className="flex items-center rounded-r-lg border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+                %
+              </span>
+            </div>
+          </label>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
           <div className="text-sm text-gray-600">
-            Current rules: SAR &gt;= {sarThreshold}% and NMV/GMV &gt;= EUR {nmvThreshold.toLocaleString()}.
+            Current rules: SAR &gt;= {sarThreshold}%, NMV/GMV &gt;= EUR {nmvThreshold.toLocaleString()}, active season {currentSeasonCode || "not set"}, discount threshold {requiredDiscountThreshold}%.
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -607,14 +662,15 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               onChange={(event) => setActionFilter(event.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
             >
-              <option value="all">All actions</option>
+              <option value="all">All season recommendations</option>
               {([
+                "Already YRB / no action required",
+                "Already SS_Basics / no action required",
+                "Already AW_Basics / no action required",
                 "Retag to next season",
                 "Apply for Year-Round Basic",
                 "Apply for SS_Basics",
                 "Apply for AW_Basics",
-                "Add required discount",
-                "Replenish ZFS first",
                 "Manual review",
                 "Clearance / phase out",
               ] satisfies RetaggingSuggestedAction[]).map((action) => (
@@ -657,7 +713,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           onPointerCancel={stopTableDrag}
           onPointerLeave={stopTableDrag}
         >
-          <table className="w-full min-w-[2200px] border-collapse">
+          <table className="w-full min-w-[2500px] border-collapse">
             <thead className="sticky top-0 z-20 bg-white shadow-sm">
               <tr className="border-b border-gray-200 bg-gray-50">
                 {columns.map((column) => (
@@ -680,7 +736,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                         className={`px-4 py-3 text-sm text-gray-900 ${
                           numericColumns.has(column) ? "text-right tabular-nums" : ""
                         } ${
-                          column === "Reason / explanation" || column === "Missing data / manual review note"
+                          column === "Operational note" || column === "Reason / explanation" || column === "Missing data / manual review note"
                             ? "min-w-[280px] whitespace-normal"
                             : "whitespace-nowrap"
                         }`}

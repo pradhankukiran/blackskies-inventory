@@ -1,19 +1,24 @@
 export type RetaggingEligibility = "Eligible" | "Not eligible" | "Unknown / missing data";
 
-export type RetaggingSuggestedAction =
+export type RetaggingSeasonRecommendation =
+  | "Already YRB / no action required"
+  | "Already SS_Basics / no action required"
+  | "Already AW_Basics / no action required"
   | "Retag to next season"
   | "Apply for Year-Round Basic"
   | "Apply for SS_Basics"
   | "Apply for AW_Basics"
-  | "Add required discount"
-  | "Replenish ZFS first"
   | "Manual review"
   | "Clearance / phase out";
+
+export type RetaggingSuggestedAction = RetaggingSeasonRecommendation;
 
 export interface RetaggingDecisionConfig {
   market: "DE";
   sarThreshold: number;
   nmvThreshold: number;
+  currentSeasonCode?: string;
+  requiredDiscountThreshold?: number;
   currentDate?: Date;
 }
 
@@ -38,6 +43,8 @@ export interface RetaggingDecisionRow {
   "AW_Basics eligibility": RetaggingEligibility;
   "Retagging eligibility": RetaggingEligibility;
   "Retagging score": number;
+  "Season recommendation": RetaggingSeasonRecommendation;
+  "Operational note": string;
   "Suggested action": RetaggingSuggestedAction;
   "Reason / explanation": string;
   "Missing data / manual review note": string;

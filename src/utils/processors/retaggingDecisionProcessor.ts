@@ -3,7 +3,7 @@ import {
   RetaggingDecisionResult,
   RetaggingDecisionRow,
   RetaggingEligibility,
-  RetaggingSuggestedAction,
+  RetaggingSeasonRecommendation,
 } from "@/types/retagging";
 
 type RawRow = Record<string, unknown>;
@@ -108,21 +108,162 @@ const firstNonEmpty = (...values: string[]) => values.find((value) => value.trim
 const classifySeason = (season: string): string => {
   const normalized = normalizeKey(season);
   if (!normalized) return "";
-  if (normalized.includes("yearround") || normalized.includes("yrb") || normalized.includes("basic")) {
-    return "Year-Round Basic";
-  }
-  if (normalized.includes("springsummer") || normalized.includes("summer") || normalized.includes("ss")) {
+  if (
+    normalized.includes("springsummerbasics") ||
+    normalized.includes("ssbasics") ||
+    normalized.includes("summerbasics")
+  ) {
     return "SS_Basics";
   }
   if (
-    normalized.includes("autumnwinter") ||
-    normalized.includes("fallwinter") ||
-    normalized.includes("winter") ||
-    normalized.includes("aw")
+    normalized.includes("autumnwinterbasics") ||
+    normalized.includes("fallwinterbasics") ||
+    normalized.includes("awbasics") ||
+    normalized.includes("winterbasics")
   ) {
     return "AW_Basics";
   }
+  if (normalized.includes("yearround") || normalized.includes("yearroundbasic") || normalized.includes("yrb")) {
+    return "Year-Round Basic";
+  }
   return "Regular";
+};
+
+const classifyBasicCandidate = (inventory?: InventoryItem, sales?: SalesAggregate): "yrb" | "ss" | "aw" | "unknown" => {
+  const text = normalizeKey([
+    inventory?.articleName,
+    inventory?.category,
+    sales?.category,
+    inventory?.season,
+    sales?.season,
+  ].filter(Boolean).join(" "));
+
+  if (!text) return "unknown";
+
+  if (
+    text.includes("ring") ||
+    text.includes("jewelry") ||
+    text.includes("jewellery") ||
+    text.includes("necklace") ||
+    text.includes("bracelet") ||
+    text.includes("earring")
+  ) {
+    return "yrb";
+  }
+
+  if (
+    text.includes("longsleeve") ||
+    text.includes("longsleeved") ||
+    text.includes("langarm") ||
+    text.includes("sweatshirt") ||
+    text.includes("hoodie") ||
+    text.includes("sweater") ||
+    text.includes("pullover")
+  ) {
+    return "aw";
+  }
+
+  if (
+    text.includes("cap") ||
+    text.includes("shortsleeve") ||
+    text.includes("shortsleeved") ||
+    text.includes("tank") ||
+    text.includes("summer") ||
+    text.includes("swim") ||
+    text.includes("bikini")
+  ) {
+    return "ss";
+  }
+
+  const group = seasonGroup(inventory?.season || sales?.season || "");
+  if (group === "ss" || group === "aw" || group === "yrb") return group;
+
+  return "unknown";
+};
+
+const alreadyBasicRecommendation = (classification: string): RetaggingSeasonRecommendation | null => {
+  if (classification === "Year-Round Basic") return "Already YRB / no action required";
+  if (classification === "SS_Basics") return "Already SS_Basics / no action required";
+  if (classification === "AW_Basics") return "Already AW_Basics / no action required";
+  return null;
+};
+
+const recommendationForCandidate = (candidate: "yrb" | "ss" | "aw" | "unknown"): RetaggingSeasonRecommendation => {
+  if (candidate === "yrb") return "Apply for Year-Round Basic";
+  if (candidate === "ss") return "Apply for SS_Basics";
+  if (candidate === "aw") return "Apply for AW_Basics";
+  return "Manual review";
+};
+
+const seasonCodeParts = (season: string): { year: number; half: number } | null => {
+  const normalized = season.toUpperCase();
+  const shortYear = normalized.match(/\b(?:FS|SS|AW|HW)[_-]?(\d{2})\b/);
+  const fullYear = normalized.match(/\b(20\d{2})\b/);
+  const year = shortYear ? 2000 + Number(shortYear[1]) : fullYear ? Number(fullYear[1]) : null;
+  if (!year) return null;
+
+  let half = 0;
+  if (/\b(?:FS|SS)[_-]?\d{2}\b/.test(normalized) || /SPRING|SUMMER/.test(normalized)) half = 1;
+  if (/\b(?:AW|HW)[_-]?\d{2}\b/.test(normalized) || /AUTUMN|WINTER|FALL/.test(normalized)) half = 2;
+  return half ? { year, half } : { year, half: 1 };
+};
+
+const isOldSeason = (season: string, sales: SalesAggregate | undefined, config: RetaggingDecisionConfig) => {
+  const current = seasonCodeParts(config.currentSeasonCode || "");
+  const article = seasonCodeParts(season);
+  if (current && article) {
+    return article.year < current.year || (article.year === current.year && article.half < current.half);
+  }
+  const year = yearFromSeason(season);
+  const currentYear = (config.currentDate || new Date()).getFullYear();
+  return Boolean(year && year < currentYear) || (sales?.daysOnline ?? 0) > 365;
+};
+
+const operationalNotes = ({
+  sales,
+  inventory,
+  shopifyStock,
+  discount,
+  config,
+}: {
+  sales?: SalesAggregate;
+  inventory?: InventoryItem;
+  shopifyStock: number;
+  discount: number | null;
+  config: RetaggingDecisionConfig;
+}) => {
+  const notes: string[] = [];
+  const requiredDiscount = config.requiredDiscountThreshold ?? 20;
+
+  if (!sales || !inventory) notes.push("Missing data");
+  if (inventory && isBlockingStatus(inventory.status, inventory.statusCode)) notes.push("Blocking issue code");
+  if (inventory && inventory.zfsStock <= 0 && shopifyStock > 0) notes.push("Replenish ZFS first");
+  if (shopifyStock > 0 && shopifyStock <= 5) notes.push("Low internal stock");
+  if (sales?.sar !== null && sales?.sar !== undefined && sales.sar < config.sarThreshold) notes.push("Low size availability");
+  if (sales?.returnRate !== null && sales?.returnRate !== undefined && sales.returnRate > 35) notes.push("High return rate");
+
+  const oldSeason = inventory ? isOldSeason(inventory.season || sales?.season || "", sales, config) : false;
+  const alreadyBasic = alreadyBasicRecommendation(inventory?.classification || "");
+  if (oldSeason && !alreadyBasic) {
+    if (discount === null || discount < requiredDiscount) {
+      notes.push(`Discount required: below ${requiredDiscount}%`);
+    } else {
+      notes.push("Already discounted / no discount action required");
+    }
+  }
+
+  return Array.from(new Set(notes)).join("; ");
+};
+
+const firstNullable = (values: Array<number | null>) => {
+  return values.find((value): value is number => value !== null) ?? null;
+};
+
+const currentDiscount = (regularPrice: number | null, discountedPrice: number | null, salesDiscount: number | null) => {
+  if (regularPrice && discountedPrice && regularPrice > 0 && discountedPrice < regularPrice) {
+    return Math.max(0, Math.round(((regularPrice - discountedPrice) / regularPrice) * 1000) / 10);
+  }
+  return salesDiscount;
 };
 
 const seasonGroup = (season: string) => {
@@ -146,13 +287,6 @@ const isBlockingStatus = (status: string, statusCode: string) => {
     combined.includes("not live") ||
     combined.includes("not visible")
   );
-};
-
-const currentDiscount = (regularPrice: number | null, discountedPrice: number | null, salesDiscount: number | null) => {
-  if (regularPrice && discountedPrice && regularPrice > 0 && discountedPrice < regularPrice) {
-    return Math.max(0, Math.round(((regularPrice - discountedPrice) / regularPrice) * 1000) / 10);
-  }
-  return salesDiscount;
 };
 
 const averageNullable = (values: Array<number | null>) => {
@@ -218,7 +352,7 @@ const normalizeSalesRows = (rows: RawRow[], config: RetaggingDecisionConfig): Sa
     season: item.season,
     nmv: item.nmv,
     unitsSold: item.unitsSold,
-    sar: averageNullable(item.sarValues),
+    sar: firstNullable(item.sarValues),
     returnRate: averageNullable(item.returnValues),
     discountRate: averageNullable(item.discountValues),
     daysOnline: item.daysOnline,
@@ -315,6 +449,18 @@ const calculateEligibility = ({
   return "Eligible";
 };
 
+const calculateRetaggingEligibility = ({
+  sales,
+  inventory,
+}: {
+  sales?: SalesAggregate;
+  inventory?: InventoryItem;
+}): RetaggingEligibility => {
+  if (!sales || !inventory) return UNKNOWN_ELIGIBILITY;
+  if (isBlockingStatus(inventory.status, inventory.statusCode)) return "Not eligible";
+  return "Eligible";
+};
+
 const calculateScore = ({
   sales,
   inventory,
@@ -355,16 +501,13 @@ const calculateScore = ({
   return Math.round(clamp(score, 0, 100));
 };
 
-const determineAction = ({
+const determineSeasonRecommendation = ({
   sales,
   inventory,
   yrbEligibility,
   ssEligibility,
   awEligibility,
   retaggingEligibility,
-  score,
-  shopifyStock,
-  discount,
   config,
 }: {
   sales?: SalesAggregate;
@@ -373,29 +516,25 @@ const determineAction = ({
   ssEligibility: RetaggingEligibility;
   awEligibility: RetaggingEligibility;
   retaggingEligibility: RetaggingEligibility;
-  score: number;
-  shopifyStock: number;
-  discount: number | null;
   config: RetaggingDecisionConfig;
-}): RetaggingSuggestedAction => {
+}): RetaggingSeasonRecommendation => {
   if (!sales || !inventory) return "Manual review";
-  if (isBlockingStatus(inventory.status, inventory.statusCode) && inventory.zfsStock <= 0 && sales.nmv >= config.nmvThreshold) {
-    return "Replenish ZFS first";
-  }
   if (isBlockingStatus(inventory.status, inventory.statusCode)) return "Manual review";
-  if (inventory.zfsStock <= 0 && shopifyStock > 0 && sales.nmv >= config.nmvThreshold) return "Replenish ZFS first";
+
+  const alreadyBasic = alreadyBasicRecommendation(inventory.classification);
+  if (alreadyBasic) return alreadyBasic;
 
   const weakSales = sales.nmv < config.nmvThreshold * 0.5 && sales.unitsSold < 5;
-  const year = yearFromSeason(inventory.season || sales.season);
-  const oldSeason = Boolean(year && year < (config.currentDate || new Date()).getFullYear());
+  const oldSeason = isOldSeason(inventory.season || sales.season, sales, config);
   if (weakSales && oldSeason) return "Clearance / phase out";
-  if (sales.nmv < config.nmvThreshold && sales.unitsSold > 0 && (discount === null || discount < 20)) return "Add required discount";
 
-  if (yrbEligibility === "Eligible" && score >= 75 && (sales.returnRate === null || sales.returnRate <= 35) && (discount === null || discount <= 25)) {
-    return "Apply for Year-Round Basic";
+  const candidate = classifyBasicCandidate(inventory, sales);
+  if (candidate === "yrb" && yrbEligibility === "Eligible") {
+    return recommendationForCandidate(candidate);
   }
-  if (ssEligibility === "Eligible") return "Apply for SS_Basics";
-  if (awEligibility === "Eligible") return "Apply for AW_Basics";
+  if (candidate === "ss" && ssEligibility === "Eligible") return recommendationForCandidate(candidate);
+  if (candidate === "aw" && awEligibility === "Eligible") return recommendationForCandidate(candidate);
+
   if (retaggingEligibility === "Eligible") return "Retag to next season";
   return "Manual review";
 };
@@ -408,7 +547,8 @@ const buildReason = ({
   shopifyStock,
   discount,
   score,
-  action,
+  seasonRecommendation,
+  operationalNote,
   config,
 }: {
   sales?: SalesAggregate;
@@ -416,7 +556,8 @@ const buildReason = ({
   shopifyStock: number;
   discount: number | null;
   score: number;
-  action: RetaggingSuggestedAction;
+  seasonRecommendation: RetaggingSeasonRecommendation;
+  operationalNote: string;
   config: RetaggingDecisionConfig;
 }) => {
   const reasons: string[] = [];
@@ -431,7 +572,8 @@ const buildReason = ({
   if (shopifyStock > 0) reasons.push(`Shopify stock ${shopifyStock.toLocaleString()}`);
   if (discount !== null) reasons.push(`Current discount ${discount.toFixed(1)}%`);
   reasons.push(`Score ${score}/100`);
-  reasons.push(`Suggested action: ${action}`);
+  reasons.push(`Season recommendation: ${seasonRecommendation}`);
+  if (operationalNote) reasons.push(`Operational note: ${operationalNote}`);
   return reasons.join("; ");
 };
 
@@ -471,20 +613,20 @@ const createDecisionRow = ({
   const awEligibility: RetaggingEligibility = baseEligibility === "Eligible" && (group === "aw" || group === "regular")
     ? "Eligible"
     : baseEligibility === "Eligible" ? "Not eligible" : baseEligibility;
-  const retaggingEligibility = baseEligibility;
+  const retaggingEligibility = alreadyBasicRecommendation(inventory?.classification || "")
+    ? "Not eligible"
+    : calculateRetaggingEligibility({ sales, inventory });
   const score = calculateScore({ sales, inventory, shopifyStock, discount, config });
-  const action = determineAction({
+  const seasonRecommendation = determineSeasonRecommendation({
     sales,
     inventory,
     yrbEligibility,
     ssEligibility,
     awEligibility,
     retaggingEligibility,
-    score,
-    shopifyStock,
-    discount,
     config,
   });
+  const operationalNote = operationalNotes({ sales, inventory, shopifyStock, discount, config });
 
   const row: RetaggingDecisionRow = {
     "SKU": inventory?.sku || "N/A",
@@ -507,12 +649,23 @@ const createDecisionRow = ({
     "AW_Basics eligibility": awEligibility,
     "Retagging eligibility": retaggingEligibility,
     "Retagging score": score,
-    "Suggested action": action,
+    "Season recommendation": seasonRecommendation,
+    "Operational note": operationalNote,
+    "Suggested action": seasonRecommendation,
     "Reason / explanation": "",
     "Missing data / manual review note": "",
   };
 
-  row["Reason / explanation"] = buildReason({ sales, inventory, shopifyStock, discount, score, action, config });
+  row["Reason / explanation"] = buildReason({
+    sales,
+    inventory,
+    shopifyStock,
+    discount,
+    score,
+    seasonRecommendation,
+    operationalNote,
+    config,
+  });
   row["Missing data / manual review note"] = buildMissingNote(row);
   return row;
 };
