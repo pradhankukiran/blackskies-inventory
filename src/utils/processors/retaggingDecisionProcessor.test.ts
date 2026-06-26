@@ -45,7 +45,9 @@ describe("processRetaggingDecisions", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]["Internal Shopify stock"]).toBe(8);
-    expect(result.rows[0]["YRB eligibility"]).toBe("Eligible");
+    expect(result.rows[0]["Zalando SKU"]).toBe("BFBTEST-Q11");
+    expect(result.rows[0]["Basic Retagging Eligible"]).toBe("Yes");
+    expect(result.rows[0]["Season recommendation"]).toBe("Basic retagging eligible - choose department manually");
     expect(result.rows[0]["Retagging score"]).toBeGreaterThan(0);
   });
 
@@ -72,7 +74,7 @@ describe("processRetaggingDecisions", () => {
       config,
     });
 
-    expect(result.rows[0]["YRB eligibility"]).toBe("Unknown / missing data");
+    expect(result.rows[0]["Basic Retagging Eligible"]).toBe("No");
     expect(result.rows[0]["Missing data / manual review note"]).toContain("SAR");
   });
 
@@ -84,7 +86,7 @@ describe("processRetaggingDecisions", () => {
       config,
     });
 
-    expect(result.rows[0]["YRB eligibility"]).toBe("Not eligible");
+    expect(result.rows[0]["Basic Retagging Eligible"]).toBe("No");
   });
 
   it("recommends no action for articles already classified as basics", () => {
@@ -95,9 +97,25 @@ describe("processRetaggingDecisions", () => {
       config,
     });
 
-    expect(result.rows[0]["Current classification"]).toBe("SS_Basics");
-    expect(result.rows[0]["Season recommendation"]).toBe("Already SS_Basics / no action required");
-    expect(result.rows[0]["Suggested action"]).toBe("Already SS_Basics / no action required");
+    expect(result.rows[0]["Season recommendation"]).toBe("Already Basic / no action required");
+    expect(result.rows[0]["Suggested action"]).toBe("Already Basic / no action required");
+  });
+
+  it("does not hide blocking issues behind an already-basic recommendation", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [salesRow],
+      inventoryRows: [{
+        ...inventoryRow,
+        season: "year_round_basics",
+        status_description: "Blocked",
+        status_detail: "ZANOS_01",
+      }],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Season recommendation"]).toBe("Manual review");
+    expect(result.rows[0]["Operational note"]).toContain("Blocking issue code");
   });
 
   it("keeps replenishment as an operational note instead of the season recommendation", () => {
@@ -121,7 +139,7 @@ describe("processRetaggingDecisions", () => {
       config,
     });
 
-    expect(result.rows[0]["YRB eligibility"]).toBe("Not eligible");
+    expect(result.rows[0]["Basic Retagging Eligible"]).toBe("No");
     expect(result.rows[0]["Season recommendation"]).toBe("Retag to next season");
   });
 
@@ -138,11 +156,13 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["Operational note"]).not.toContain("Discount required");
   });
 
-  it("uses the first Zalando SAR value instead of averaging duplicate sales rows", () => {
+  it("uses the Zalando article-level SAR value directly when provided", () => {
     const result = processRetaggingDecisions({
       salesRows: [
-        { ...salesRow, "Avg. size availability rate": "29.8%" },
-        { ...salesRow, "Avg. size availability rate": "65.8%" },
+        { ...salesRow, Country: "DE", "Avg. size availability rate": "47.8%" },
+      ],
+      salesArticleLevelRows: [
+        { ...salesRow, Country: "", "Avg. size availability rate": "29.8%" },
       ],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
@@ -152,10 +172,26 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["Size Availability Rate / SAR"]).toBe(29.8);
   });
 
-  it("sends weak old-season sales to clearance", () => {
+  it("does not send weak old-season sales to clearance when the article can still be retagged", () => {
     const result = processRetaggingDecisions({
       salesRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
       inventoryRows: [inventoryRow],
+      shopifyStockRows: [],
+      config,
+    });
+
+    expect(result.rows[0]["Suggested action"]).toBe("Retag to next season");
+  });
+
+  it("uses clearance only for a clear no-stock blocked case", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
+      inventoryRows: [{
+        ...inventoryRow,
+        status_description: "Blocked",
+        status_detail: "ZANOS_01",
+        sellable_zfs_stock: "0",
+      }],
       shopifyStockRows: [],
       config,
     });

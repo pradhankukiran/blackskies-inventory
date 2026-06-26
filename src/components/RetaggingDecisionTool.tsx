@@ -15,6 +15,7 @@ import {
   clearRetaggingResult,
   loadRetaggingState,
   resetRetaggingState,
+  saveRetaggingSalesArticleLevelFile,
   saveRetaggingSalesPerformanceFile,
   saveRetaggingUiState,
   saveRetaggingZfsInventoryFile,
@@ -31,15 +32,15 @@ interface RetaggingDecisionToolProps {
   isShopifyStockLoading?: boolean;
 }
 
-type RetaggingDecisionFileKey = "salesPerformance" | "zfsInventory";
+type RetaggingDecisionFileKey = "salesPerformance" | "salesArticleLevel" | "zfsInventory";
 
 const columns: Array<keyof RetaggingDecisionRow> = [
   "SKU",
+  "Zalando SKU",
   "EAN",
   "Article name",
   "Category",
   "Current season",
-  "Current classification",
   "Article status",
   "Zalando issue/status code",
   "ZFS stock",
@@ -49,9 +50,7 @@ const columns: Array<keyof RetaggingDecisionRow> = [
   "Return rate, if available",
   "Size Availability Rate / SAR",
   "Current discount %",
-  "YRB eligibility",
-  "SS_Basics eligibility",
-  "AW_Basics eligibility",
+  "Basic Retagging Eligible",
   "Retagging eligibility",
   "Retagging score",
   "Season recommendation",
@@ -90,6 +89,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
 }) => {
   const [files, setFiles] = useState<Record<RetaggingDecisionFileKey, File | null>>({
     salesPerformance: null,
+    salesArticleLevel: null,
     zfsInventory: null,
   });
   const [sarThreshold, setSarThreshold] = useState(85);
@@ -135,6 +135,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
 
         setFiles({
           salesPerformance: persisted.salesPerformanceFile,
+          salesArticleLevel: persisted.salesArticleLevelFile,
           zfsInventory: persisted.zfsInventoryFile,
         });
         setSarThreshold(persisted.sarThreshold);
@@ -232,6 +233,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     setResult(null);
     const saveFile = key === "salesPerformance"
       ? saveRetaggingSalesPerformanceFile
+      : key === "salesArticleLevel"
+      ? saveRetaggingSalesArticleLevelFile
       : saveRetaggingZfsInventoryFile;
     saveFile(file).catch((err) => {
       console.error("Error saving Retagging file:", err);
@@ -244,6 +247,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     setResult(null);
     const saveFile = key === "salesPerformance"
       ? saveRetaggingSalesPerformanceFile
+      : key === "salesArticleLevel"
+      ? saveRetaggingSalesArticleLevelFile
       : saveRetaggingZfsInventoryFile;
     saveFile(null).catch((err) => {
       console.error("Error clearing Retagging file:", err);
@@ -282,6 +287,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   const resetFiles = async () => {
     setFiles({
       salesPerformance: null,
+      salesArticleLevel: null,
       zfsInventory: null,
     });
     onShopifyStockFileRemove(shopifyStockFile?.name || "");
@@ -329,6 +335,12 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       setProcessingStatus("Parsing Sales Performance file...");
       const salesRows = await parseFile(files.salesPerformance!);
 
+      let salesArticleLevelRows: any[] = [];
+      if (files.salesArticleLevel) {
+        setProcessingStatus("Parsing Sales Performance article-level file...");
+        salesArticleLevelRows = await parseFile(files.salesArticleLevel);
+      }
+
       setProcessingStatus("Parsing ZFS Inventory file...");
       const inventoryRows = await parseFile(files.zfsInventory!);
 
@@ -347,6 +359,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       setProcessingStatus("Calculating retagging decisions...");
       const processed = processRetaggingDecisions({
         salesRows,
+        salesArticleLevelRows,
         inventoryRows,
         shopifyStockRows: shopifyRows,
         shopifySkuEanRows,
@@ -379,7 +392,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   const summaryCards = [
     { label: "Total Articles", value: result?.summary.totalArticles ?? 0 },
     { label: "Retag Candidates", value: result?.summary.retagCandidates ?? 0 },
-    { label: "Basics Candidates", value: result?.summary.basicsCandidates ?? 0 },
+    { label: "Basic Eligible", value: result?.summary.basicsCandidates ?? 0 },
     { label: "Manual Review", value: result?.summary.manualReview ?? 0 },
     { label: "Clearance", value: result?.summary.clearance ?? 0 },
   ];
@@ -389,6 +402,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     return rows.filter((row) => {
       const matchesSearch = !search || [
         row.SKU,
+        row["Zalando SKU"],
         row.EAN,
         row["Article name"],
         row.Category,
@@ -398,9 +412,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       ].some((value) => String(value).toLowerCase().includes(search));
       const matchesAction = actionFilter === "all" || row["Suggested action"] === actionFilter;
       const matchesEligibility = eligibilityFilter === "all" || [
-        row["YRB eligibility"],
-        row["SS_Basics eligibility"],
-        row["AW_Basics eligibility"],
+        row["Basic Retagging Eligible"],
         row["Retagging eligibility"],
       ].includes(eligibilityFilter as any);
       const matchesMissing = !showMissingOnly || Boolean(row["Missing data / manual review note"]);
@@ -465,12 +477,19 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       ) : null}
 
       <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <FileUploadSection
             title="Sales Performance Detail Breakdown CSV"
             onChange={(event) => handleFileChange(event, "salesPerformance")}
             onRemove={(fileName) => handleRemoveFile(fileName, "salesPerformance")}
             files={files.salesPerformance ? [files.salesPerformance] : []}
+            acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+          />
+          <FileUploadSection
+            title="Sales Performance Article Level CSV (Global SAR)"
+            onChange={(event) => handleFileChange(event, "salesArticleLevel")}
+            onRemove={(fileName) => handleRemoveFile(fileName, "salesArticleLevel")}
+            files={files.salesArticleLevel ? [files.salesArticleLevel] : []}
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
           <FileUploadSection
@@ -664,13 +683,9 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             >
               <option value="all">All season recommendations</option>
               {([
-                "Already YRB / no action required",
-                "Already SS_Basics / no action required",
-                "Already AW_Basics / no action required",
+                "Already Basic / no action required",
+                "Basic retagging eligible - choose department manually",
                 "Retag to next season",
-                "Apply for Year-Round Basic",
-                "Apply for SS_Basics",
-                "Apply for AW_Basics",
                 "Manual review",
                 "Clearance / phase out",
               ] satisfies RetaggingSuggestedAction[]).map((action) => (
@@ -685,6 +700,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
           >
             <option value="all">All eligibility</option>
+            <option value="Yes">Basic eligible: Yes</option>
+            <option value="No">Basic eligible: No</option>
             <option value="Eligible">Eligible</option>
             <option value="Not eligible">Not eligible</option>
             <option value="Unknown / missing data">Unknown / missing data</option>
@@ -741,7 +758,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                             : "whitespace-nowrap"
                         }`}
                       >
-                        {row[column] === "" ? "N/A" : row[column]}
+                        {row[column] === "" || row[column] === undefined ? "N/A" : row[column]}
                       </td>
                     ))}
                   </tr>

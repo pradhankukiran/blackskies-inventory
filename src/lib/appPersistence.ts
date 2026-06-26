@@ -28,6 +28,7 @@ const ZFS_TREND_FACTOR_KEY = 'zfsTrendFactor';
 const FBA_SAFETY_FACTOR_KEY = 'fbaSafetyFactor';
 const FBA_TREND_FACTOR_KEY = 'fbaTrendFactor';
 const RETAGGING_SALES_FILE_KEY = 'retaggingSalesPerformanceFile';
+const RETAGGING_SALES_ARTICLE_LEVEL_FILE_KEY = 'retaggingSalesArticleLevelFile';
 const RETAGGING_INVENTORY_FILE_KEY = 'retaggingZfsInventoryFile';
 const RETAGGING_SHOPIFY_STOCK_FILE_KEY = 'retaggingShopifyStockFile';
 const RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY = 'retaggingShopifySkuEanFile';
@@ -48,6 +49,7 @@ export interface RetaggingUiState {
 
 export interface RetaggingPersistedState extends RetaggingUiState {
   salesPerformanceFile: File | null;
+  salesArticleLevelFile: File | null;
   zfsInventoryFile: File | null;
   shopifyStockFile: File | null;
   shopifySkuEanFile: File | null;
@@ -251,8 +253,9 @@ export const clearFbaTablesData = async (blacklist: string[]) => {
 };
 
 export const loadRetaggingState = async (): Promise<RetaggingPersistedState> => {
-  const [salesPerformanceFile, zfsInventoryFile, shopifyStockFile, shopifySkuEanFile, state] = await Promise.all([
+  const [salesPerformanceFile, salesArticleLevelFile, zfsInventoryFile, shopifyStockFile, shopifySkuEanFile, state] = await Promise.all([
     getGenericData(RETAGGING_SALES_FILE_KEY),
+    getGenericData(RETAGGING_SALES_ARTICLE_LEVEL_FILE_KEY),
     getGenericData(RETAGGING_INVENTORY_FILE_KEY),
     getGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
     getGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY),
@@ -263,6 +266,7 @@ export const loadRetaggingState = async (): Promise<RetaggingPersistedState> => 
     ...DEFAULT_RETAGGING_STATE,
     ...(state || {}),
     salesPerformanceFile: salesPerformanceFile instanceof File ? salesPerformanceFile : null,
+    salesArticleLevelFile: salesArticleLevelFile instanceof File ? salesArticleLevelFile : null,
     zfsInventoryFile: zfsInventoryFile instanceof File ? zfsInventoryFile : null,
     shopifyStockFile: shopifyStockFile instanceof File ? shopifyStockFile : null,
     shopifySkuEanFile: shopifySkuEanFile instanceof File ? shopifySkuEanFile : null,
@@ -275,6 +279,14 @@ export const saveRetaggingSalesPerformanceFile = async (file: File | null) => {
     return;
   }
   await clearGenericData(RETAGGING_SALES_FILE_KEY);
+};
+
+export const saveRetaggingSalesArticleLevelFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(RETAGGING_SALES_ARTICLE_LEVEL_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(RETAGGING_SALES_ARTICLE_LEVEL_FILE_KEY);
 };
 
 export const saveRetaggingZfsInventoryFile = async (file: File | null) => {
@@ -327,6 +339,7 @@ export const clearRetaggingResult = async () => {
 export const resetRetaggingState = async () => {
   await Promise.all([
     clearGenericData(RETAGGING_SALES_FILE_KEY),
+    clearGenericData(RETAGGING_SALES_ARTICLE_LEVEL_FILE_KEY),
     clearGenericData(RETAGGING_INVENTORY_FILE_KEY),
     clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
     clearGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY),

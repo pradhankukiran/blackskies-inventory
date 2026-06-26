@@ -1,13 +1,10 @@
 export type RetaggingEligibility = "Eligible" | "Not eligible" | "Unknown / missing data";
+export type BasicRetaggingEligible = "Yes" | "No";
 
 export type RetaggingSeasonRecommendation =
-  | "Already YRB / no action required"
-  | "Already SS_Basics / no action required"
-  | "Already AW_Basics / no action required"
+  | "Already Basic / no action required"
+  | "Basic retagging eligible - choose department manually"
   | "Retag to next season"
-  | "Apply for Year-Round Basic"
-  | "Apply for SS_Basics"
-  | "Apply for AW_Basics"
   | "Manual review"
   | "Clearance / phase out";
 
@@ -24,11 +21,11 @@ export interface RetaggingDecisionConfig {
 
 export interface RetaggingDecisionRow {
   "SKU": string;
+  "Zalando SKU": string;
   "EAN": string;
   "Article name": string;
   "Category": string;
   "Current season": string;
-  "Current classification": string;
   "Article status": string;
   "Zalando issue/status code": string;
   "ZFS stock": number;
@@ -38,9 +35,7 @@ export interface RetaggingDecisionRow {
   "Return rate, if available": number | "";
   "Size Availability Rate / SAR": number | "";
   "Current discount %": number | "";
-  "YRB eligibility": RetaggingEligibility;
-  "SS_Basics eligibility": RetaggingEligibility;
-  "AW_Basics eligibility": RetaggingEligibility;
+  "Basic Retagging Eligible": BasicRetaggingEligible;
   "Retagging eligibility": RetaggingEligibility;
   "Retagging score": number;
   "Season recommendation": RetaggingSeasonRecommendation;

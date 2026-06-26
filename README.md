@@ -56,6 +56,7 @@ Required:
 
 Optional but recommended:
 
+- Zalando Sales Performance **article-level** CSV, used to take the report's SAR value directly.
 - Shopify Internal Stock from the app's Shopify sync.
 - Shopify SKU/EAN mapper from the same Shopify sync.
 
@@ -80,12 +81,12 @@ The module produces one main table and export: **Retagging Decision Export**.
 
 Important columns include:
 
-- SKU, EAN, article name, category.
-- Current season and current classification.
+- SKU, Zalando SKU, EAN, article name, category.
+- Current season.
 - Article status and Zalando issue/status code.
 - ZFS stock and internal Shopify stock.
 - NMV/GMV proxy, units sold, return rate, SAR, discount.
-- YRB, SS_Basics, AW_Basics, and retagging eligibility.
+- Basic retagging eligibility and regular retagging eligibility.
 - Retagging score.
 - Season recommendation.
 - Operational note.
@@ -96,7 +97,7 @@ Important columns include:
 
 The retagging logic intentionally separates season decisions from operational warnings:
 
-- **Season recommendation**: already basic/no action, apply for YRB, apply for SS_Basics, apply for AW_Basics, retag to next season, clearance/phase out, or manual review.
+- **Season recommendation**: already basic/no action, basic retagging eligible with manual department choice, retag to next season, clearance/phase out, or manual review.
 - **Operational note**: replenish ZFS first, low internal stock, low size availability, missing data, blocking issue code, high return rate, discount required, or already discounted.
 
 This avoids replacing a season decision with an operational task like replenishing ZFS.
