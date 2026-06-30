@@ -3,6 +3,7 @@ import { ParsedData } from '@/types/stock';
 import { ArticleRecommendation } from '@/types/sales';
 import { ProcessedSellerboardStock } from '@/types/processors';
 import { RetaggingDecisionResult } from '@/types/retagging';
+import { StockReturnResult } from '@/types/stockReturn';
 import { clearGenericData, getGenericData, getStoredData, storeData, storeGenericData, StoredData } from './indexedDB';
 
 export interface RecommendationSettings {
@@ -33,6 +34,9 @@ const RETAGGING_INVENTORY_FILE_KEY = 'retaggingZfsInventoryFile';
 const RETAGGING_SHOPIFY_STOCK_FILE_KEY = 'retaggingShopifyStockFile';
 const RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY = 'retaggingShopifySkuEanFile';
 const RETAGGING_STATE_KEY = 'retaggingDecisionState';
+const STOCK_RETURN_INVENTORY_FILE_KEY = 'stockReturnInventoryFile';
+const STOCK_RETURN_SALES_FILE_KEY = 'stockReturnSalesFile';
+const STOCK_RETURN_STATE_KEY = 'stockReturnState';
 
 export interface RetaggingUiState {
   sarThreshold: number;
@@ -55,6 +59,21 @@ export interface RetaggingPersistedState extends RetaggingUiState {
   shopifySkuEanFile: File | null;
 }
 
+export interface StockReturnUiState {
+  forecastPeriodDays: number;
+  safetyBufferPercent: number;
+  storageFeePerUnitPerDay: number;
+  searchTerm: string;
+  showReturnOnly: boolean;
+  hasProcessed: boolean;
+  result: StockReturnResult | null;
+}
+
+export interface StockReturnPersistedState extends StockReturnUiState {
+  inventoryFile: File | null;
+  salesFile: File | null;
+}
+
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
   sarThreshold: 85,
   nmvThreshold: 1000,
@@ -64,6 +83,16 @@ const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
   actionFilter: 'all',
   eligibilityFilter: 'all',
   showMissingOnly: false,
+  hasProcessed: false,
+  result: null,
+};
+
+const DEFAULT_STOCK_RETURN_STATE: StockReturnUiState = {
+  forecastPeriodDays: 30,
+  safetyBufferPercent: 20,
+  storageFeePerUnitPerDay: 0.0128,
+  searchTerm: '',
+  showReturnOnly: false,
   hasProcessed: false,
   result: null,
 };
@@ -344,5 +373,65 @@ export const resetRetaggingState = async () => {
     clearGenericData(RETAGGING_SHOPIFY_STOCK_FILE_KEY),
     clearGenericData(RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY),
     clearGenericData(RETAGGING_STATE_KEY),
+  ]);
+};
+
+export const loadStockReturnState = async (): Promise<StockReturnPersistedState> => {
+  const [inventoryFile, salesFile, state] = await Promise.all([
+    getGenericData(STOCK_RETURN_INVENTORY_FILE_KEY),
+    getGenericData(STOCK_RETURN_SALES_FILE_KEY),
+    getGenericData(STOCK_RETURN_STATE_KEY),
+  ]);
+
+  return {
+    ...DEFAULT_STOCK_RETURN_STATE,
+    ...(state || {}),
+    inventoryFile: inventoryFile instanceof File ? inventoryFile : null,
+    salesFile: salesFile instanceof File ? salesFile : null,
+  };
+};
+
+export const saveStockReturnInventoryFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(STOCK_RETURN_INVENTORY_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(STOCK_RETURN_INVENTORY_FILE_KEY);
+};
+
+export const saveStockReturnSalesFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(STOCK_RETURN_SALES_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(STOCK_RETURN_SALES_FILE_KEY);
+};
+
+export const saveStockReturnUiState = async (state: Partial<StockReturnUiState>) => {
+  const existing = await getGenericData(STOCK_RETURN_STATE_KEY);
+  await storeGenericData(STOCK_RETURN_STATE_KEY, {
+    ...DEFAULT_STOCK_RETURN_STATE,
+    ...(existing || {}),
+    ...state,
+  });
+};
+
+export const clearStockReturnResult = async () => {
+  const existing = await getGenericData(STOCK_RETURN_STATE_KEY);
+  await storeGenericData(STOCK_RETURN_STATE_KEY, {
+    ...DEFAULT_STOCK_RETURN_STATE,
+    ...(existing || {}),
+    result: null,
+    hasProcessed: false,
+    searchTerm: '',
+    showReturnOnly: false,
+  });
+};
+
+export const resetStockReturnState = async () => {
+  await Promise.all([
+    clearGenericData(STOCK_RETURN_INVENTORY_FILE_KEY),
+    clearGenericData(STOCK_RETURN_SALES_FILE_KEY),
+    clearGenericData(STOCK_RETURN_STATE_KEY),
   ]);
 };

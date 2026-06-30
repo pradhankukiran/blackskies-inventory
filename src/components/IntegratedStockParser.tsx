@@ -36,6 +36,7 @@ import { FileState, ParsedData } from "@/types/stock";
 import RelativeStockTable from "./RelativeStockTable";
 import BlacklistModal from "./BlacklistModal";
 import { RetaggingDecisionTool } from "./RetaggingDecisionTool";
+import { StockReturnTool } from "./StockReturnTool";
 
 interface TabContentProps {
   files: any;
@@ -1454,6 +1455,18 @@ const IntegratedStockParser: React.FC = () => {
             >
               Retagging
             </NavLink>
+            <NavLink
+              to="/stock-return"
+              className={({ isActive }) =>
+                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                  isActive
+                    ? "text-gray-900 border-gray-900"
+                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                }`
+              }
+            >
+              Stock Return
+            </NavLink>
           </nav>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -1615,6 +1628,7 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isRetaggingShopifyStockLoading}
               />
               } />
+              <Route path="/stock-return" element={<StockReturnTool />} />
               <Route path="*" element={<Navigate to="/zfs" replace />} />
             </Routes>
           </div>
