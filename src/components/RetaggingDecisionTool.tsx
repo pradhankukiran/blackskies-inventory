@@ -46,7 +46,7 @@ const columns: Array<keyof RetaggingDecisionRow> = [
   "ZFS stock",
   "Internal Shopify stock",
   "NMV used as GMV proxy",
-  "Units sold last 12 months",
+  "Units sold selected period",
   "Return rate, if available",
   "Size Availability Rate / SAR",
   "Current discount %",
@@ -64,7 +64,7 @@ const numericColumns = new Set<keyof RetaggingDecisionRow>([
   "ZFS stock",
   "Internal Shopify stock",
   "NMV used as GMV proxy",
-  "Units sold last 12 months",
+  "Units sold selected period",
   "Return rate, if available",
   "Size Availability Rate / SAR",
   "Current discount %",
@@ -117,7 +117,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   });
   const [isTableDragging, setIsTableDragging] = useState(false);
 
-  const requiredFilesPresent = Boolean(files.salesPerformance && files.zfsInventory);
+  const requiredFilesPresent = Boolean(files.salesPerformance && files.salesArticleLevel && files.zfsInventory);
 
   const processButtonLabel = isProcessing
     ? "Processing..."
@@ -325,7 +325,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
 
   const processFiles = async () => {
     if (!requiredFilesPresent) {
-      setError("Upload the Sales Performance detail-breakdown CSV and ZFS Inventory CSV first.");
+      setError("Upload the Sales Performance detail-breakdown CSV, Sales Performance article-level CSV, and ZFS Inventory CSV first.");
       return;
     }
 
@@ -486,7 +486,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
           <FileUploadSection
-            title="Sales Performance Article Level CSV (Global SAR)"
+            title="Sales Performance Article Level CSV (Main Sales Metrics)"
             onChange={(event) => handleFileChange(event, "salesArticleLevel")}
             onRemove={(fileName) => handleRemoveFile(fileName, "salesArticleLevel")}
             files={files.salesArticleLevel ? [files.salesArticleLevel] : []}

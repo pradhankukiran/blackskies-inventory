@@ -31,7 +31,7 @@ export interface RetaggingDecisionRow {
   "ZFS stock": number;
   "Internal Shopify stock": number;
   "NMV used as GMV proxy": number | "";
-  "Units sold last 12 months": number | "";
+  "Units sold selected period": number | "";
   "Return rate, if available": number | "";
   "Size Availability Rate / SAR": number | "";
   "Current discount %": number | "";

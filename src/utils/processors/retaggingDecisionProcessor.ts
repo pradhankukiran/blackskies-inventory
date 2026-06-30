@@ -22,11 +22,6 @@ interface SalesAggregate {
   rowCount: number;
 }
 
-interface ArticleLevelMetric {
-  articleVariant: string;
-  sar: number | null;
-}
-
 interface InventoryItem {
   articleVariant: string;
   ean: string;
@@ -249,27 +244,6 @@ const averageNullable = (values: Array<number | null>) => {
   const present = values.filter((value): value is number => value !== null);
   if (!present.length) return null;
   return present.reduce((sum, value) => sum + value, 0) / present.length;
-};
-
-const normalizeArticleLevelRows = (rows: RawRow[], config: RetaggingDecisionConfig): ArticleLevelMetric[] => {
-  const metrics = new Map<string, ArticleLevelMetric>();
-
-  rows
-    .filter((row) => sameMarket(row, ["Country"], config.market))
-    .forEach((row) => {
-      const articleVariant = normalizeId(firstNonEmpty(
-        getValue(row, ["Zalando article variant", "zalando_article_variant", "zalando article variant"]),
-        getValue(row, ["Article variant", "article_variant"])
-      ));
-      if (!articleVariant || metrics.has(articleVariant)) return;
-
-      metrics.set(articleVariant, {
-        articleVariant,
-        sar: parsePercent(getValue(row, ["Avg. size availability rate", "Size Availability Rate", "SAR"])),
-      });
-    });
-
-  return Array.from(metrics.values());
 };
 
 const normalizeSalesRows = (rows: RawRow[], config: RetaggingDecisionConfig): SalesAggregate[] => {
@@ -544,7 +518,7 @@ const buildReason = ({
   }
   if (sales) {
     reasons.push(`NMV EUR ${Math.round(sales.nmv).toLocaleString()} used as GMV proxy`);
-    reasons.push(`${Math.round(sales.unitsSold).toLocaleString()} units sold in last 12 months`);
+    reasons.push(`${Math.round(sales.unitsSold).toLocaleString()} units sold in selected report period`);
   }
   if (inventory) reasons.push(`ZFS stock ${inventory.zfsStock.toLocaleString()}`);
   if (shopifyStock > 0) reasons.push(`Shopify stock ${shopifyStock.toLocaleString()}`);
@@ -561,7 +535,7 @@ const buildMissingNote = (row: RetaggingDecisionRow) => {
   if (hasMissingData(row.EAN)) missing.push("EAN");
   if (hasMissingData(row["Article name"])) missing.push("article name");
   if (row["NMV used as GMV proxy"] === "") missing.push("NMV");
-  if (row["Units sold last 12 months"] === "") missing.push("units sold");
+  if (row["Units sold selected period"] === "") missing.push("units sold");
   if (row["Size Availability Rate / SAR"] === "") missing.push("SAR");
   if (row["Internal Shopify stock"] === 0) missing.push("Shopify stock");
   if (row["Retagging eligibility"] === UNKNOWN_ELIGIBILITY) {
@@ -609,7 +583,7 @@ const createDecisionRow = ({
     "ZFS stock": inventory?.zfsStock ?? 0,
     "Internal Shopify stock": shopifyStock,
     "NMV used as GMV proxy": sales ? Math.round(sales.nmv * 100) / 100 : "",
-    "Units sold last 12 months": sales ? Math.round(sales.unitsSold) : "",
+    "Units sold selected period": sales ? Math.round(sales.unitsSold) : "",
     "Return rate, if available": sales?.returnRate !== null && sales?.returnRate !== undefined ? Math.round(sales.returnRate * 10) / 10 : "",
     "Size Availability Rate / SAR": sales?.sar !== null && sales?.sar !== undefined ? Math.round(sales.sar * 10) / 10 : "",
     "Current discount %": discount !== null ? Math.round(discount * 10) / 10 : "",
@@ -661,21 +635,7 @@ export const processRetaggingDecisions = ({
   config: RetaggingDecisionConfig;
 }): RetaggingDecisionResult => {
   const warnings: string[] = [];
-  const sales = normalizeSalesRows(salesRows, config);
-  const articleLevelMetrics = normalizeArticleLevelRows(salesArticleLevelRows, config);
-  const articleLevelSarByVariant = new Map(
-    articleLevelMetrics
-      .filter((item) => item.sar !== null)
-      .map((item) => [item.articleVariant, item.sar as number])
-  );
-  if (articleLevelSarByVariant.size) {
-    sales.forEach((item) => {
-      const articleLevelSar = articleLevelSarByVariant.get(item.articleVariant);
-      if (articleLevelSar !== undefined) {
-        item.sar = articleLevelSar;
-      }
-    });
-  }
+  const sales = normalizeSalesRows(salesArticleLevelRows, config);
   const inventory = normalizeInventoryRows(inventoryRows, config);
   const shopifyStock = normalizeShopifyRows(shopifyStockRows);
   const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
@@ -683,7 +643,8 @@ export const processRetaggingDecisions = ({
   const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock, shopifySkuEan);
   const usedSalesKeys = new Set<string>();
 
-  if (!sales.length) warnings.push("No DE sales rows were found in the Sales Performance detail-breakdown file.");
+  if (!sales.length) warnings.push("No article-level Sales Performance rows were found. Sales metrics will be missing.");
+  if (!salesRows.length) warnings.push("No Sales Performance detail-breakdown rows were provided.");
   if (!inventory.length) warnings.push("No DE inventory rows were found in the ZFS Inventory file.");
   if (!shopifyStock.length) warnings.push("No Shopify stock rows were provided. Internal stock will be 0 and affected rows may need manual review.");
 

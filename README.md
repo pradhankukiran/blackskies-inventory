@@ -52,15 +52,15 @@ The Retagging module is currently built as a Germany-only MVP.
 Required:
 
 - Zalando Sales Performance **detail-breakdown** CSV.
+- Zalando Sales Performance **article-level** CSV, used as the source for NMV, units sold, SAR, return rate, and discount.
 - Zalando ZFS Inventory CSV.
 
 Optional but recommended:
 
-- Zalando Sales Performance **article-level** CSV, used to take the report's SAR value directly.
 - Shopify Internal Stock from the app's Shopify sync.
 - Shopify SKU/EAN mapper from the same Shopify sync.
 
-The retagging tool can process with only the two Zalando CSVs, but Shopify stock improves internal stock visibility and SKU/EAN fallback matching.
+The retagging tool uses the article-level Sales Performance report as the main sales source. Shopify stock improves internal stock visibility and SKU/EAN fallback matching.
 
 ### Matching
 

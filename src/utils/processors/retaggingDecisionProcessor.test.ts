@@ -37,7 +37,8 @@ const salesRow = {
 describe("processRetaggingDecisions", () => {
   it("matches DE sales, inventory, and Shopify stock by variant/SKU", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
       config,
@@ -53,7 +54,8 @@ describe("processRetaggingDecisions", () => {
 
   it("matches Shopify stock by EAN through the SKU/EAN mapper", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [{ ...inventoryRow, partner_variant_size: "" }],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "11" }],
       shopifySkuEanRows: [{ SKU: "SKU-1", EAN: "4251812300001" }],
@@ -68,7 +70,8 @@ describe("processRetaggingDecisions", () => {
 
   it("marks eligibility as unknown when SAR is missing", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, "Avg. size availability rate": "" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, "Avg. size availability rate": "" }],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [],
       config,
@@ -80,7 +83,8 @@ describe("processRetaggingDecisions", () => {
 
   it("marks low NMV rows as not eligible", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, NMV: "100" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, NMV: "100" }],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [],
       config,
@@ -91,7 +95,8 @@ describe("processRetaggingDecisions", () => {
 
   it("recommends no action for articles already classified as basics", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [{ ...inventoryRow, season: "spring_summer_basics" }],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
       config,
@@ -103,7 +108,8 @@ describe("processRetaggingDecisions", () => {
 
   it("does not hide blocking issues behind an already-basic recommendation", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [{
         ...inventoryRow,
         season: "year_round_basics",
@@ -120,7 +126,8 @@ describe("processRetaggingDecisions", () => {
 
   it("keeps replenishment as an operational note instead of the season recommendation", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [{ ...inventoryRow, sellable_zfs_stock: "0" }],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
       config,
@@ -133,7 +140,8 @@ describe("processRetaggingDecisions", () => {
 
   it("retags below-threshold NMV articles when the data is otherwise usable", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, NMV: "100", "Sold articles": "4" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, NMV: "100", "Sold articles": "4" }],
       inventoryRows: [{ ...inventoryRow, season: "FS_26" }],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
       config,
@@ -145,7 +153,8 @@ describe("processRetaggingDecisions", () => {
 
   it("does not suggest discount action when the required old-season discount is already met", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, NMV: "700", "Sold articles": "10" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, NMV: "700", "Sold articles": "10" }],
       inventoryRows: [{ ...inventoryRow, season: "Spring-Summer 2025", regular_price: "100", discounted_price: "70" }],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
       config: { ...config, currentSeasonCode: "FS_26", requiredDiscountThreshold: 20 },
@@ -156,13 +165,13 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["Operational note"]).not.toContain("Discount required");
   });
 
-  it("uses the Zalando article-level SAR value directly when provided", () => {
+  it("uses article-level sales metrics even when detail-breakdown has zero sales", () => {
     const result = processRetaggingDecisions({
       salesRows: [
-        { ...salesRow, Country: "DE", "Avg. size availability rate": "47.8%" },
+        { ...salesRow, Country: "DE", NMV: "0", "Sold articles": "0", "Avg. size availability rate": "47.8%" },
       ],
       salesArticleLevelRows: [
-        { ...salesRow, Country: "", "Avg. size availability rate": "29.8%" },
+        { ...salesRow, Country: "", NMV: "53.21", "Sold articles": "2", "Avg. size availability rate": "29.8%" },
       ],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
@@ -170,11 +179,14 @@ describe("processRetaggingDecisions", () => {
     });
 
     expect(result.rows[0]["Size Availability Rate / SAR"]).toBe(29.8);
+    expect(result.rows[0]["NMV used as GMV proxy"]).toBe(53.21);
+    expect(result.rows[0]["Units sold selected period"]).toBe(2);
   });
 
   it("does not send weak old-season sales to clearance when the article can still be retagged", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
       inventoryRows: [inventoryRow],
       shopifyStockRows: [],
       config,
@@ -185,7 +197,8 @@ describe("processRetaggingDecisions", () => {
 
   it("uses clearance only for a clear no-stock blocked case", () => {
     const result = processRetaggingDecisions({
-      salesRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, NMV: "10", "Sold articles": "0" }],
       inventoryRows: [{
         ...inventoryRow,
         status_description: "Blocked",
@@ -201,7 +214,8 @@ describe("processRetaggingDecisions", () => {
 
   it("adds sales-only rows for manual review when inventory is missing", () => {
     const result = processRetaggingDecisions({
-      salesRows: [salesRow],
+      salesRows: [],
+      salesArticleLevelRows: [salesRow],
       inventoryRows: [],
       shopifyStockRows: [],
       config,
