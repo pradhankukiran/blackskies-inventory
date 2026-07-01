@@ -61,6 +61,13 @@ export const StockReturnTool: React.FC = () => {
   const [result, setResult] = useState<StockReturnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableDragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    scrollLeft: 0,
+  });
+  const [isTableDragging, setIsTableDragging] = useState(false);
 
   const requiredFilesPresent = Boolean(files.inventory && files.sales);
   const rows = result?.rows || [];
@@ -257,6 +264,36 @@ export const StockReturnTool: React.FC = () => {
     : !requiredFilesPresent
       ? "Upload Required CSVs"
       : "Process Stock Returns";
+
+  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !tableScrollRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,a")) return;
+
+    tableDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      scrollLeft: tableScrollRef.current.scrollLeft,
+    };
+    setIsTableDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - tableDragRef.current.startX;
+    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+  };
+
+  const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging) return;
+    tableDragRef.current.isDragging = false;
+    setIsTableDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   const summaryCards = [
     { label: "Total EANs", value: result?.summary.totalArticles ?? 0 },
@@ -471,7 +508,18 @@ export const StockReturnTool: React.FC = () => {
             </label>
           </div>
 
-          <div className="max-h-[calc(100vh-260px)] overflow-auto">
+          <div
+            ref={tableScrollRef}
+            className={`max-h-[calc(100vh-260px)] overflow-auto ${
+              isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+            }`}
+            title="Drag horizontally to scroll the table"
+            onPointerDown={handleTablePointerDown}
+            onPointerMove={handleTablePointerMove}
+            onPointerUp={stopTableDrag}
+            onPointerCancel={stopTableDrag}
+            onPointerLeave={stopTableDrag}
+          >
             <table className="ops-table min-w-[1250px]">
               <thead>
                 <tr>
