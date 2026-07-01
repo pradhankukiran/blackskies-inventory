@@ -7,7 +7,7 @@ import { StockTable } from "./StockTable";
 import { RecommendationsTable } from "./RecommendationsTable";
 import { useFileProcessing } from "@/hooks/useFileProcessing";
 import { Tabs } from "./ui/tabs";
-import { RotateCcw } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
 import { LoadingOverlay } from "./ui/loading-overlay";
 import { TimelineType } from "@/types/common";
 import { FBAStockTable } from "./FBAStockTable";
@@ -155,18 +155,18 @@ const ZFSContent: React.FC<TabContentProps> = ({
         <div className="flex gap-3">
           <button
             onClick={resetFiles}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+            className="ops-button-secondary"
           >
             <RotateCcw className="w-4 h-4" />
             Reset Files
           </button>
           <button
             onClick={onOpenBlacklist}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+            className="ops-button-secondary"
           >
             Manage Blacklist
             {blacklistCount > 0 && (
-              <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-sm font-semibold text-white min-w-[20px]">
+              <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
                 {blacklistCount}
               </span>
             )}
@@ -174,7 +174,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
           {showTabs && (
             <button
               onClick={clearTables}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-700 bg-white border-2 border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200"
+              className="ops-button-danger"
             >
               Clear Tables
             </button>
@@ -200,7 +200,7 @@ const ZFSContent: React.FC<TabContentProps> = ({
                 ? "Select a timeline for the ZFS Sales file"
                 : "Process uploaded ZFS files"
           }
-          className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:shadow-md"
+          className="ops-button-primary px-6"
         >
           {processButtonLabel}
         </button>
@@ -503,18 +503,18 @@ const FBAContent: React.FC<FBAContentProps> = ({
           <div className="flex gap-3">
             <button
               onClick={resetFiles}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+              className="ops-button-secondary"
             >
               <RotateCcw className="w-4 h-4" />
               Reset Files
             </button>
             <button
               onClick={onOpenBlacklist}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+              className="ops-button-secondary"
             >
               Manage Blacklist
               {blacklist.length > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-black px-2 py-0.5 text-sm font-semibold text-white min-w-[20px]">
+                <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
                   {blacklist.length}
                 </span>
               )}
@@ -522,7 +522,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
             {showTabs && (
               <button
                 onClick={clearTables}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-700 bg-white border-2 border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200"
+                className="ops-button-danger"
               >
                 Clear Tables
               </button>
@@ -530,7 +530,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
           </div>
           <button
             onClick={() => processFiles()}
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-black rounded-lg hover:bg-gray-800 transition-all duration-200 shadow-md hover:shadow-lg"
+            className="ops-button-primary px-6"
           >
             Process Files
           </button>
@@ -707,6 +707,9 @@ const IntegratedStockParser: React.FC = () => {
     readShopifySyncMeta(RETAGGING_SHOPIFY_SYNC_META_KEY)
   );
   const activeShopifySyncMeta = onRetaggingRoute ? retaggingShopifySyncMeta : zfsShopifySyncMeta;
+  const shopifySyncStatusLabel = onRetaggingRoute
+    ? "Fetching Shopify stock for Retagging"
+    : "Fetching Shopify stock for ZFS";
 
   const clearZfsShopifySyncMeta = () => {
     setZfsShopifySyncMeta(null);
@@ -1386,7 +1389,7 @@ const IntegratedStockParser: React.FC = () => {
 
   return (
     <>
-      <LoadingOverlay isLoading={isProcessing || isLoadingPersistedData} message={processingStatus || (isLoadingPersistedData ? 'Loading data...' : '')} />
+      <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
       <BlacklistModal
         isOpen={showZfsBlacklistModal}
         title="ZFS Blacklisted SKUs"
@@ -1407,7 +1410,7 @@ const IntegratedStockParser: React.FC = () => {
       />
 
       {/* Modern Header */}
-      <div className="bg-white py-6 mb-6 border-b border-gray-200">
+      <div className="mb-6 border-b border-slate-200 bg-white/95 py-5 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
         <div className="container mx-auto flex flex-col items-center gap-4 px-4 lg:px-10 xl:flex-row xl:justify-between">
           <div className="flex items-center gap-4">
             <img
@@ -1415,17 +1418,20 @@ const IntegratedStockParser: React.FC = () => {
               alt="Blackskies Logo"
               className="h-14 sm:h-16"
             />
-            <h1 className="text-xl font-normal tracking-tight text-gray-900 sm:text-2xl">Inventory Management</h1>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Inventory Management</h1>
+              <p className="mt-0.5 hidden text-base text-slate-500 sm:block">ZFS, FBA, retagging, and stock return operations</p>
+            </div>
           </div>
 
-          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-1 sm:gap-x-8" aria-label="Primary">
+          <nav className="flex flex-wrap justify-center gap-1 border border-slate-200 bg-slate-50 p-1 shadow-inner" aria-label="Primary">
             <NavLink
               to="/zfs"
               className={({ isActive }) =>
-                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
                   isActive
-                    ? "text-gray-900 border-gray-900"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                 }`
               }
             >
@@ -1434,10 +1440,10 @@ const IntegratedStockParser: React.FC = () => {
             <NavLink
               to="/fba"
               className={({ isActive }) =>
-                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
                   isActive
-                    ? "text-gray-900 border-gray-900"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                 }`
               }
             >
@@ -1446,10 +1452,10 @@ const IntegratedStockParser: React.FC = () => {
             <NavLink
               to="/retagging"
               className={({ isActive }) =>
-                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
                   isActive
-                    ? "text-gray-900 border-gray-900"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                 }`
               }
             >
@@ -1458,10 +1464,10 @@ const IntegratedStockParser: React.FC = () => {
             <NavLink
               to="/stock-return"
               className={({ isActive }) =>
-                `px-2 py-3 text-base font-semibold transition-colors border-b-2 sm:px-3 ${
+                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
                   isActive
-                    ? "text-gray-900 border-gray-900"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                 }`
               }
             >
@@ -1474,23 +1480,34 @@ const IntegratedStockParser: React.FC = () => {
               <button
                 onClick={canSyncShopify ? handleShopifySync : undefined}
                 disabled={isShopifySyncing || !canSyncShopify}
-                className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 sm:px-5 sm:text-base"
+                className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
                 title={
                   canSyncShopify
                     ? "Pull Internal Stocks and SKU/EAN data directly from Shopify"
                     : "Shopify sync is used by ZFS and Retagging"
                 }
               >
-                {isShopifySyncing ? 'Syncing…' : 'Sync from Shopify'}
+                {isShopifySyncing && (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                )}
+                {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
               </button>
-              {canSyncShopify && activeShopifySyncMeta && (
-                <span className="absolute right-0 top-full mt-1 text-sm text-gray-500 whitespace-nowrap">
-                  Last synced {timeAgo(activeShopifySyncMeta.lastSyncedAt)}
+              {canSyncShopify && (
+                <span
+                  className={`absolute right-0 top-full mt-1 whitespace-nowrap text-base ${
+                    isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
+                  }`}
+                >
+                  {isShopifySyncing
+                    ? shopifySyncStatusLabel
+                    : activeShopifySyncMeta
+                      ? `Last synced ${timeAgo(activeShopifySyncMeta.lastSyncedAt)} · ${activeShopifySyncMeta.internalCount.toLocaleString()} stock rows`
+                      : "Not synced yet"}
                 </span>
               )}
             </div>
             <button
-              className="whitespace-nowrap rounded-full bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-gray-800 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
+              className="whitespace-nowrap border border-slate-900 bg-slate-950 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleOpenOverlay}
               title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
               disabled={isLoadingPersistedData}
@@ -1504,17 +1521,17 @@ const IntegratedStockParser: React.FC = () => {
       {/* Relative Stock Export Overlay */}
       {showExportOverlay && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-50 rounded-lg w-full max-w-4xl p-6 relative flex flex-col max-h-[90vh]">
+          <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col bg-slate-50 p-6 shadow-2xl">
             <button
               onClick={handleCloseOverlay}
-              className="absolute top-6 right-6 text-gray-500 hover:text-gray-900 hover:bg-white rounded-full p-1.5 transition-colors z-10"
+              className="absolute right-6 top-6 z-10 p-1.5 text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            <h2 className="text-xl font-bold mb-6 flex-shrink-0 text-gray-900">Create Stock Deduction File for Shopware</h2>
+            <h2 className="mb-6 flex-shrink-0 text-xl font-semibold text-slate-950">Create Stock Deduction File for Shopware</h2>
 
             <div className="flex-grow overflow-y-auto space-y-4"> {/* Make content area scrollable */}
               {processingExport ? (
@@ -1530,7 +1547,7 @@ const IntegratedStockParser: React.FC = () => {
                    <div className="flex justify-end mt-4">
                      <button
                       onClick={handleCloseOverlay}
-                      className="inline-flex justify-center py-2.5 px-5 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all"
+                      className="ops-button-secondary"
                     >
                       Close
                     </button>
@@ -1552,14 +1569,14 @@ const IntegratedStockParser: React.FC = () => {
                   <div className="flex justify-end space-x-3 mt-4">
                     <button
                       onClick={handleCloseOverlay}
-                      className="inline-flex justify-center py-2.5 px-5 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all"
+                      className="ops-button-secondary"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={processExportFile}
                       disabled={!exportFile || processingExport}
-                      className="inline-flex justify-center py-2.5 px-6 border border-transparent rounded-lg text-sm font-semibold text-white bg-black hover:bg-gray-800 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:shadow-md"
+                      className="ops-button-primary px-6"
                     >
                       Process
                     </button>
@@ -1573,7 +1590,7 @@ const IntegratedStockParser: React.FC = () => {
 
       <div className="container mx-auto px-4 pb-6">
         {/* Main Card */}
-        <div className="bg-gray-50 overflow-hidden">
+        <div className="overflow-hidden bg-slate-50">
           {/* Content Area */}
           <div className="p-6">
             <Routes>

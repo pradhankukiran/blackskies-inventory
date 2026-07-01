@@ -8,24 +8,24 @@ interface StockTableRowProps {
 export const StockTableRow: React.FC<StockTableRowProps> = React.memo(
   ({ row }) => {
     return (
-      <tr className="hover:bg-gray-50 transition-colors">
-        <td className="px-4 py-3 text-sm text-gray-900">{row.EAN}</td>
-        <td className="px-4 py-3 text-sm text-gray-900">
+      <tr>
+        <td>{row.EAN}</td>
+        <td>
           {row["partner_variant_size"]}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-900">
+        <td>
           {row["Product Name"]}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-900">
+        <td>
           {row["Status Description"]}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+        <td className="text-right font-medium tabular-nums">
           {row["ZFS Total"]}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+        <td className="text-right font-medium tabular-nums">
           {row["Available Stock"]}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-900">
+        <td>
           {row["Status Cluster"]}
         </td>
       </tr>

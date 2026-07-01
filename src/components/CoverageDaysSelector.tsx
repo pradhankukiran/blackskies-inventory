@@ -10,15 +10,15 @@ export function CoverageDaysSelector({
   label = "Coverage Period:",
 }: CoverageDaysSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="coverage-days" className="text-sm font-medium text-gray-700">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="coverage-days" className="text-base font-medium text-slate-700">
         {label}
       </label>
       <select
         id="coverage-days"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded-md border border-gray-300 py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        className="ops-input min-w-[180px]"
       >
         <option value={3}>3 Days (Minimum)</option>
         <option value={7}>7 Days (1 Week)</option>

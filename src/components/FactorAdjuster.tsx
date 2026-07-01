@@ -16,17 +16,17 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
   const isCustom = value !== 0 && !presets.includes(value);
 
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm font-medium text-gray-600">
+    <div className="flex flex-col gap-1.5">
+      <label className="text-base font-medium text-slate-700">
         {label}
       </label>
       <div className="flex items-end">
         <button
           type="button"
-          className={`px-3 py-1.5 text-sm font-medium border transition-colors ${
+          className={`border px-4 py-2.5 text-base font-medium transition-colors ${
             value === 0
-              ? "bg-black text-white border-black"
-              : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+              ? "border-slate-950 bg-slate-950 text-white"
+              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
           }`}
           onClick={() => onChange(0)}
         >
@@ -36,10 +36,10 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
           <button
             key={preset}
             type="button"
-            className={`px-3 py-1.5 text-sm font-medium border border-l-0 transition-colors ${
+            className={`border border-l-0 px-4 py-2.5 text-base font-medium transition-colors ${
               value === preset
-                ? "bg-black text-white border-black"
-                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             }`}
             onClick={() => onChange(preset)}
           >
@@ -60,7 +60,7 @@ export const FactorAdjuster: React.FC<FactorAdjusterProps> = ({
             onChange(isNaN(v) ? 0 : v);
           }}
           placeholder="Custom"
-          className="w-24 border border-l-0 border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          className="w-32 border border-l-0 border-slate-300 px-3 py-2.5 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
           aria-label={`${label} custom percentage`}
         />
       </div>

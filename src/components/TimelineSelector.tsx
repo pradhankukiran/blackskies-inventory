@@ -45,23 +45,23 @@ export function TimelineSelector({ value, onChange }: TimelineSelectorProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="text-sm border border-gray-200 rounded-lg py-2 px-3 focus:outline-none focus:border-black transition-all bg-white text-gray-900 font-medium cursor-pointer hover:border-gray-300 flex items-center gap-2 min-w-[150px] justify-between"
+        className="flex min-w-[180px] cursor-pointer items-center justify-between gap-2 border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 shadow-sm transition-all hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
       >
         <span>{selectedOption?.label}</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden border border-slate-200 bg-white shadow-lg">
           {options.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => handleSelect(option.value)}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+              className={`w-full px-4 py-3 text-left text-base transition-colors ${
                 option.value === value
-                  ? "bg-gray-900 text-white font-medium"
-                  : "text-gray-900 hover:bg-gray-50"
+                  ? "bg-slate-950 text-white font-medium"
+                  : "text-slate-900 hover:bg-slate-50"
               }`}
             >
               {option.label}

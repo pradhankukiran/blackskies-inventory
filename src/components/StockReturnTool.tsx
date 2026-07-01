@@ -268,8 +268,8 @@ export const StockReturnTool: React.FC = () => {
   return (
     <div className="space-y-5">
       <LoadingOverlay
-        isLoading={isProcessing || isLoadingPersistedState}
-        message={isLoadingPersistedState ? "Loading Stock Return data..." : processingStatus}
+        isLoading={isProcessing}
+        message={processingStatus}
       />
 
       {error && (
@@ -281,7 +281,7 @@ export const StockReturnTool: React.FC = () => {
       {hasProcessed && result?.warnings.length ? (
         <Alert>
           <AlertTitle>Processing warnings</AlertTitle>
-          <div className="mt-2 space-y-1 text-sm text-gray-700">
+          <div className="mt-2 space-y-1 text-base text-slate-700">
             {result.warnings.map((warning) => (
               <div key={warning}>{warning}</div>
             ))}
@@ -289,7 +289,7 @@ export const StockReturnTool: React.FC = () => {
         </Alert>
       ) : null}
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="ops-surface rounded-[8px] p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <FileUploadSection
             title="ZFS Inventory CSV"
@@ -308,30 +308,30 @@ export const StockReturnTool: React.FC = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+      <section className="ops-surface rounded-[8px]">
+        <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-gray-500" />
+            <SlidersHorizontal className="h-4 w-4 text-slate-500" />
             <div>
-              <h3 className="text-base font-semibold text-gray-900">Return Configuration</h3>
-              <p className="text-sm text-gray-500">DE-only ZFS overstock return calculation.</p>
+              <h3 className="ops-title">Return Configuration</h3>
+              <p className="ops-muted">DE-only ZFS overstock return calculation.</p>
             </div>
           </div>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
             Export uses EAN + return qty only
           </span>
         </div>
 
         <div className="grid gap-4 p-5 md:grid-cols-3">
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Forecast period</span>
+            <span className="text-base font-medium text-slate-700">Forecast period</span>
             <select
               value={forecastPeriodDays}
               onChange={(event) => {
                 setForecastPeriodDays(Number(event.target.value));
                 clearStaleResult();
               }}
-              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="ops-input mt-1 w-full"
             >
               {FORECAST_PERIOD_OPTIONS.map((days) => (
                 <option key={days} value={days}>{days} days</option>
@@ -340,8 +340,8 @@ export const StockReturnTool: React.FC = () => {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Safety buffer</span>
-            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
+            <span className="text-base font-medium text-slate-700">Safety buffer</span>
+            <div className="mt-1 flex border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
               <input
                 type="number"
                 min={0}
@@ -352,18 +352,18 @@ export const StockReturnTool: React.FC = () => {
                   setSafetyBufferPercent(Number(event.target.value));
                   clearStaleResult();
                 }}
-                className="w-full rounded-l-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                className="w-full border-0 px-4 py-3 text-base text-slate-900 focus:outline-none"
               />
-              <span className="flex items-center rounded-r-lg border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+              <span className="flex items-center border-l border-slate-200 bg-slate-50 px-4 text-base text-slate-500">
                 %
               </span>
             </div>
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Storage fee per unit per day</span>
-            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
-              <span className="flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+            <span className="text-base font-medium text-slate-700">Storage fee per unit per day</span>
+            <div className="mt-1 flex border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+              <span className="flex items-center border-r border-slate-200 bg-slate-50 px-4 text-base text-slate-500">
                 EUR
               </span>
               <input
@@ -375,21 +375,21 @@ export const StockReturnTool: React.FC = () => {
                   setStorageFeePerUnitPerDay(Number(event.target.value));
                   clearStaleResult();
                 }}
-                className="w-full rounded-r-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                className="w-full border-0 px-4 py-3 text-base text-slate-900 focus:outline-none"
               />
             </div>
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="text-base text-slate-600">
             Current rules: keep selected-period demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
           </div>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={resetFiles}
-              className="inline-flex items-center rounded-lg border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+              className="ops-button-secondary"
             >
               Reset Files
             </button>
@@ -397,7 +397,7 @@ export const StockReturnTool: React.FC = () => {
               <button
                 type="button"
                 onClick={clearTable}
-                className="inline-flex items-center rounded-lg border-2 border-red-200 bg-white px-5 py-2.5 text-sm font-medium text-red-700 transition-all hover:border-red-300 hover:bg-red-50"
+                className="ops-button-danger"
               >
                 Clear Table
               </button>
@@ -406,7 +406,7 @@ export const StockReturnTool: React.FC = () => {
               type="button"
               onClick={processFiles}
               disabled={!requiredFilesPresent || isProcessing}
-              className="inline-flex items-center rounded-lg bg-black px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-gray-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-black disabled:hover:shadow-md"
+              className="ops-button-primary px-6"
             >
               {processButtonLabel}
             </button>
@@ -415,12 +415,12 @@ export const StockReturnTool: React.FC = () => {
       </section>
 
       {hasProcessed && (
-        <section ref={resultsRef} className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-5 py-4">
+        <section ref={resultsRef} className="ops-surface rounded-[8px]">
+          <div className="ops-section-header">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">ZFS Stock Return Dashboard</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <h3 className="ops-title">ZFS Stock Return Dashboard</h3>
+                <p className="ops-muted mt-1">
                   {rows.length.toLocaleString()} DE EAN rows generated from uploaded ZFS inventory and sales files.
                 </p>
               </div>
@@ -428,7 +428,7 @@ export const StockReturnTool: React.FC = () => {
                 type="button"
                 onClick={exportZalandoCsv}
                 disabled={!result?.exportRows.length}
-                className="inline-flex items-center gap-2 rounded-lg border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-white"
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
               >
                 <Download className="h-4 w-4" />
                 Export Zalando CSV
@@ -436,63 +436,62 @@ export const StockReturnTool: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 border-b border-gray-200 bg-gray-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((card) => (
-              <div key={card.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
-                <div className="text-sm font-medium uppercase tracking-wide text-gray-500">{card.label}</div>
-                <div className="mt-1 text-2xl font-semibold text-gray-900">
+              <div key={card.label} className="ops-summary-card rounded-[8px]">
+                <div className="ops-kicker">{card.label}</div>
+                <div className="mt-1 text-3xl font-semibold text-slate-950">
                   {typeof card.value === "number" ? card.value.toLocaleString() : card.value}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-5 py-4">
+          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
             <label className="relative min-w-[260px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search EAN, article name, or Zalando SKU"
-                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+                className="ops-input w-full pl-10 pr-4"
               />
             </label>
 
-            <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-              <Filter className="h-4 w-4 text-gray-400" />
+            <label className="ops-button-secondary">
+              <Filter className="h-4 w-4 text-slate-400" />
               <input
                 type="checkbox"
                 checked={showReturnOnly}
                 onChange={(event) => setShowReturnOnly(event.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-900"
               />
               Return candidates only
             </label>
           </div>
 
           <div className="max-h-[calc(100vh-260px)] overflow-auto">
-            <table className="w-full min-w-[1250px] border-collapse">
-              <thead className="sticky top-0 z-20 bg-white shadow-sm">
-                <tr className="border-b border-gray-200 bg-gray-50">
+            <table className="ops-table min-w-[1250px]">
+              <thead>
+                <tr>
                   {columns.map((column) => (
                     <th
                       key={column}
-                      className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium uppercase text-gray-500"
                     >
                       {column}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {paginatedItems.length > 0 ? (
                   paginatedItems.map((row, index) => (
-                    <tr key={`${row.EAN}-${index}`} className="hover:bg-gray-50">
+                    <tr key={`${row.EAN}-${index}`}>
                       {columns.map((column) => (
                         <td
                           key={column}
-                          className={`px-4 py-3 text-sm text-gray-900 ${
+                          className={`${
                             numericColumns.has(column) ? "text-right tabular-nums" : ""
                           } ${column === "Article name" ? "min-w-[260px] whitespace-normal" : "whitespace-nowrap"}`}
                         >
@@ -505,8 +504,8 @@ export const StockReturnTool: React.FC = () => {
                   <tr>
                     <td colSpan={columns.length} className="px-4 py-12 text-center">
                       <div className="mx-auto max-w-lg">
-                        <div className="text-sm font-semibold text-gray-900">No matching return rows</div>
-                        <div className="mt-1 text-sm text-gray-500">
+                        <div className="text-base font-semibold text-slate-950">No matching return rows</div>
+                        <div className="mt-1 text-base text-slate-500">
                           Adjust the search/filter, or confirm the uploaded files contain DE rows.
                         </div>
                       </div>
@@ -517,7 +516,7 @@ export const StockReturnTool: React.FC = () => {
             </table>
           </div>
 
-          <div className="border-t border-gray-200 px-5 py-4">
+          <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

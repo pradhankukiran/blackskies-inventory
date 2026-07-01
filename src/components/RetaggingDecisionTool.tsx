@@ -455,8 +455,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   return (
     <div className="space-y-5">
       <LoadingOverlay
-        isLoading={isProcessing || isLoadingPersistedState}
-        message={isLoadingPersistedState ? "Loading Retagging data..." : processingStatus}
+        isLoading={isProcessing}
+        message={processingStatus}
       />
 
       {(error || shopifySyncError) && (
@@ -468,7 +468,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       {hasProcessed && result?.warnings.length ? (
         <Alert>
           <AlertTitle>Processing warnings</AlertTitle>
-          <div className="mt-2 space-y-1 text-sm text-gray-700">
+          <div className="mt-2 space-y-1 text-base text-slate-700">
             {result.warnings.map((warning) => (
               <div key={warning}>{warning}</div>
             ))}
@@ -476,8 +476,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         </Alert>
       ) : null}
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="ops-surface rounded-[8px] p-5">
+        <div className="grid gap-4 md:grid-cols-2">
           <FileUploadSection
             title="Sales Performance Detail Breakdown CSV"
             onChange={(event) => handleFileChange(event, "salesPerformance")}
@@ -510,24 +510,24 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+      <section className="ops-surface rounded-[8px]">
+        <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-gray-500" />
+            <SlidersHorizontal className="h-4 w-4 text-slate-500" />
             <div>
-              <h3 className="text-base font-semibold text-gray-900">Decision Configuration</h3>
-              <p className="text-sm text-gray-500">Thresholds are configurable for the DE MVP.</p>
+              <h3 className="ops-title">Decision Configuration</h3>
+              <p className="ops-muted">Thresholds are configurable for the DE MVP.</p>
             </div>
           </div>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
             NMV is used as GMV proxy
           </span>
         </div>
 
         <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">SAR threshold</span>
-            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
+            <span className="text-base font-medium text-slate-700">SAR threshold</span>
+            <div className="mt-1 flex border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
               <input
                 type="number"
                 min={0}
@@ -535,18 +535,18 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                 step={1}
                 value={sarThreshold}
                 onChange={(event) => handleSarThresholdChange(Number(event.target.value))}
-                className="w-full rounded-l-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                className="w-full border-0 px-4 py-3 text-base text-slate-900 focus:outline-none"
               />
-              <span className="flex items-center rounded-r-lg border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+              <span className="flex items-center border-l border-slate-200 bg-slate-50 px-4 text-base text-slate-500">
                 %
               </span>
             </div>
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">NMV/GMV threshold</span>
-            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
-              <span className="flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+            <span className="text-base font-medium text-slate-700">NMV/GMV threshold</span>
+            <div className="mt-1 flex border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+              <span className="flex items-center border-r border-slate-200 bg-slate-50 px-4 text-base text-slate-500">
                 EUR
               </span>
               <input
@@ -555,25 +555,25 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                 step={100}
                 value={nmvThreshold}
                 onChange={(event) => handleNmvThresholdChange(Number(event.target.value))}
-                className="w-full rounded-r-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                className="w-full border-0 px-4 py-3 text-base text-slate-900 focus:outline-none"
               />
             </div>
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Current active season</span>
+            <span className="text-base font-medium text-slate-700">Current active season</span>
             <input
               type="text"
               value={currentSeasonCode}
               onChange={(event) => handleCurrentSeasonCodeChange(event.target.value)}
               placeholder="FS_26"
-              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="ops-input mt-1 w-full"
             />
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Required discount</span>
-            <div className="mt-1 flex rounded-lg border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-gray-900">
+            <span className="text-base font-medium text-slate-700">Required discount</span>
+            <div className="mt-1 flex border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
               <input
                 type="number"
                 min={0}
@@ -581,24 +581,24 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                 step={1}
                 value={requiredDiscountThreshold}
                 onChange={(event) => handleRequiredDiscountThresholdChange(Number(event.target.value))}
-                className="w-full rounded-l-lg border-0 px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                className="w-full border-0 px-4 py-3 text-base text-slate-900 focus:outline-none"
               />
-              <span className="flex items-center rounded-r-lg border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+              <span className="flex items-center border-l border-slate-200 bg-slate-50 px-4 text-base text-slate-500">
                 %
               </span>
             </div>
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="text-base text-slate-600">
             Current rules: SAR &gt;= {sarThreshold}%, NMV/GMV &gt;= EUR {nmvThreshold.toLocaleString()}, active season {currentSeasonCode || "not set"}, discount threshold {requiredDiscountThreshold}%.
           </div>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={resetFiles}
-              className="inline-flex items-center rounded-lg border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
+              className="ops-button-secondary"
             >
               Reset Files
             </button>
@@ -606,7 +606,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               <button
                 type="button"
                 onClick={clearTable}
-                className="inline-flex items-center rounded-lg border-2 border-red-200 bg-white px-5 py-2.5 text-sm font-medium text-red-700 transition-all hover:border-red-300 hover:bg-red-50"
+                className="ops-button-danger"
               >
                 Clear Table
               </button>
@@ -615,7 +615,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               type="button"
               onClick={processFiles}
               disabled={!requiredFilesPresent || isProcessing}
-              className="inline-flex items-center rounded-lg bg-black px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-gray-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-black disabled:hover:shadow-md"
+              className="ops-button-primary px-6"
             >
               {processButtonLabel}
             </button>
@@ -624,12 +624,12 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
       </section>
 
       {hasProcessed && (
-      <section ref={resultsRef} className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-5 py-4">
+      <section ref={resultsRef} className="ops-surface rounded-[8px]">
+        <div className="ops-section-header">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-semibold text-gray-900">Retagging Decision Export</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <h3 className="ops-title">Retagging Decision Export</h3>
+              <p className="ops-muted mt-1">
                 {rows.length.toLocaleString()} DE decision rows generated from the uploaded Zalando and Shopify files.
               </p>
             </div>
@@ -643,7 +643,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               <button
                 type="button"
                 disabled
-                className="inline-flex items-center rounded-lg border-2 border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-400 disabled:cursor-not-allowed"
+                className="ops-button-secondary text-slate-400 disabled:cursor-not-allowed"
               >
                 Export Retagging Decision
               </button>
@@ -651,35 +651,35 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           </div>
         </div>
 
-        <div className="grid gap-3 border-b border-gray-200 bg-gray-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-5">
           {summaryCards.map((card) => (
-            <div key={card.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
-              <div className="text-sm font-medium uppercase tracking-wide text-gray-500">{card.label}</div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
+            <div key={card.label} className="ops-summary-card rounded-[8px]">
+              <div className="ops-kicker">{card.label}</div>
+              <div className="mt-1 text-3xl font-semibold text-slate-950">
                 {card.value.toLocaleString()}
               </div>
             </div>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
           <label className="relative min-w-[260px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search SKU, EAN, or article name"
-              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="ops-input w-full pl-10 pr-4"
             />
           </label>
 
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-slate-400" />
             <select
               value={actionFilter}
               onChange={(event) => setActionFilter(event.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="ops-input"
             >
               <option value="all">All season recommendations</option>
               {([
@@ -697,7 +697,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           <select
             value={eligibilityFilter}
             onChange={(event) => setEligibilityFilter(event.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+            className="ops-input"
           >
             <option value="all">All eligibility</option>
             <option value="Yes">Basic eligible: Yes</option>
@@ -707,12 +707,12 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             <option value="Unknown / missing data">Unknown / missing data</option>
           </select>
 
-          <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+          <label className="ops-button-secondary">
             <input
               type="checkbox"
               checked={showMissingOnly}
               onChange={(event) => setShowMissingOnly(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+              className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-900"
             />
             Missing data only
           </label>
@@ -730,27 +730,26 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
           onPointerCancel={stopTableDrag}
           onPointerLeave={stopTableDrag}
         >
-          <table className="w-full min-w-[2500px] border-collapse">
-            <thead className="sticky top-0 z-20 bg-white shadow-sm">
-              <tr className="border-b border-gray-200 bg-gray-50">
+          <table className="ops-table min-w-[2500px]">
+            <thead>
+              <tr>
                 {columns.map((column) => (
                   <th
                     key={column}
-                    className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium uppercase text-gray-500"
                   >
                     {column}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {paginatedItems.length > 0 ? (
                 paginatedItems.map((row, index) => (
-                  <tr key={`${row.SKU}-${row.EAN}-${index}`} className="hover:bg-gray-50">
+                  <tr key={`${row.SKU}-${row.EAN}-${index}`}>
                     {columns.map((column) => (
                       <td
                         key={column}
-                        className={`px-4 py-3 text-sm text-gray-900 ${
+                        className={`${
                           numericColumns.has(column) ? "text-right tabular-nums" : ""
                         } ${
                           column === "Operational note" || column === "Reason / explanation" || column === "Missing data / manual review note"
@@ -767,10 +766,10 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center">
                     <div className="mx-auto max-w-lg">
-                      <div className="text-sm font-semibold text-gray-900">
+                      <div className="text-base font-semibold text-slate-950">
                         No matching decision rows
                       </div>
-                      <div className="mt-1 text-sm text-gray-500">
+                      <div className="mt-1 text-base text-slate-500">
                         Adjust the search and filters, or confirm that the uploaded files contain DE rows.
                       </div>
                     </div>
@@ -780,8 +779,8 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
-          <div className="text-sm text-gray-500">
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="text-base text-slate-500">
             Showing {filteredRows.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredRows.length)} of{" "}
             {filteredRows.length.toLocaleString()} entries

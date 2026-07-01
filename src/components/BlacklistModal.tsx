@@ -100,18 +100,18 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
         </div>
         <div className="space-y-5 px-6 py-6">
           {description && (
-            <p className="text-sm text-gray-600">{description}</p>
+            <p className="text-base text-gray-600">{description}</p>
           )}
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               placeholder="Enter SKU or EAN"
-              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-black focus:outline-none transition-colors bg-white"
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-base transition-colors focus:border-black focus:outline-none"
             />
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-lg bg-black px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-gray-800"
+              className="inline-flex items-center justify-center rounded-lg bg-black px-5 py-3 text-base font-semibold text-white transition-all hover:bg-gray-800"
             >
               Add
             </button>
@@ -122,23 +122,23 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
               onChange={(event) => setBulkValue(event.target.value)}
               placeholder="Paste SKUs or EANs (one per line, comma, or tab separated)"
               rows={4}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-black focus:outline-none transition-colors bg-white"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base transition-colors focus:border-black focus:outline-none"
             />
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-500">
+              <span className="text-base text-gray-500">
                 Existing entries and duplicates are ignored automatically.
               </span>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleClearAll}
-                  className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-white bg-gray-50"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-base font-medium text-gray-700 transition-all hover:bg-white"
                 >
                   Clear All
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-gray-800"
+                  className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2.5 text-base font-semibold text-white transition-all hover:bg-gray-800"
                 >
                   Add All
                 </button>
@@ -147,12 +147,12 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
           </form>
           <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white">
             {sortedItems.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-gray-500">No SKUs are currently blacklisted.</p>
+              <p className="px-4 py-8 text-center text-base text-gray-500">No SKUs are currently blacklisted.</p>
             ) : (
               <ul className="divide-y divide-gray-200">
                 {sortedItems.map((sku) => (
-                  <li key={sku} className="flex items-center justify-between px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 transition-colors">
-                    <span className="font-mono text-sm font-medium">{sku}</span>
+                  <li key={sku} className="flex items-center justify-between px-4 py-3 text-base text-gray-800 transition-colors hover:bg-gray-50">
+                    <span className="font-mono text-base font-medium">{sku}</span>
                     <button
                       onClick={() => onRemove(sku)}
                       className="rounded-full p-1.5 text-red-500 transition-colors hover:bg-red-50"
@@ -169,7 +169,7 @@ export const BlacklistModal: React.FC<BlacklistModalProps> = ({
         <div className="flex justify-end px-6 py-5">
           <button
             onClick={onClose}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-white bg-gray-50"
+            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-5 py-3 text-base font-medium text-gray-700 transition-all hover:bg-white"
           >
             Close
           </button>

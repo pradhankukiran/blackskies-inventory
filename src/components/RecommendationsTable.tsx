@@ -65,9 +65,9 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
-        <div className="border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-3 px-4 py-3">
+      <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
+        <div className="border-b border-slate-200 bg-slate-50">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-5 py-4">
             <CoverageDaysSelector
               value={coverageDays}
               onChange={onCoverageDaysChange}
@@ -84,12 +84,12 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
               onChange={onTrendFactorChange}
             />
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-900">
+              <div className="text-base font-semibold text-slate-950">
                 {recommendations.length.toLocaleString()} recommendations
               </div>
-              <div className="mt-0.5 text-sm text-gray-500">
+              <div className="mt-0.5 text-base text-slate-500">
                 {coverageDays} days coverage · {timelineLabel} · Safety {safetyFactor}% · Demand {trendFactor}%
               </div>
             </div>
@@ -101,10 +101,10 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
           </div>
         </div>
         <div className="overflow-auto flex-1">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-white z-10">
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
                       <div className="flex items-center w-full">
@@ -113,7 +113,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                           value={searchEan}
                           onChange={(e) => setSearchEan(e.target.value)}
                           placeholder="Search EAN..."
-                          className="w-full px-2 py-1 text-sm border rounded-l focus:outline-none focus:ring-1 focus:ring-green-500"
+                          className="ops-input w-full"
                           autoFocus
                         />
                         <button
@@ -121,7 +121,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                             setIsSearching(false);
                             setSearchEan('');
                           }}
-                          className="px-2 py-1 border border-l-0 rounded-r hover:bg-gray-100"
+                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
                         >
                           <X className="w-4 h-4 text-gray-500" />
                         </button>
@@ -139,19 +139,19 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                     )}
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Partner Variant Size</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Article Name</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Status Description</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">ZFS Total</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Recommended Stock</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Sellable PF Stock</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Avg. Daily Sales</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Total Sales</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase">Avg. Return Rate (%)</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">Status Cluster</th>
+                <th>Partner Variant Size</th>
+                <th>Article Name</th>
+                <th>Status Description</th>
+                <th className="text-right">ZFS Total</th>
+                <th className="text-right">Recommended Stock</th>
+                <th className="text-right">Sellable PF Stock</th>
+                <th className="text-right">Avg. Daily Sales</th>
+                <th className="text-right">Total Sales</th>
+                <th className="text-right">Avg. Return Rate (%)</th>
+                <th>Status Cluster</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {paginatedItems.length > 0 ? (
                 paginatedItems.map((rec, index) => {
                   const stockInfo = stockByEAN.get(rec.ean);
@@ -161,25 +161,25 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                   const availableStock = stockInfo?.["Available Stock"] || 0;
 
                   return (
-                  <tr key={`${rec.ean}-${index}`} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{rec.ean}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{rec.partnerVariantSize || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{rec.articleName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Description"] || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{zfsTotal}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-semibold">
+                  <tr key={`${rec.ean}-${index}`}>
+                    <td>{rec.ean}</td>
+                    <td>{rec.partnerVariantSize || 'N/A'}</td>
+                    <td>{rec.articleName}</td>
+                    <td>{stockInfo?.["Status Description"] || 'N/A'}</td>
+                    <td className="text-right tabular-nums">{zfsTotal}</td>
+                    <td className="text-right font-semibold tabular-nums">
                       {rec.recommendedStock !== undefined ? rec.recommendedStock : 'N/A'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{availableStock}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageDailySales)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{rec.totalSales || 0}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(rec.averageReturnRate)}%</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{stockInfo?.["Status Cluster"] || 'N/A'}</td>
+                    <td className="text-right tabular-nums">{availableStock}</td>
+                    <td className="text-right tabular-nums">{formatNumber(rec.averageDailySales)}</td>
+                    <td className="text-right tabular-nums">{rec.totalSales || 0}</td>
+                    <td className="text-right tabular-nums">{formatNumber(rec.averageReturnRate)}%</td>
+                    <td>{stockInfo?.["Status Cluster"] || 'N/A'}</td>
                   </tr>
                 )})
               ) : (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
                     No recommendations available with the current selection
                   </td>
                 </tr>
@@ -187,8 +187,8 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-          <div className="text-sm text-gray-500">
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="text-base text-slate-500">
             Showing {filteredRecommendations.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredRecommendations.length)} of{" "}
             {filteredRecommendations.length} entries

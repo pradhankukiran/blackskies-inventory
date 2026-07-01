@@ -184,15 +184,15 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
             <FactorAdjuster label="Safety Factor" value={safetyFactor} onChange={handleSafetyFactorChange} />
             <FactorAdjuster label="Trend Factor" value={trendFactor} onChange={handleTrendFactorChange} />
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="text-sm text-gray-700">
+            <div className="text-base text-slate-700">
               {filteredData.length} items with {coverageDays} days coverage
             </div>
             <ExportButton
@@ -203,10 +203,10 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
           </div>
         </div>
         <div className="overflow-auto flex-1">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-white z-10">
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
                       <div className="flex items-center w-full">
@@ -215,7 +215,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                           value={searchSku}
                           onChange={(e) => setSearchSku(e.target.value)}
                           placeholder="Search SKU/ASIN..."
-                          className="w-full px-2 py-1 text-sm border rounded-l focus:outline-none focus:ring-1 focus:ring-green-500"
+                          className="ops-input w-full"
                           autoFocus
                         />
                         <button
@@ -223,7 +223,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                             setIsSearching(false);
                             setSearchSku('');
                           }}
-                          className="px-2 py-1 border border-l-0 rounded-r hover:bg-gray-100"
+                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
                         >
                           <X className="w-4 h-4 text-gray-500" />
                         </button>
@@ -244,7 +244,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                 {DISPLAY_COLUMNS.slice(1).map((column) => (
                   <th
                     key={column.key}
-                    className={`px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase ${
+                    className={`${
                       column.key === "FBA Quantity" ? "text-right" : ""
                     }`}
                   >
@@ -253,37 +253,37 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {paginatedItems.length > 0 ? (
                 paginatedItems.map((item, index) => (
-                  <tr key={`${item.SKU}-${index}`} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.SKU}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.ASIN}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                  <tr key={`${item.SKU}-${index}`}>
+                    <td>{item.SKU}</td>
+                    <td>{item.ASIN}</td>
+                    <td className="text-right font-medium tabular-nums">
                       {item["FBA Quantity"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["Units In Transit"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["Reserved Units"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["FBA Quantity"] + item["Units In Transit"] + item["Reserved Units"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["Internal Stock"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-semibold tabular-nums">
                       {item["Recommended Quantity"]}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["Avg. Daily Sales"]?.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {Math.round(item["Avg. Total Sales (30 Days)"] || 0)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="text-right font-medium tabular-nums">
                       {item["Avg. Return Rate (%)"]?.toFixed(2)}
                     </td>
                   </tr>
@@ -292,7 +292,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
                 <tr>
                   <td
                     colSpan={DISPLAY_COLUMNS.length + 1}
-                    className="px-4 py-8 text-center text-sm text-gray-500"
+                    className="px-4 py-8 text-center text-base text-slate-500"
                   >
                     No data available
                   </td>
@@ -301,8 +301,8 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-          <div className="text-sm text-gray-500">
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="text-base text-slate-500">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
             {filteredData.length} entries

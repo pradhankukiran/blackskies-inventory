@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Upload, Download } from "lucide-react";
+import { X, Upload, Download, CheckCircle2 } from "lucide-react";
 
 interface FileUploadSectionProps {
   title: string;
@@ -88,14 +88,20 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
-      <div className="px-4 py-3">
-        <div className="flex items-center justify-between mb-3 gap-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+    <div className="ops-surface rounded-[8px] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
+      <div className="px-5 py-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="truncate text-base font-semibold text-slate-950">{title}</h3>
+            {files.length > 0 && !syncedFromShopify && (
+              <span className="inline-flex items-center gap-1 rounded-[999px] bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-700">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                Uploaded
+              </span>
+            )}
             {syncedFromShopify && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-sm font-medium text-emerald-800 bg-emerald-100 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-flex items-center gap-1 rounded-[999px] bg-emerald-50 px-2 py-0.5 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 from Shopify
               </span>
             )}
@@ -105,11 +111,11 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
         <div className="flex justify-center items-center w-full">
           <label
-            className={`flex flex-col items-center justify-center w-full h-32 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+            className={`flex h-36 w-full cursor-pointer flex-col items-center justify-center rounded-[8px] border transition-all duration-200 ${
               isDragging
-                ? "border-black bg-gray-50 border-solid"
-                : "border-gray-200 bg-gray-50 border-dashed"
-            } hover:bg-gray-100 hover:border-gray-300`}
+                ? "border-slate-950 bg-slate-50 border-solid"
+                : "border-slate-200 bg-slate-50/80 border-dashed"
+            } hover:border-slate-300 hover:bg-slate-100/70`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -117,13 +123,14 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           >
             <div className="flex flex-col items-center justify-center">
               <Upload
-                className={`w-9 h-9 mb-2 transition-colors duration-200 ${
-                  isDragging ? "text-black" : "text-gray-400"
+                className={`mb-3 h-9 w-9 transition-colors duration-200 ${
+                  isDragging ? "text-slate-950" : "text-slate-400"
                 }`}
               />
-              <p className="px-2 text-center text-sm text-gray-600">
-                <span className="font-semibold text-gray-900">Click to upload</span> or drag and drop
+              <p className="px-2 text-center text-base text-slate-600">
+                <span className="font-semibold text-slate-950">Click to upload</span> or drag and drop
               </p>
+              <p className="mt-1 text-sm text-slate-400">CSV, TSV, TXT, XLSX</p>
             </div>
             <input
               type="file"
@@ -136,35 +143,35 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         </div>
 
         {files.length > 0 && (
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-4 space-y-2">
             {files.map((file: File, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between px-3 py-2.5 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors duration-200"
+                className="flex items-center justify-between rounded-[6px] border border-slate-200 bg-slate-50 px-4 py-3 transition-colors duration-200 hover:bg-slate-100"
               >
-                <div className="flex items-center space-x-2 min-w-0">
-                  <span className="font-medium text-gray-900 truncate text-sm">
+                <div className="flex min-w-0 items-center space-x-2">
+                  <span className="truncate text-base font-medium text-slate-900">
                     {file.name}
                   </span>
-                  <span className="text-gray-500 text-sm flex-shrink-0">
+                  <span className="flex-shrink-0 text-base text-slate-500">
                     ({(file.size / 1024).toFixed(1)} KB)
                   </span>
                   {syncedFromShopify && (
                     <button
                       onClick={() => handleDownload(file)}
-                      className="p-1 hover:bg-gray-200 transition-colors flex-shrink-0"
+                      className="flex-shrink-0 rounded-[4px] p-1 transition-colors hover:bg-slate-200"
                       title="Download CSV"
                     >
-                      <Download size={16} className="text-gray-600" />
+                      <Download size={16} className="text-slate-600" />
                     </button>
                   )}
                 </div>
                 <button
                   onClick={() => onRemove(file.name)}
-                  className="p-1.5 hover:bg-gray-200 transition-colors flex-shrink-0 ml-2"
+                  className="ml-2 flex-shrink-0 rounded-[4px] p-1.5 transition-colors hover:bg-slate-200"
                   title="Remove"
                 >
-                  <X size={16} className="text-gray-600" />
+                  <X size={16} className="text-slate-600" />
                 </button>
               </div>
             ))}

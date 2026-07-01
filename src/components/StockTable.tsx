@@ -54,19 +54,19 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <div className="flex justify-end mb-4">
+      <div className="mb-4 flex justify-end">
         <ExportButton
           data={dataWithTotal}
           label="Export ZFS Stock Overview"
           filename="stock-data"
         />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
+      <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
         <div className="overflow-auto flex-1">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-white z-10">
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
                       <div className="flex items-center w-full">
@@ -75,7 +75,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
                           value={searchEan}
                           onChange={(e) => setSearchEan(e.target.value)}
                           placeholder="Search EAN..."
-                          className="w-full px-2 py-1 text-sm border rounded-l focus:outline-none focus:ring-1 focus:ring-green-500"
+                          className="ops-input w-full"
                           autoFocus
                         />
                         <button
@@ -83,7 +83,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
                             setIsSearching(false);
                             setSearchEan('');
                           }}
-                          className="px-2 py-1 border border-l-0 rounded-r hover:bg-gray-100"
+                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
                         >
                           <X className="w-4 h-4 text-gray-500" />
                         </button>
@@ -95,28 +95,28 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
                           onClick={() => setIsSearching(true)}
                           className="hover:text-green-600 transition-colors"
                         >
-                          <Search className="w-4 h-4" />
+                            <Search className="h-4 w-4" />
                         </button>
                       </>
                     )}
                   </div>
                 </th>
                 {COLUMNS.slice(1).map((column) => (
-                  <th key={column.key} className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                  <th key={column.key}>
                     {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {paginatedItems.map((row, index) => (
                 <StockTableRow key={`${row.EAN}-${index}`} row={row} />
               ))}
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-          <div className="text-sm text-gray-500">
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="text-base text-slate-500">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
             {filteredData.length} entries

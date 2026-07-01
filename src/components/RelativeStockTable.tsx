@@ -61,7 +61,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <div className="flex justify-between items-center mb-4 px-1">
-        <div className="text-sm text-gray-700">
+        <div className="text-base text-gray-700">
           {filteredData.length} {filteredData.length === 1 ? "item" : "items"} found
         </div>
         <ExportButton
@@ -70,14 +70,13 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
           filename="relative-stock-data"
         />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-auto flex-1">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+          <table className="ops-table min-w-full">
+            <thead>
               <tr>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   <div className="flex items-center space-x-2">
                     {isSearching ? (
@@ -87,7 +86,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           placeholder="Search Article Number..."
-                          className="w-full px-2 py-1 text-sm border rounded-l focus:outline-none focus:ring-1 focus:ring-green-500"
+                          className="ops-input w-full"
                           autoFocus
                         />
                         <button
@@ -95,7 +94,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
                             setIsSearching(false);
                             setSearchTerm('');
                           }}
-                          className="px-2 py-1 border border-l-0 rounded-r hover:bg-gray-100"
+                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
                         >
                           <X className="w-4 h-4 text-gray-500" />
                         </button>
@@ -115,54 +114,51 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Warehouse
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Bin Location
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-center text-sm font-medium text-gray-500 uppercase tracking-wider"
+                  className="text-center"
                 >
                   Default Bin?
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Physical Stock
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {paginatedItems.length > 0 ? (
                  paginatedItems.map((item, index) => (
-                   <tr key={`${item.articleNumber}-${index}`} className="hover:bg-gray-50">
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                   <tr key={`${item.articleNumber}-${index}`}>
+                     <td className="whitespace-nowrap">
                        {item.articleNumber}
                      </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                     <td className="whitespace-nowrap text-slate-600">
                        {item.warehouse ?? 'N/A'}
                      </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                     <td className="whitespace-nowrap text-slate-600">
                        {item.binLocation ?? 'N/A'}
                      </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
+                     <td className="whitespace-nowrap text-center text-slate-600">
                        {item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null ? 'N/A' : (item.isDefaultBinLocation ? 'Yes' : 'No')}
                      </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                     <td className="whitespace-nowrap">
                        {-item.physicalStock}
                      </td>
                    </tr>
                 ))
                ) : (
                  <tr>
-                   <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                   <td colSpan={5} className="px-6 py-6 text-center text-base text-gray-500">
                      {searchTerm ? "No matching records found." : "No items found with stock > 0."}
                    </td>
                  </tr>
@@ -171,8 +167,8 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
           </table>
         </div>
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-            <div className="text-sm text-gray-500">
+          <div className="sticky bottom-0 flex items-center justify-between border-t border-gray-200 bg-gray-50 px-5 py-4">
+            <div className="text-base text-gray-500">
               Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
               {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
               {filteredData.length} entries
@@ -185,8 +181,8 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
           </div>
         )}
         {totalPages <= 1 && filteredData.length > 0 && (
-           <div className="flex items-center justify-end px-4 py-3 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-             <div className="text-sm text-gray-500">
+           <div className="sticky bottom-0 flex items-center justify-end border-t border-gray-200 bg-gray-50 px-5 py-4">
+             <div className="text-base text-gray-500">
                {filteredData.length} {filteredData.length === 1 ? "entry" : "entries"}
             </div>
           </div>
