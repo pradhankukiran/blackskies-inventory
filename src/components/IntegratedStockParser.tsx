@@ -345,29 +345,6 @@ const FBAContent: React.FC<FBAContentProps> = ({
             setProcessingStatus(`Processing Sellerboard Sales + Returns (${Math.round(progress)}%)...`);
           });
 
-          // Log sellerboard returns data for debugging
-          console.log("Parsed sellerboard returns data:", salesReturnsData);
-
-          // Log specific fields for debugging sales and returns values
-          if (salesReturnsData && salesReturnsData.length > 0) {
-            // Find an entry with SKU for better logging
-            const sampleItem = salesReturnsData.find(item => item.SKU) || salesReturnsData[0];
-            console.log("Sample returns data fields:", {
-              SKU: sampleItem.SKU,
-              // Sales fields
-              Totals: sampleItem.Totals,
-              EMPTY_22: sampleItem.__EMPTY_22,
-              undefined_22: sampleItem.undefined_22,
-              // Keys that might contain sales data
-              allKeys: Object.keys(sampleItem).filter(key =>
-                key.includes('22') || key.includes('Totals') || key.includes('Sales')
-              ),
-              // Return rate fields
-              EMPTY_24: sampleItem.__EMPTY_24,
-              undefined_24: sampleItem.undefined_24,
-              PercentRefunds: sampleItem["% Refunds"]
-            });
-          }
         }
 
         const normalizeSkuValue = (value: any) =>
@@ -1087,8 +1064,6 @@ const IntegratedStockParser: React.FC = () => {
       await clearFiles('fba');
 
       await resetFbaData(Array.from(fbaBlacklistRef.current));
-
-      console.log("FBA data cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing FBA data:", err);
     }
@@ -1104,7 +1079,6 @@ const IntegratedStockParser: React.FC = () => {
     // Clear only FBA data from storage while preserving files
     try {
       await clearFbaTablesData(Array.from(fbaBlacklistRef.current));
-      console.log("FBA tables cleared from IndexedDB");
     } catch (err) {
       console.error("Error clearing FBA tables:", err);
     }
@@ -1117,7 +1091,6 @@ const IntegratedStockParser: React.FC = () => {
       try {
         const storedFile = await getGenericData(RELATIVE_STOCK_FILE_KEY);
         if (storedFile instanceof File) {
-          console.log("Loaded persisted export file:", storedFile.name);
           setExportFile(storedFile);
         }
 
@@ -1136,7 +1109,6 @@ const IntegratedStockParser: React.FC = () => {
               (item.isDefaultBinLocation === undefined || item.isDefaultBinLocation === null || typeof item.isDefaultBinLocation === 'boolean')
           )
         ) {
-          console.log(`Loaded persisted relative stock table data with ${storedTableData.length} items.`);
           // Cast to the new type
           setRelativeStockData(storedTableData as {
              articleNumber: string;
@@ -1169,7 +1141,6 @@ const IntegratedStockParser: React.FC = () => {
       setExportError(null);
       try {
         await storeGenericData(RELATIVE_STOCK_FILE_KEY, file);
-        console.log("Stored export file in IndexedDB");
         await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
       } catch (err) {
         console.error("Error storing export file:", err);
@@ -1185,7 +1156,6 @@ const IntegratedStockParser: React.FC = () => {
     try {
       await clearGenericData(RELATIVE_STOCK_FILE_KEY);
       await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
-      console.log("Cleared persisted relative stock file and table data.");
     } catch (err) {
       console.error("Error clearing persisted relative stock data:", err);
     }
@@ -1200,10 +1170,7 @@ const IntegratedStockParser: React.FC = () => {
     setRelativeStockData([]);
 
     try {
-      const parsedData = await parseFile(exportFile, (progress) => {
-        // Optional: update status if needed, though it might be quick
-        console.log(`Parsing progress: ${progress}%`);
-      });
+      const parsedData = await parseFile(exportFile);
 
       if (!parsedData || parsedData.length === 0) {
         throw new Error("File is empty or could not be parsed.");
@@ -1234,8 +1201,6 @@ const IntegratedStockParser: React.FC = () => {
            const missing = [!skuColumn ? "SKU/Partner Variant Size" : null, !stockColumn ? "Recommended Stock/Quantity" : null].filter(Boolean).join(' and ');
            throw new Error(`Required columns (${missing}) not found in the file.`);
       }
-      console.log("Found required columns:", { skuColumn, stockColumn });
-
       // --- Process rows, handling SET SKUs and aggregating ---
       const processedItems: {
         articleNumber: string;
@@ -1325,21 +1290,16 @@ const IntegratedStockParser: React.FC = () => {
         });
       }
 
-      console.log(`Processed ${parsedData.length} rows into ${processedItems.length} items (incl. generated SKUs).`);
-
-
       if (processedItems.length === 0) {
         throw new Error("No valid data rows found after processing.");
       }
 
       // --- Sort by articleNumber ---
       processedItems.sort((a, b) => a.articleNumber.localeCompare(b.articleNumber));
-      console.log("Sorted data (first 10):", processedItems.slice(0, 10));
 
       // Set state and persist
       setRelativeStockData(processedItems);
       await storeGenericData(RELATIVE_STOCK_TABLE_KEY, processedItems);
-      console.log("Stored updated table data in IndexedDB");
 
     } catch (err) {
       console.error("Error processing export file:", err);
@@ -1362,7 +1322,6 @@ const IntegratedStockParser: React.FC = () => {
       // Clear the specific keys used by this feature
       await clearGenericData(RELATIVE_STOCK_FILE_KEY);
       await clearGenericData(RELATIVE_STOCK_TABLE_KEY);
-      console.log("Cleared persisted relative stock data on overlay close.");
        // Also reset the state now that persistence is cleared
        setExportFile(null);
        setRelativeStockData([]);

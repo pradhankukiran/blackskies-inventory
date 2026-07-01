@@ -92,10 +92,6 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
           // Mark this SKU as already processed for sales
           processedSalesSKUs[normalizedSku] = true;
 
-          // Debug log
-          if (sku === 'DE-10-F-S') { // Log for a specific SKU to avoid console spam
-            console.log(`Using __EMPTY_22/_22 value for ${sku}: ${salesValue}`);
-          }
         }
       }
 
@@ -106,10 +102,6 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
         // If we already have a value for this SKU, add to it (handling potential duplicates)
         salesMap[normalizedSku] = (salesMap[normalizedSku] || 0) + sales;
 
-        // Debug log
-        if (sku === 'DE-10-F-S') { // Log for a specific SKU to avoid console spam
-          console.log(`Using Totals value for ${sku}: ${sales}`);
-        }
       }
 
       // ALWAYS set the refund percentage if we have a valid value, regardless of sales source
@@ -225,19 +217,6 @@ export function processSellerboardStock(data: any[], salesReturnsData?: any[] | 
       "Marketplace": item.Marketplace || item.marketplace || ''
     };
   });
-
-  // Log some sample data for debugging purposes
-  // Find a few SKUs for debugging
-  const sampleSKUs = Object.keys(salesMap).slice(0, 3);
-  if (sampleSKUs.length > 0) {
-    console.log('Sample sales data (30 days total / 30 = daily avg):',
-      sampleSKUs.map(sku => ({
-        SKU: sku,
-        TotalSales: salesMap[sku],
-        AvgDailySales: salesMap[sku] / 30
-      }))
-    );
-  }
 
   return results;
 }

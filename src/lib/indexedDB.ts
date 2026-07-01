@@ -153,20 +153,6 @@ export const storeFiles = async (files: FileState): Promise<void> => {
   // Determine which key to use based on storeType
   const storageKey = files.storeType === 'fba' ? FBA_FILES_KEY : ZFS_FILES_KEY;
   
-  console.log(`Storing ${files.storeType} files with key: ${storageKey}`);
-  console.log("Files being stored:", {
-    hasInternal: !!files.internal,
-    hasFba: !!files.fba,
-    zfsCount: files.zfs.length,
-    zfsShipmentsCount: files.zfsShipments.length,
-    zfsShipmentsReceivedCount: files.zfsShipmentsReceived.length,
-    hasSkuEanMapper: !!files.skuEanMapper,
-    hasZfsSales: !!files.zfsSales,
-    hasSellerboardExport: !!files.sellerboardExport,
-    hasSellerboardReturns: !!files.sellerboardReturns,
-    hasFbaSales: !!files.fbaSales,
-  });
-
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(FILES_STORE, 'readwrite');
     const store = transaction.objectStore(FILES_STORE);
@@ -174,7 +160,6 @@ export const storeFiles = async (files: FileState): Promise<void> => {
     const request = store.put(serializedFiles, storageKey);
 
     request.onsuccess = () => {
-      console.log(`Files stored successfully in IndexedDB with key: ${storageKey}`);
       transaction.oncomplete = () => resolve();
     };
 
@@ -204,7 +189,6 @@ export const getFiles = async (storeType?: 'zfs' | 'fba'): Promise<FileState | n
     try {
       const files = await getFilesByKey(db, key);
       if (files) {
-        console.log(`Retrieved files with key: ${key}`);
         result = files;
         if (storeType || keysToTry.length === 1) {
           break;
@@ -227,25 +211,11 @@ const getFilesByKey = async (db: IDBDatabase, key: string): Promise<FileState | 
     request.onsuccess = () => {
       const serializedFiles = request.result;
       if (!serializedFiles) {
-        console.log(`No files found in IndexedDB with key: ${key}`);
         resolve(null);
         return;
       }
 
       const files = deserializeFiles(serializedFiles);
-      console.log(`Retrieved files with key ${key}, storeType:`, files.storeType);
-      console.log("Files retrieved:", {
-        hasInternal: !!files.internal,
-        hasFba: !!files.fba,
-        zfsCount: files.zfs.length,
-        zfsShipmentsCount: files.zfsShipments.length,
-        zfsShipmentsReceivedCount: files.zfsShipmentsReceived.length,
-        hasSkuEanMapper: !!files.skuEanMapper,
-        hasZfsSales: !!files.zfsSales,
-        hasSellerboardExport: !!files.sellerboardExport,
-        hasSellerboardReturns: !!files.sellerboardReturns,
-        hasFbaSales: !!files.fbaSales,
-      });
       resolve(files);
     };
 
@@ -277,7 +247,6 @@ const clearFilesByKey = async (db: IDBDatabase, key: string): Promise<void> => {
     const request = store.delete(key);
 
     request.onsuccess = () => {
-      console.log(`Files cleared with key: ${key}`);
       transaction.oncomplete = () => resolve();
     };
 
@@ -302,11 +271,9 @@ export const storeData = async (data: StoredData, storeType: 'zfs' | 'fba' = 'zf
     const transaction = db.transaction(DATA_STORE, 'readwrite');
     const store = transaction.objectStore(DATA_STORE);
     
-    console.log(`Storing data with key: ${dataKey}`);
     const request = store.put(data, dataKey);
 
     request.onsuccess = () => {
-      console.log(`Data stored successfully with key: ${dataKey}`);
       transaction.oncomplete = () => resolve();
     };
 
@@ -354,7 +321,6 @@ export const getStoredData = async (storeType?: 'zfs' | 'fba'): Promise<StoredDa
     try {
       const data = await getStoredDataByKey(db, key);
       if (data) {
-        console.log(`Retrieved data with key: ${key}`);
         result = data;
         if (storeType || keysToTry.length === 1) {
           break;
@@ -376,11 +342,6 @@ const getStoredDataByKey = async (db: IDBDatabase, key: string): Promise<StoredD
 
     request.onsuccess = () => {
       const data = request.result;
-      if (!data) {
-        console.log(`No data found with key: ${key}`);
-      } else {
-        console.log(`Data retrieved with key: ${key}`);
-      }
       resolve(data || null);
     };
 
@@ -412,7 +373,6 @@ const clearStoredDataByKey = async (db: IDBDatabase, key: string): Promise<void>
     const request = store.delete(key);
 
     request.onsuccess = () => {
-      console.log(`Stored data cleared successfully for key: ${key}`);
       transaction.oncomplete = () => resolve();
     };
 
@@ -446,13 +406,10 @@ export const storeGenericData = async (key: string, value: any): Promise<void> =
     try {
       const serialized = await serializeFile(value);
       dataToStore = { _isFile: true, data: serialized } as StoredFileWrapper;
-      console.log(`Serialized file for generic storage under key: ${key}`);
     } catch (error) {
       console.error(`Error serializing file for key ${key}:`, error);
       throw error; // Re-throw to indicate failure
     }
-  } else {
-     console.log(`Storing generic non-file data under key: ${key}`);
   }
 
   return new Promise((resolve, reject) => {
@@ -461,7 +418,6 @@ export const storeGenericData = async (key: string, value: any): Promise<void> =
     const request = store.put(dataToStore, key);
 
     request.onsuccess = () => {
-      console.log(`Generic data stored successfully for key: ${key}`);
       transaction.oncomplete = () => resolve();
     };
 
@@ -489,7 +445,6 @@ export const getGenericData = async (key: string): Promise<any | null> => {
     request.onsuccess = () => {
       const storedValue = request.result;
       if (!storedValue) {
-        console.log(`No generic data found for key: ${key}`);
         resolve(null);
         return;
       }
@@ -498,14 +453,12 @@ export const getGenericData = async (key: string): Promise<any | null> => {
       if (storedValue && typeof storedValue === 'object' && storedValue._isFile === true && storedValue.data) {
          try {
            const file = deserializeToFile(storedValue.data as SerializedFile);
-           console.log(`Deserialized file retrieved for generic key: ${key}`);
            resolve(file);
          } catch (error) {
             console.error(`Error deserializing file for key ${key}:`, error);
             reject(error); // Indicate failure
          }
       } else {
-        console.log(`Retrieved generic non-file data for key: ${key}`);
         resolve(storedValue);
       }
     };
