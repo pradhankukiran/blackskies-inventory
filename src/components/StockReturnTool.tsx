@@ -21,6 +21,7 @@ import {
 type StockReturnFileKey = "inventory" | "sales";
 
 const FORECAST_PERIOD_OPTIONS = [14, 30, 45, 60, 90];
+const SALES_HISTORY_PERIOD_OPTIONS = [14, 30, 45, 60, 90, 180, 365];
 const ITEMS_PER_PAGE = 25;
 
 const columns: Array<keyof StockReturnReviewRow> = [
@@ -49,6 +50,7 @@ export const StockReturnTool: React.FC = () => {
     inventory: null,
     sales: null,
   });
+  const [salesHistoryDays, setSalesHistoryDays] = useState(30);
   const [forecastPeriodDays, setForecastPeriodDays] = useState(30);
   const [safetyBufferPercent, setSafetyBufferPercent] = useState(20);
   const [storageFeePerUnitPerDay, setStorageFeePerUnitPerDay] = useState(0.0128);
@@ -71,6 +73,20 @@ export const StockReturnTool: React.FC = () => {
 
   const requiredFilesPresent = Boolean(files.inventory && files.sales);
   const rows = result?.rows || [];
+  const stockReturnExportRows = useMemo(() => (
+    rows
+      .filter((row) => row["Suggested return qty"] > 0)
+      .map((row) => ({
+        "EAN": row.EAN,
+        "SKU": row["Zalando article variant / SKU"],
+        "Article name": row["Article name"],
+        "Current ZFS stock": row["Current ZFS stock"],
+        "Units sold in selected period": row["Units sold in selected period"],
+        "Stock to keep": row["Stock to keep"],
+        "Estimated savings": row["Estimated savings"],
+        "return qty": row["Suggested return qty"],
+      }))
+  ), [rows]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +100,7 @@ export const StockReturnTool: React.FC = () => {
           inventory: persisted.inventoryFile,
           sales: persisted.salesFile,
         });
+        setSalesHistoryDays(persisted.salesHistoryDays);
         setForecastPeriodDays(persisted.forecastPeriodDays);
         setSafetyBufferPercent(persisted.safetyBufferPercent);
         setStorageFeePerUnitPerDay(persisted.storageFeePerUnitPerDay);
@@ -109,6 +126,7 @@ export const StockReturnTool: React.FC = () => {
   useEffect(() => {
     if (isLoadingPersistedState) return;
     saveStockReturnUiState({
+      salesHistoryDays,
       forecastPeriodDays,
       safetyBufferPercent,
       storageFeePerUnitPerDay,
@@ -124,6 +142,7 @@ export const StockReturnTool: React.FC = () => {
     hasProcessed,
     isLoadingPersistedState,
     result,
+    salesHistoryDays,
     safetyBufferPercent,
     searchTerm,
     showReturnOnly,
@@ -167,6 +186,7 @@ export const StockReturnTool: React.FC = () => {
 
   const resetFiles = async () => {
     setFiles({ inventory: null, sales: null });
+    setSalesHistoryDays(30);
     setForecastPeriodDays(30);
     setSafetyBufferPercent(20);
     setStorageFeePerUnitPerDay(0.0128);
@@ -217,6 +237,7 @@ export const StockReturnTool: React.FC = () => {
         salesRows,
         config: {
           market: "DE",
+          salesHistoryDays,
           forecastPeriodDays,
           safetyBufferPercent,
           storageFeePerUnitPerDay,
@@ -255,8 +276,8 @@ export const StockReturnTool: React.FC = () => {
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(filteredRows, ITEMS_PER_PAGE);
 
   const exportZalandoCsv = () => {
-    if (!result?.exportRows.length) return;
-    exportToCSV(result.exportRows, `zfs-stock-return-${new Date().toISOString().split("T")[0]}`);
+    if (!stockReturnExportRows.length) return;
+    exportToCSV(stockReturnExportRows, `zfs-stock-return-${new Date().toISOString().split("T")[0]}`);
   };
 
   const processButtonLabel = isProcessing
@@ -355,11 +376,27 @@ export const StockReturnTool: React.FC = () => {
             </div>
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
-            Export uses EAN + return qty only
+            Sales history and forecast period are separate
           </span>
         </div>
 
-        <div className="grid gap-4 p-5 md:grid-cols-3">
+        <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <label className="block">
+            <span className="text-base font-medium text-slate-700">Sales history period</span>
+            <select
+              value={salesHistoryDays}
+              onChange={(event) => {
+                setSalesHistoryDays(Number(event.target.value));
+                clearStaleResult();
+              }}
+              className="ops-input mt-1 w-full"
+            >
+              {SALES_HISTORY_PERIOD_OPTIONS.map((days) => (
+                <option key={days} value={days}>{days} days</option>
+              ))}
+            </select>
+          </label>
+
           <label className="block">
             <span className="text-base font-medium text-slate-700">Forecast period</span>
             <select
@@ -420,7 +457,7 @@ export const StockReturnTool: React.FC = () => {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-600">
-            Current rules: keep selected-period demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
+            Current rules: use {salesHistoryDays} days of sales history to forecast {forecastPeriodDays} days of demand, keep demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -464,11 +501,11 @@ export const StockReturnTool: React.FC = () => {
               <button
                 type="button"
                 onClick={exportZalandoCsv}
-                disabled={!result?.exportRows.length}
+                disabled={!stockReturnExportRows.length}
                 className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
               >
                 <Download className="h-4 w-4" />
-                Export Zalando CSV
+                Export Stock Return CSV
               </button>
             </div>
           </div>

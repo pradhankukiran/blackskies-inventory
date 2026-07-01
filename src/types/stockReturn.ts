@@ -1,5 +1,6 @@
 export interface StockReturnConfig {
   market: "DE";
+  salesHistoryDays: number;
   forecastPeriodDays: number;
   safetyBufferPercent: number;
   storageFeePerUnitPerDay: number;
@@ -19,6 +20,12 @@ export interface StockReturnReviewRow {
 
 export interface StockReturnExportRow {
   "EAN": string;
+  "SKU": string;
+  "Article name": string;
+  "Current ZFS stock": number;
+  "Units sold in selected period": number;
+  "Stock to keep": number;
+  "Estimated savings": number;
   "return qty": number;
 }
 

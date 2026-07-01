@@ -60,6 +60,7 @@ export interface RetaggingPersistedState extends RetaggingUiState {
 }
 
 export interface StockReturnUiState {
+  salesHistoryDays: number;
   forecastPeriodDays: number;
   safetyBufferPercent: number;
   storageFeePerUnitPerDay: number;
@@ -88,6 +89,7 @@ const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
 };
 
 const DEFAULT_STOCK_RETURN_STATE: StockReturnUiState = {
+  salesHistoryDays: 30,
   forecastPeriodDays: 30,
   safetyBufferPercent: 20,
   storageFeePerUnitPerDay: 0.0128,

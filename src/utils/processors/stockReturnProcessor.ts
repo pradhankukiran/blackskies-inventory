@@ -178,7 +178,7 @@ export const processStockReturns = ({
 
   inventoryByVariant.forEach((items, articleVariant) => {
     const unitsSold = salesByVariant.get(articleVariant)?.unitsSold ?? 0;
-    const averageDailySales = unitsSold / Math.max(config.forecastPeriodDays, 1);
+    const averageDailySales = unitsSold / Math.max(config.salesHistoryDays, 1);
     const expectedDemand = averageDailySales * config.forecastPeriodDays;
     const totalStockToKeep = Math.ceil(expectedDemand * (1 + config.safetyBufferPercent / 100));
     const keepByEan = distributeKeepStock(items, totalStockToKeep);
@@ -212,6 +212,12 @@ export const processStockReturns = ({
     .filter((row) => row["Suggested return qty"] > 0)
     .map((row) => ({
       "EAN": row.EAN,
+      "SKU": row["Zalando article variant / SKU"],
+      "Article name": row["Article name"],
+      "Current ZFS stock": row["Current ZFS stock"],
+      "Units sold in selected period": row["Units sold in selected period"],
+      "Stock to keep": row["Stock to keep"],
+      "Estimated savings": row["Estimated savings"],
       "return qty": row["Suggested return qty"],
     }));
 

@@ -3,6 +3,7 @@ import { processStockReturns } from "./stockReturnProcessor";
 
 const config = {
   market: "DE" as const,
+  salesHistoryDays: 30,
   forecastPeriodDays: 30,
   safetyBufferPercent: 20,
   storageFeePerUnitPerDay: 0.0128,
@@ -40,9 +41,31 @@ describe("processStockReturns", () => {
     expect(result.exportRows).toEqual([
       {
         EAN: "4251812300001",
+        SKU: "BFBTEST-Q11",
+        "Article name": "Test Cap",
+        "Current ZFS stock": 100,
+        "Units sold in selected period": 20,
+        "Stock to keep": 24,
+        "Estimated savings": 29.18,
         "return qty": 76,
       },
     ]);
+  });
+
+  it("uses sales history days separately from forecast period", () => {
+    const result = processStockReturns({
+      inventoryRows: [inventoryRow],
+      salesRows: [{ ...salesRow, "Sold articles": "90" }],
+      config: {
+        ...config,
+        salesHistoryDays: 90,
+        forecastPeriodDays: 30,
+      },
+    });
+
+    expect(result.rows[0]["Average daily sales"]).toBe(1);
+    expect(result.rows[0]["Stock to keep"]).toBe(36);
+    expect(result.rows[0]["Suggested return qty"]).toBe(64);
   });
 
   it("allocates article-level demand across EAN rows by stock share", () => {
