@@ -186,7 +186,13 @@ const operationalNotes = ({
   if (inventory && inventory.zfsStock <= 0 && shopifyStock > 0) notes.push("Replenish ZFS first");
   if (shopifyStock > 0 && shopifyStock <= 5) notes.push("Low internal stock");
   if (sales?.sar !== null && sales?.sar !== undefined && sales.sar < config.sarThreshold) notes.push("Low size availability");
-  if (sales?.returnRate !== null && sales?.returnRate !== undefined && sales.returnRate > 35) notes.push("High return rate");
+  if (sales?.returnRate !== null && sales?.returnRate !== undefined) {
+    if (sales.returnRate > 45) {
+      notes.push("High return rate");
+    } else if (sales.returnRate >= 35) {
+      notes.push("Medium return rate");
+    }
+  }
 
   const oldSeason = inventory ? isOldSeason(inventory.season || sales?.season || "", sales, config) : false;
   const alreadyBasic = alreadyBasicRecommendation(inventory?.classification || "");

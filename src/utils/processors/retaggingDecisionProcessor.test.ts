@@ -165,6 +165,45 @@ describe("processRetaggingDecisions", () => {
     expect(result.rows[0]["Operational note"]).not.toContain("Discount required");
   });
 
+  it("adds medium return rate note between 35% and 45%", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, "Estimated return rate": "36%" }],
+      inventoryRows: [inventoryRow],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Operational note"]).toContain("Medium return rate");
+    expect(result.rows[0]["Operational note"]).not.toContain("High return rate");
+  });
+
+  it("keeps 45% return rate as medium", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, "Estimated return rate": "45%" }],
+      inventoryRows: [inventoryRow],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Operational note"]).toContain("Medium return rate");
+    expect(result.rows[0]["Operational note"]).not.toContain("High return rate");
+  });
+
+  it("adds high return rate note only above 45%", () => {
+    const result = processRetaggingDecisions({
+      salesRows: [],
+      salesArticleLevelRows: [{ ...salesRow, "Estimated return rate": "46%" }],
+      inventoryRows: [inventoryRow],
+      shopifyStockRows: [{ SKU: "SKU-1", Lager: "8" }],
+      config,
+    });
+
+    expect(result.rows[0]["Operational note"]).toContain("High return rate");
+    expect(result.rows[0]["Operational note"]).not.toContain("Medium return rate");
+  });
+
   it("uses article-level sales metrics even when detail-breakdown has zero sales", () => {
     const result = processRetaggingDecisions({
       salesRows: [
