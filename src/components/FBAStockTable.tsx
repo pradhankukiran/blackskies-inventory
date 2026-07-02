@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { X, Search } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Download, Search } from "lucide-react";
 import { ProcessedSellerboardStock } from "@/types/processors";
 import { usePagination } from "@/hooks/usePagination";
-import { ExportButton } from "./ExportButton";
 import { Pagination } from "./ui/pagination";
 import { CoverageDaysSelector } from "./CoverageDaysSelector";
 import { FactorAdjuster } from "./FactorAdjuster";
+import { exportToCSV } from "@/utils/exporters/csvExporter";
+import { exportToXLSX } from "@/utils/exporters/xlsxExporter";
 import {
   loadFbaSettings,
   saveFbaSafetyFactor,
@@ -81,12 +82,18 @@ function recalcItem(
 export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
   const [searchSku, setSearchSku] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [coverageDays, setCoverageDays] = useState(14);
   const [safetyFactor, setSafetyFactor] = useState(0);
   const [trendFactor, setTrendFactor] = useState(0);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [displayData, setDisplayData] = useState<ProcessedSellerboardStock[]>(data);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableDragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    scrollLeft: 0,
+  });
+  const [isTableDragging, setIsTableDragging] = useState(false);
 
   // Re-apply factors whenever the data prop or any setting changes
   useEffect(() => {
@@ -178,6 +185,66 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
     setIsClient(true);
   }, [data]);
 
+  const exportRows = useMemo(() => (
+    displayData.map((item) => ({
+      "SKU": item.SKU,
+      "ASIN": item.ASIN,
+      "Product Name": item["Product Name"],
+      "FBA Quantity": item["FBA Quantity"],
+      "Units In Transit": item["Units In Transit"],
+      "Reserved Units": item["Reserved Units"],
+      "Total Stock": item["FBA Quantity"] + item["Units In Transit"] + item["Reserved Units"],
+      "Internal Stock": item["Internal Stock"],
+      "Recommended Quantity": item["Recommended Quantity"],
+      "Avg. Daily Sales": Number(item["Avg. Daily Sales"]?.toFixed(2) || 0),
+      "Avg. Total Sales (30 Days)": Math.round(item["Avg. Total Sales (30 Days)"] || 0),
+      "Avg. Return Rate (%)": Number(item["Avg. Return Rate (%)"]?.toFixed(2) || 0),
+      "Coverage Period (Days)": item["Coverage Period (Days)"] || coverageDays,
+    }))
+  ), [coverageDays, displayData]);
+
+  const exportFilename = `fba-stock-data-${new Date().toISOString().split("T")[0]}`;
+
+  const exportCsv = () => {
+    if (!exportRows.length) return;
+    exportToCSV(exportRows, exportFilename);
+  };
+
+  const exportXlsx = () => {
+    if (!exportRows.length) return;
+    exportToXLSX(exportRows, exportFilename);
+  };
+
+  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !tableScrollRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,a")) return;
+
+    tableDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      scrollLeft: tableScrollRef.current.scrollLeft,
+    };
+    setIsTableDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - tableDragRef.current.startX;
+    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+  };
+
+  const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging) return;
+    tableDragRef.current.isDragging = false;
+    setIsTableDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   if (!isClient) {
     return null;
   }
@@ -185,6 +252,37 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
   return (
     <div className="h-full flex flex-col">
       <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
+        <div className="ops-section-header">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="ops-title">FBA Stock Overview & Recommendation</h3>
+              <p className="ops-muted mt-1">
+                {filteredData.length.toLocaleString()} of {displayData.length.toLocaleString()} SKU rows.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!exportRows.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportXlsx}
+                disabled={!exportRows.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export Excel
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <CoverageDaysSelector value={coverageDays} onChange={handleCoverageDaysChange} />
@@ -195,53 +293,34 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
             <div className="text-base text-slate-700">
               {filteredData.length} items with {coverageDays} days coverage
             </div>
-            <ExportButton
-              data={displayData}
-              label="Export FBA Stock Overview & Recommendation"
-              filename="fba-stock-data"
-            />
+            <label className="relative min-w-[260px] flex-1 lg:max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchSku}
+                onChange={(event) => setSearchSku(event.target.value)}
+                placeholder="Search SKU or ASIN"
+                className="ops-input w-full pl-10 pr-4"
+              />
+            </label>
           </div>
         </div>
-        <div className="overflow-auto flex-1">
-          <table className="ops-table">
+        <div
+          ref={tableScrollRef}
+          className={`flex-1 overflow-auto ${
+            isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+          title="Drag horizontally to scroll the table"
+          onPointerDown={handleTablePointerDown}
+          onPointerMove={handleTablePointerMove}
+          onPointerUp={stopTableDrag}
+          onPointerCancel={stopTableDrag}
+          onPointerLeave={stopTableDrag}
+        >
+          <table className="ops-table min-w-[1700px]">
             <thead>
               <tr>
-                <th>
-                  <div className="flex items-center space-x-2">
-                    {isSearching ? (
-                      <div className="flex items-center w-full">
-                        <input
-                          type="text"
-                          value={searchSku}
-                          onChange={(e) => setSearchSku(e.target.value)}
-                          placeholder="Search SKU/ASIN..."
-                          className="ops-input w-full"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => {
-                            setIsSearching(false);
-                            setSearchSku('');
-                          }}
-                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
-                        >
-                          <X className="w-4 h-4 text-gray-500" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span>SKU/ASIN</span>
-                        <button
-                          onClick={() => setIsSearching(true)}
-                          className="hover:text-green-600 transition-colors"
-                        >
-                          <Search className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </th>
-                {DISPLAY_COLUMNS.slice(1).map((column) => (
+                {DISPLAY_COLUMNS.map((column) => (
                   <th
                     key={column.key}
                     className={`${
@@ -291,10 +370,15 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
               ) : (
                 <tr>
                   <td
-                    colSpan={DISPLAY_COLUMNS.length + 1}
-                    className="px-4 py-8 text-center text-base text-slate-500"
+                    colSpan={DISPLAY_COLUMNS.length}
+                    className="px-4 py-12 text-center"
                   >
-                    No data available
+                    <div className="mx-auto max-w-lg">
+                      <div className="text-base font-semibold text-slate-950">No matching FBA rows</div>
+                      <div className="mt-1 text-base text-slate-500">
+                        Adjust the search or confirm the uploaded files contain Sellerboard rows.
+                      </div>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -303,7 +387,7 @@ export const FBAStockTable: React.FC<FBAStockTableProps> = ({ data }) => {
         </div>
         <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-500">
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            Showing {filteredData.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
             {filteredData.length} entries
           </div>
