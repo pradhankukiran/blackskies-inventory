@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ArticleRecommendation } from '@/types/sales';
-import { ExportButton } from './ExportButton';
 import { formatNumber } from '@/utils/formatters/numberFormatter';
 import { Pagination } from './ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { IntegratedStockData } from '@/types/stock';
-import { Search, X } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { CoverageDaysSelector } from './CoverageDaysSelector';
 import { FactorAdjuster } from './FactorAdjuster';
 import { TimelineType } from '@/types/common';
+import { exportToCSV } from '@/utils/exporters/csvExporter';
+import { exportToXLSX } from '@/utils/exporters/xlsxExporter';
 
 interface RecommendationsTableProps {
   recommendations: ArticleRecommendation[];
@@ -36,7 +37,13 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
   onTrendFactorChange
 }) => {
   const [searchEan, setSearchEan] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableDragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    scrollLeft: 0,
+  });
+  const [isTableDragging, setIsTableDragging] = useState(false);
   const timelineLabel = timeline === '30days'
     ? '30 days sales timeline'
     : timeline === '6months'
@@ -61,11 +68,103 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     ITEMS_PER_PAGE
   );
 
+  const exportRows = useMemo(() => (
+    recommendations.map((item) => ({
+      "EAN": item.ean,
+      "Partner Variant Size": item.partnerVariantSize || 'N/A',
+      "Article Name": item.articleName,
+      "Status Description": stockByEAN.get(item.ean)?.["Status Description"] || 'N/A',
+      "ZFS Total": stockByEAN.get(item.ean)
+        ? (stockByEAN.get(item.ean)?.["ZFS Quantity"] || 0) + (stockByEAN.get(item.ean)?.["ZFS Pending Shipment"] || 0)
+        : 0,
+      "Recommended Stock": item.recommendedStock || 0,
+      "Sellable PF Stock": stockByEAN.get(item.ean)?.["Available Stock"] || 0,
+      "Avg. Daily Sales": Number(item.averageDailySales?.toFixed(2) || 0),
+      "Total Sales": item.totalSales || 0,
+      "Avg. Return Rate (%)": Number(item.averageReturnRate?.toFixed(2) || 0),
+      "Status Cluster": stockByEAN.get(item.ean)?.["Status Cluster"] || 'N/A',
+      "Coverage Days": item.recommendedDays || coverageDays,
+    }))
+  ), [coverageDays, recommendations, stockByEAN]);
+
+  const exportFilename = `stock-recommendations-${new Date().toISOString().split("T")[0]}`;
+
+  const exportCsv = () => {
+    if (!exportRows.length) return;
+    exportToCSV(exportRows, exportFilename);
+  };
+
+  const exportXlsx = () => {
+    if (!exportRows.length) return;
+    exportToXLSX(exportRows, exportFilename);
+  };
+
+  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !tableScrollRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,a")) return;
+
+    tableDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      scrollLeft: tableScrollRef.current.scrollLeft,
+    };
+    setIsTableDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - tableDragRef.current.startX;
+    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+  };
+
+  const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging) return;
+    tableDragRef.current.isDragging = false;
+    setIsTableDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   if (!recommendations.length) return null;
 
   return (
     <div className="h-full flex flex-col">
       <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
+        <div className="ops-section-header">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="ops-title">ZFS Stock Recommendation</h3>
+              <p className="ops-muted mt-1">
+                {filteredRecommendations.length.toLocaleString()} of {recommendations.length.toLocaleString()} recommendations.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!exportRows.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportXlsx}
+                disabled={!exportRows.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export Excel
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="border-b border-slate-200 bg-slate-50">
           <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-5 py-4">
             <CoverageDaysSelector
@@ -87,58 +186,40 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
             <div className="min-w-0">
               <div className="text-base font-semibold text-slate-950">
-                {recommendations.length.toLocaleString()} recommendations
+                {coverageDays} days coverage
               </div>
               <div className="mt-0.5 text-base text-slate-500">
-                {coverageDays} days coverage · {timelineLabel} · Safety {safetyFactor}% · Demand {trendFactor}%
+                {timelineLabel} · Safety {safetyFactor}% · Demand {trendFactor}%
               </div>
             </div>
-            <ExportButton
-              data={recommendations}
-              label="Export ZFS Stock Recommendation"
-              filename="stock-recommendations"
-            />
+            <label className="relative min-w-[260px] flex-1 lg:max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchEan}
+                onChange={(event) => setSearchEan(event.target.value)}
+                placeholder="Search EAN"
+                className="ops-input w-full pl-10 pr-4"
+              />
+            </label>
           </div>
         </div>
-        <div className="overflow-auto flex-1">
-          <table className="ops-table">
+        <div
+          ref={tableScrollRef}
+          className={`flex-1 overflow-auto ${
+            isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+          title="Drag horizontally to scroll the table"
+          onPointerDown={handleTablePointerDown}
+          onPointerMove={handleTablePointerMove}
+          onPointerUp={stopTableDrag}
+          onPointerCancel={stopTableDrag}
+          onPointerLeave={stopTableDrag}
+        >
+          <table className="ops-table min-w-[1800px]">
             <thead>
               <tr>
-                <th>
-                  <div className="flex items-center space-x-2">
-                    {isSearching ? (
-                      <div className="flex items-center w-full">
-                        <input
-                          type="text"
-                          value={searchEan}
-                          onChange={(e) => setSearchEan(e.target.value)}
-                          placeholder="Search EAN..."
-                          className="ops-input w-full"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => {
-                            setIsSearching(false);
-                            setSearchEan('');
-                          }}
-                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
-                        >
-                          <X className="w-4 h-4 text-gray-500" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span>EAN</span>
-                        <button
-                          onClick={() => setIsSearching(true)}
-                          className="hover:text-green-600 transition-colors"
-                        >
-                          <Search className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </th>
+                <th>EAN</th>
                 <th>Partner Variant Size</th>
                 <th>Article Name</th>
                 <th>Status Description</th>

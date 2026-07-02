@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { IntegratedStockData } from "@/types/stock";
 import { StockTableRow } from "./StockTableRow";
 import { Pagination } from "./ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
-import { ExportButton } from "./ExportButton";
-import { Search, X } from "lucide-react";
+import { Download, Search } from "lucide-react";
+import { exportToCSV } from "@/utils/exporters/csvExporter";
+import { exportToXLSX } from "@/utils/exporters/xlsxExporter";
 
 interface StockTableProps {
   data: IntegratedStockData[];
@@ -25,7 +26,13 @@ const COLUMNS = [
 export const StockTable: React.FC<StockTableProps> = ({ data }) => {
   const [isClient, setIsClient] = useState(false);
   const [searchEan, setSearchEan] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableDragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    scrollLeft: 0,
+  });
+  const [isTableDragging, setIsTableDragging] = useState(false);
 
   const dataWithTotal = data.map((item) => ({
     ...item,
@@ -48,60 +55,129 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
     setIsClient(true);
   }, []);
 
+  const exportFilename = `stock-data-${new Date().toISOString().split("T")[0]}`;
+
+  const exportCsv = () => {
+    exportToCSV(dataWithTotal.map((item) => ({
+      "EAN": item.EAN,
+      "Partner Variant Size": item.partner_variant_size || 'N/A',
+      "Article Name": item["Product Name"],
+      "Status Description": item["Status Description"],
+      "ZFS Total": item["ZFS Total"],
+      "Sellable PF Stock": item["Available Stock"],
+      "Status Cluster": item["Status Cluster"]
+    })), exportFilename);
+  };
+
+  const exportXlsx = () => {
+    exportToXLSX(dataWithTotal.map((item) => ({
+      "EAN": item.EAN,
+      "Partner Variant Size": item.partner_variant_size || 'N/A',
+      "Article Name": item["Product Name"],
+      "Status Description": item["Status Description"],
+      "ZFS Total": item["ZFS Total"],
+      "Sellable PF Stock": item["Available Stock"],
+      "Status Cluster": item["Status Cluster"]
+    })), exportFilename);
+  };
+
+  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !tableScrollRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,a")) return;
+
+    tableDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      scrollLeft: tableScrollRef.current.scrollLeft,
+    };
+    setIsTableDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - tableDragRef.current.startX;
+    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+  };
+
+  const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging) return;
+    tableDragRef.current.isDragging = false;
+    setIsTableDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   if (!isClient) {
     return null;
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      <div className="mb-4 flex justify-end">
-        <ExportButton
-          data={dataWithTotal}
-          label="Export ZFS Stock Overview"
-          filename="stock-data"
-        />
-      </div>
+    <div className="h-full flex flex-col">
       <div className="ops-surface flex min-h-0 flex-1 flex-col rounded-[8px]">
-        <div className="overflow-auto flex-1">
-          <table className="ops-table">
+        <div className="ops-section-header">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="ops-title">ZFS Stock Overview</h3>
+              <p className="ops-muted mt-1">
+                {filteredData.length.toLocaleString()} of {dataWithTotal.length.toLocaleString()} EAN rows.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!dataWithTotal.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportXlsx}
+                disabled={!dataWithTotal.length}
+                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                <Download className="h-4 w-4" />
+                Export Excel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
+          <label className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchEan}
+              onChange={(event) => setSearchEan(event.target.value)}
+              placeholder="Search EAN"
+              className="ops-input w-full pl-10 pr-4"
+            />
+          </label>
+        </div>
+
+        <div
+          ref={tableScrollRef}
+          className={`flex-1 overflow-auto ${
+            isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+          title="Drag horizontally to scroll the table"
+          onPointerDown={handleTablePointerDown}
+          onPointerMove={handleTablePointerMove}
+          onPointerUp={stopTableDrag}
+          onPointerCancel={stopTableDrag}
+          onPointerLeave={stopTableDrag}
+        >
+          <table className="ops-table min-w-[1150px]">
             <thead>
               <tr>
-                <th>
-                  <div className="flex items-center space-x-2">
-                    {isSearching ? (
-                      <div className="flex items-center w-full">
-                        <input
-                          type="text"
-                          value={searchEan}
-                          onChange={(e) => setSearchEan(e.target.value)}
-                          placeholder="Search EAN..."
-                          className="ops-input w-full"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => {
-                            setIsSearching(false);
-                            setSearchEan('');
-                          }}
-                          className="border border-l-0 border-slate-300 px-3 py-3 hover:bg-slate-100"
-                        >
-                          <X className="w-4 h-4 text-gray-500" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span>EAN</span>
-                        <button
-                          onClick={() => setIsSearching(true)}
-                          className="hover:text-green-600 transition-colors"
-                        >
-                            <Search className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </th>
-                {COLUMNS.slice(1).map((column) => (
+                {COLUMNS.map((column) => (
                   <th key={column.key}>
                     {column.label}
                   </th>
@@ -109,9 +185,22 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
               </tr>
             </thead>
             <tbody>
-              {paginatedItems.map((row, index) => (
-                <StockTableRow key={`${row.EAN}-${index}`} row={row} />
-              ))}
+              {paginatedItems.length > 0 ? (
+                paginatedItems.map((row, index) => (
+                  <StockTableRow key={`${row.EAN}-${index}`} row={row} />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={COLUMNS.length} className="px-4 py-12 text-center">
+                    <div className="mx-auto max-w-lg">
+                      <div className="text-base font-semibold text-slate-950">No matching stock rows</div>
+                      <div className="mt-1 text-base text-slate-500">
+                        Adjust the search or confirm the uploaded files contain ZFS rows.
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
