@@ -90,6 +90,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
   const [error, setError] = useState<string | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
   const previousShopifyFileSignatureRef = useRef<string>(getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile));
+  const hasInitializedShopifyFileRef = useRef(false);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const tableDragRef = useRef({
     isDragging: false,
@@ -119,8 +120,13 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
     if (isLoadingPersistedState || isShopifyStockLoading) return;
 
     const currentSignature = getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile);
-    if (previousShopifyFileSignatureRef.current === currentSignature) return;
+    if (!hasInitializedShopifyFileRef.current) {
+      previousShopifyFileSignatureRef.current = currentSignature;
+      hasInitializedShopifyFileRef.current = true;
+      return;
+    }
 
+    if (previousShopifyFileSignatureRef.current === currentSignature) return;
     previousShopifyFileSignatureRef.current = currentSignature;
     if (!hasProcessed && !result) return;
 
