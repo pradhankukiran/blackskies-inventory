@@ -50,6 +50,7 @@ export function useFileProcessing() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [blacklist, setBlacklist] = useState<string[]>([]);
+  const [filesLoaded, setFilesLoaded] = useState(false);
   const blacklistRef = useRef<string[]>([]);
   useEffect(() => {
     blacklistRef.current = blacklist;
@@ -108,9 +109,13 @@ export function useFileProcessing() {
 
   useEffect(() => {
     const loadSavedFiles = async () => {
-      const savedFiles = await getFiles('zfs');
-      if (savedFiles) {
-        setFiles(savedFiles);
+      try {
+        const savedFiles = await getFiles('zfs');
+        if (savedFiles) {
+          setFiles(savedFiles);
+        }
+      } finally {
+        setFilesLoaded(true);
       }
     };
     loadSavedFiles();
@@ -211,6 +216,18 @@ export function useFileProcessing() {
         ...prev,
         storeType: 'zfs',
         [type]: file,
+      };
+      persistFiles(next);
+      return next;
+    });
+  };
+
+  const setFilesPatch = (patch: Partial<FileState>) => {
+    setFiles((prev) => {
+      const next: FileState = {
+        ...prev,
+        ...patch,
+        storeType: 'zfs',
       };
       persistFiles(next);
       return next;
@@ -332,12 +349,14 @@ export function useFileProcessing() {
     handleFileChange,
     handleRemoveFile,
     setFile,
+    setFilesPatch,
     processFiles,
     setTimeline: handleTimelineChange,
     resetFiles,
     clearTables,
     resetAll,
     setError,
+    filesLoaded,
     blacklist,
     addToBlacklist: async (value: string) => {
       const normalized = value.trim().toUpperCase();

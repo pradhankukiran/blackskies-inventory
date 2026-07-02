@@ -664,12 +664,13 @@ const IntegratedStockParser: React.FC = () => {
     processingStatus,
     handleFileChange,
     handleRemoveFile,
-    setFile,
+    setFilesPatch,
     processFiles,
     setTimeline,
     resetFiles,
     clearTables,
     setError,
+    filesLoaded,
     blacklist: zfsBlacklist,
     addToBlacklist: addZfsToBlacklist,
     removeFromBlacklist: removeZfsFromBlacklist,
@@ -790,8 +791,10 @@ const IntegratedStockParser: React.FC = () => {
           /* ignore quota errors */
         }
       } else {
-        setFile('internal', internalFile);
-        setFile('skuEanMapper', mapperFile);
+        setFilesPatch({
+          internal: internalFile,
+          skuEanMapper: mapperFile,
+        });
         setZfsShopifySyncMeta(meta);
         try {
           localStorage.setItem(ZFS_SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
