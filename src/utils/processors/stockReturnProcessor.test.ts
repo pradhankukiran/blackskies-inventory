@@ -41,7 +41,7 @@ describe("processStockReturns", () => {
     expect(result.exportRows).toEqual([
       {
         EAN: "4251812300001",
-        SKU: "BFBTEST-Q11",
+        SKU: "SKU-1",
         "Article name": "Test Cap",
         "Current ZFS stock": 100,
         "Units sold in selected period": 20,
@@ -126,5 +126,21 @@ describe("processStockReturns", () => {
     expect(result.rows[0]["Units sold in selected period"]).toBe(10);
     expect(result.rows[0]["Stock to keep"]).toBe(12);
     expect(result.rows[0]["Suggested return qty"]).toBe(88);
+  });
+
+  it("uses Shopify SKU and article name when the EAN mapper matches", () => {
+    const result = processStockReturns({
+      inventoryRows: [inventoryRow],
+      salesRows: [salesRow],
+      shopifyStockRows: [{ SKU: "BS-CAP-203", Title: "Shopify Cap Name", Lager: "12" }],
+      shopifySkuEanRows: [{ SKU: "BS-CAP-203", EAN: "4251812300001" }],
+      config,
+    });
+
+    expect(result.rows[0].SKU).toBe("BS-CAP-203");
+    expect(result.rows[0]["Article name"]).toBe("Shopify Cap Name");
+    expect(result.rows[0]["Zalando article variant"]).toBe("BFBTEST-Q11");
+    expect(result.exportRows[0].SKU).toBe("BS-CAP-203");
+    expect(result.exportRows[0]["Article name"]).toBe("Shopify Cap Name");
   });
 });

@@ -27,6 +27,10 @@ import {
   resetFbaData,
   saveRetaggingShopifyStockFile,
   saveRetaggingShopifySkuEanFile,
+  loadStockReturnState,
+  saveStockReturnShopifyStockFile,
+  saveStockReturnShopifySkuEanFile,
+  clearStockReturnResult,
   saveFbaProcessedData,
   saveZfsCoverageDays,
   saveZfsSafetyFactor,
@@ -548,6 +552,7 @@ const RELATIVE_STOCK_TABLE_KEY = 'relativeStockTable';
 const LEGACY_SHOPIFY_SYNC_META_KEY = 'shopifySyncMeta';
 const ZFS_SHOPIFY_SYNC_META_KEY = 'zfsShopifySyncMeta';
 const RETAGGING_SHOPIFY_SYNC_META_KEY = 'retaggingShopifySyncMeta';
+const STOCK_RETURN_SHOPIFY_SYNC_META_KEY = 'stockReturnShopifySyncMeta';
 
 type ShopifySyncMeta = {
   lastSyncedAt: string;
@@ -584,7 +589,8 @@ const IntegratedStockParser: React.FC = () => {
   const location = useLocation();
   const onZfsRoute = location.pathname === '/zfs' || location.pathname === '/';
   const onRetaggingRoute = location.pathname === '/retagging';
-  const canSyncShopify = onZfsRoute || onRetaggingRoute;
+  const onStockReturnRoute = location.pathname === '/stock-return';
+  const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
   const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
   const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
@@ -622,6 +628,10 @@ const IntegratedStockParser: React.FC = () => {
   const [retaggingShopifySkuEanFile, setRetaggingShopifySkuEanFile] = useState<File | null>(null);
   const [isRetaggingShopifyStockLoading, setIsRetaggingShopifyStockLoading] = useState(true);
   const [retaggingShopifySyncError, setRetaggingShopifySyncError] = useState<string | null>(null);
+  const [stockReturnShopifyStockFile, setStockReturnShopifyStockFile] = useState<File | null>(null);
+  const [stockReturnShopifySkuEanFile, setStockReturnShopifySkuEanFile] = useState<File | null>(null);
+  const [isStockReturnShopifyStockLoading, setIsStockReturnShopifyStockLoading] = useState(true);
+  const [stockReturnShopifySyncError, setStockReturnShopifySyncError] = useState<string | null>(null);
   const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
   const fbaBlacklistRef = useRef<string[]>([]);
   useEffect(() => {
@@ -683,8 +693,17 @@ const IntegratedStockParser: React.FC = () => {
   const [retaggingShopifySyncMeta, setRetaggingShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
     readShopifySyncMeta(RETAGGING_SHOPIFY_SYNC_META_KEY)
   );
-  const activeShopifySyncMeta = onRetaggingRoute ? retaggingShopifySyncMeta : zfsShopifySyncMeta;
-  const shopifySyncStatusLabel = onRetaggingRoute
+  const [stockReturnShopifySyncMeta, setStockReturnShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
+    readShopifySyncMeta(STOCK_RETURN_SHOPIFY_SYNC_META_KEY)
+  );
+  const activeShopifySyncMeta = onStockReturnRoute
+    ? stockReturnShopifySyncMeta
+    : onRetaggingRoute
+      ? retaggingShopifySyncMeta
+      : zfsShopifySyncMeta;
+  const shopifySyncStatusLabel = onStockReturnRoute
+    ? "Fetching Shopify stock for Stock Return"
+    : onRetaggingRoute
     ? "Fetching Shopify stock for Retagging"
     : "Fetching Shopify stock for ZFS";
 
@@ -699,9 +718,16 @@ const IntegratedStockParser: React.FC = () => {
     localStorage.removeItem(RETAGGING_SHOPIFY_SYNC_META_KEY);
   };
 
+  const clearStockReturnShopifySyncMeta = () => {
+    setStockReturnShopifySyncMeta(null);
+    localStorage.removeItem(STOCK_RETURN_SHOPIFY_SYNC_META_KEY);
+  };
+
   const handleShopifySync = async () => {
     setIsShopifySyncing(true);
-    if (onRetaggingRoute) {
+    if (onStockReturnRoute) {
+      setStockReturnShopifySyncError(null);
+    } else if (onRetaggingRoute) {
       setRetaggingShopifySyncError(null);
     } else {
       setError(null);
@@ -745,7 +771,19 @@ const IntegratedStockParser: React.FC = () => {
         locationName: typeof data.locationName === 'string' ? data.locationName : 'Lager',
       };
 
-      if (onRetaggingRoute) {
+      if (onStockReturnRoute) {
+        setStockReturnShopifyStockFile(internalFile);
+        setStockReturnShopifySkuEanFile(mapperFile);
+        await saveStockReturnShopifyStockFile(internalFile);
+        await saveStockReturnShopifySkuEanFile(mapperFile);
+        await clearStockReturnResult();
+        setStockReturnShopifySyncMeta(meta);
+        try {
+          localStorage.setItem(STOCK_RETURN_SHOPIFY_SYNC_META_KEY, JSON.stringify(meta));
+        } catch {
+          /* ignore quota errors */
+        }
+      } else if (onRetaggingRoute) {
         setRetaggingShopifyStockFile(internalFile);
         setRetaggingShopifySkuEanFile(mapperFile);
         await saveRetaggingShopifyStockFile(internalFile);
@@ -768,7 +806,9 @@ const IntegratedStockParser: React.FC = () => {
         }
       }
     } catch (err) {
-      if (onRetaggingRoute) {
+      if (onStockReturnRoute) {
+        setStockReturnShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
+      } else if (onRetaggingRoute) {
         setRetaggingShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
       } else {
         setError(err instanceof Error ? err.message : 'Shopify sync failed');
@@ -979,6 +1019,32 @@ const IntegratedStockParser: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStockReturnShopifyStock = async () => {
+      try {
+        const savedStockReturnState = await loadStockReturnState();
+        if (!cancelled) {
+          setStockReturnShopifyStockFile(savedStockReturnState.shopifyStockFile);
+          setStockReturnShopifySkuEanFile(savedStockReturnState.shopifySkuEanFile);
+        }
+      } catch (err) {
+        console.error("Error loading Stock Return Shopify files:", err);
+      } finally {
+        if (!cancelled) {
+          setIsStockReturnShopifyStockLoading(false);
+        }
+      }
+    };
+
+    loadStockReturnShopifyStock();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleRetaggingShopifyStockFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1009,6 +1075,64 @@ const IntegratedStockParser: React.FC = () => {
     } catch (err) {
       console.error("Error removing Retagging Shopify stock file:", err);
       setRetaggingShopifySyncError("Could not remove Retagging Shopify stock file");
+    }
+  };
+
+  const handleStockReturnShopifyStockFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setStockReturnShopifyStockFile(file);
+    setStockReturnShopifySyncError(null);
+    clearStockReturnShopifySyncMeta();
+    try {
+      await saveStockReturnShopifyStockFile(file);
+      await clearStockReturnResult();
+    } catch (err) {
+      console.error("Error saving Stock Return Shopify stock file:", err);
+      setStockReturnShopifySyncError("Could not save Stock Return Shopify stock file");
+    }
+  };
+
+  const handleStockReturnShopifyStockFileRemove = async () => {
+    setStockReturnShopifyStockFile(null);
+    setStockReturnShopifySyncError(null);
+    clearStockReturnShopifySyncMeta();
+    try {
+      await saveStockReturnShopifyStockFile(null);
+      await clearStockReturnResult();
+    } catch (err) {
+      console.error("Error removing Stock Return Shopify stock file:", err);
+      setStockReturnShopifySyncError("Could not remove Stock Return Shopify stock file");
+    }
+  };
+
+  const handleStockReturnShopifySkuEanFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setStockReturnShopifySkuEanFile(file);
+    setStockReturnShopifySyncError(null);
+    clearStockReturnShopifySyncMeta();
+    try {
+      await saveStockReturnShopifySkuEanFile(file);
+      await clearStockReturnResult();
+    } catch (err) {
+      console.error("Error saving Stock Return Shopify SKU/EAN file:", err);
+      setStockReturnShopifySyncError("Could not save Stock Return Shopify SKU/EAN file");
+    }
+  };
+
+  const handleStockReturnShopifySkuEanFileRemove = async () => {
+    setStockReturnShopifySkuEanFile(null);
+    setStockReturnShopifySyncError(null);
+    clearStockReturnShopifySyncMeta();
+    try {
+      await saveStockReturnShopifySkuEanFile(null);
+      await clearStockReturnResult();
+    } catch (err) {
+      console.error("Error removing Stock Return Shopify SKU/EAN file:", err);
+      setStockReturnShopifySyncError("Could not remove Stock Return Shopify SKU/EAN file");
     }
   };
 
@@ -1443,7 +1567,7 @@ const IntegratedStockParser: React.FC = () => {
                 title={
                   canSyncShopify
                     ? "Pull Internal Stocks and SKU/EAN data directly from Shopify"
-                    : "Shopify sync is used by ZFS and Retagging"
+                    : "Shopify sync is used by ZFS, Retagging, and Stock Return"
                 }
               >
                 {isShopifySyncing && (
@@ -1604,7 +1728,18 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isRetaggingShopifyStockLoading}
               />
               } />
-              <Route path="/stock-return" element={<StockReturnTool />} />
+              <Route path="/stock-return" element={
+              <StockReturnTool
+                shopifyStockFile={stockReturnShopifyStockFile}
+                shopifySkuEanMapperFile={stockReturnShopifySkuEanFile}
+                onShopifyStockFileChange={handleStockReturnShopifyStockFileChange}
+                onShopifyStockFileRemove={handleStockReturnShopifyStockFileRemove}
+                onShopifySkuEanMapperFileChange={handleStockReturnShopifySkuEanFileChange}
+                onShopifySkuEanMapperFileRemove={handleStockReturnShopifySkuEanFileRemove}
+                shopifySyncError={stockReturnShopifySyncError}
+                isShopifyStockLoading={isStockReturnShopifyStockLoading}
+              />
+              } />
               <Route path="*" element={<Navigate to="/zfs" replace />} />
             </Routes>
           </div>

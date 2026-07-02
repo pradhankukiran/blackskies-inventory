@@ -20,14 +20,26 @@ import {
 
 type StockReturnFileKey = "inventory" | "sales";
 
+interface StockReturnToolProps {
+  shopifyStockFile: File | null;
+  shopifySkuEanMapperFile: File | null;
+  onShopifyStockFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onShopifyStockFileRemove: (fileName: string) => void;
+  onShopifySkuEanMapperFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onShopifySkuEanMapperFileRemove: (fileName: string) => void;
+  shopifySyncError?: string | null;
+  isShopifyStockLoading?: boolean;
+}
+
 const FORECAST_PERIOD_OPTIONS = [14, 30, 45, 60, 90];
 const SALES_HISTORY_PERIOD_OPTIONS = [14, 30, 45, 60, 90, 180, 365];
 const ITEMS_PER_PAGE = 25;
 
 const columns: Array<keyof StockReturnReviewRow> = [
   "EAN",
+  "SKU",
   "Article name",
-  "Zalando article variant / SKU",
+  "Zalando article variant",
   "Current ZFS stock",
   "Units sold in selected period",
   "Average daily sales",
@@ -45,7 +57,20 @@ const numericColumns = new Set<keyof StockReturnReviewRow>([
   "Estimated savings",
 ]);
 
-export const StockReturnTool: React.FC = () => {
+const getShopifyInputSignature = (stockFile: File | null, mapperFile: File | null) => (
+  `${stockFile?.name || ""}:${stockFile?.size || 0}:${mapperFile?.name || ""}:${mapperFile?.size || 0}`
+);
+
+export const StockReturnTool: React.FC<StockReturnToolProps> = ({
+  shopifyStockFile,
+  shopifySkuEanMapperFile,
+  onShopifyStockFileChange,
+  onShopifyStockFileRemove,
+  onShopifySkuEanMapperFileChange,
+  onShopifySkuEanMapperFileRemove,
+  shopifySyncError = null,
+  isShopifyStockLoading = false,
+}) => {
   const [files, setFiles] = useState<Record<StockReturnFileKey, File | null>>({
     inventory: null,
     sales: null,
@@ -63,6 +88,7 @@ export const StockReturnTool: React.FC = () => {
   const [result, setResult] = useState<StockReturnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
+  const previousShopifyFileSignatureRef = useRef<string>(getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile));
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const tableDragRef = useRef({
     isDragging: false,
@@ -78,7 +104,7 @@ export const StockReturnTool: React.FC = () => {
       .filter((row) => row["Suggested return qty"] > 0)
       .map((row) => ({
         "EAN": row.EAN,
-        "SKU": row["Zalando article variant / SKU"],
+        "SKU": row.SKU,
         "Article name": row["Article name"],
         "Current ZFS stock": row["Current ZFS stock"],
         "Units sold in selected period": row["Units sold in selected period"],
@@ -87,6 +113,22 @@ export const StockReturnTool: React.FC = () => {
         "return qty": row["Suggested return qty"],
       }))
   ), [rows]);
+
+  useEffect(() => {
+    if (isLoadingPersistedState || isShopifyStockLoading) return;
+
+    const currentSignature = getShopifyInputSignature(shopifyStockFile, shopifySkuEanMapperFile);
+    if (previousShopifyFileSignatureRef.current === currentSignature) return;
+
+    previousShopifyFileSignatureRef.current = currentSignature;
+    if (!hasProcessed && !result) return;
+
+    setHasProcessed(false);
+    setResult(null);
+    clearStockReturnResult().catch((err) => {
+      console.error("Error clearing stale Stock Return result:", err);
+    });
+  }, [hasProcessed, isLoadingPersistedState, isShopifyStockLoading, result, shopifySkuEanMapperFile, shopifyStockFile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +228,8 @@ export const StockReturnTool: React.FC = () => {
 
   const resetFiles = async () => {
     setFiles({ inventory: null, sales: null });
+    onShopifyStockFileRemove(shopifyStockFile?.name || "");
+    onShopifySkuEanMapperFileRemove(shopifySkuEanMapperFile?.name || "");
     setSalesHistoryDays(30);
     setForecastPeriodDays(30);
     setSafetyBufferPercent(20);
@@ -231,10 +275,24 @@ export const StockReturnTool: React.FC = () => {
       setProcessingStatus("Parsing Sales Performance file...");
       const salesRows = await parseFile(files.sales!);
 
+      let shopifyRows: any[] = [];
+      if (shopifyStockFile) {
+        setProcessingStatus("Parsing Shopify Internal Stock file...");
+        shopifyRows = await parseFile(shopifyStockFile);
+      }
+
+      let shopifySkuEanRows: any[] = [];
+      if (shopifySkuEanMapperFile) {
+        setProcessingStatus("Parsing Shopify SKU/EAN mapper file...");
+        shopifySkuEanRows = await parseFile(shopifySkuEanMapperFile);
+      }
+
       setProcessingStatus("Calculating return quantities...");
       const processed = processStockReturns({
         inventoryRows,
         salesRows,
+        shopifyStockRows: shopifyRows,
+        shopifySkuEanRows,
         config: {
           market: "DE",
           salesHistoryDays,
@@ -265,8 +323,9 @@ export const StockReturnTool: React.FC = () => {
     return rows.filter((row) => {
       const matchesSearch = !search || [
         row.EAN,
+        row.SKU,
         row["Article name"],
-        row["Zalando article variant / SKU"],
+        row["Zalando article variant"],
       ].some((value) => String(value).toLowerCase().includes(search));
       const matchesReturnFilter = !showReturnOnly || row["Suggested return qty"] > 0;
       return matchesSearch && matchesReturnFilter;
@@ -330,9 +389,9 @@ export const StockReturnTool: React.FC = () => {
         message={processingStatus}
       />
 
-      {error && (
+      {(error || shopifySyncError) && (
         <Alert variant="destructive">
-          <AlertTitle>{error}</AlertTitle>
+          <AlertTitle>{error || shopifySyncError}</AlertTitle>
         </Alert>
       )}
 
@@ -362,6 +421,22 @@ export const StockReturnTool: React.FC = () => {
             onRemove={(fileName) => handleRemoveFile(fileName, "sales")}
             files={files.sales ? [files.sales] : []}
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+          />
+          <FileUploadSection
+            title="Shopify Internal Stock"
+            onChange={onShopifyStockFileChange}
+            onRemove={onShopifyStockFileRemove}
+            files={shopifyStockFile ? [shopifyStockFile] : []}
+            acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+            syncedFromShopify={shopifyStockFile?.name === "shopify-internal-stocks.csv"}
+          />
+          <FileUploadSection
+            title="Shopify SKU/EAN Mapper"
+            onChange={onShopifySkuEanMapperFileChange}
+            onRemove={onShopifySkuEanMapperFileRemove}
+            files={shopifySkuEanMapperFile ? [shopifySkuEanMapperFile] : []}
+            acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+            syncedFromShopify={shopifySkuEanMapperFile?.name === "shopify-sku-ean.csv"}
           />
         </div>
       </section>
@@ -505,7 +580,7 @@ export const StockReturnTool: React.FC = () => {
                 className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
               >
                 <Download className="h-4 w-4" />
-                Export Stock Return CSV
+                Export CSV
               </button>
             </div>
           </div>
@@ -528,7 +603,7 @@ export const StockReturnTool: React.FC = () => {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search EAN, article name, or Zalando SKU"
+                placeholder="Search EAN, SKU, article name, or Zalando variant"
                 className="ops-input w-full pl-10 pr-4"
               />
             </label>

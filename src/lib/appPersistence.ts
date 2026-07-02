@@ -36,6 +36,8 @@ const RETAGGING_SHOPIFY_SKU_EAN_FILE_KEY = 'retaggingShopifySkuEanFile';
 const RETAGGING_STATE_KEY = 'retaggingDecisionState';
 const STOCK_RETURN_INVENTORY_FILE_KEY = 'stockReturnInventoryFile';
 const STOCK_RETURN_SALES_FILE_KEY = 'stockReturnSalesFile';
+const STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY = 'stockReturnShopifyStockFile';
+const STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY = 'stockReturnShopifySkuEanFile';
 const STOCK_RETURN_STATE_KEY = 'stockReturnState';
 
 export interface RetaggingUiState {
@@ -73,6 +75,8 @@ export interface StockReturnUiState {
 export interface StockReturnPersistedState extends StockReturnUiState {
   inventoryFile: File | null;
   salesFile: File | null;
+  shopifyStockFile: File | null;
+  shopifySkuEanFile: File | null;
 }
 
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
@@ -379,9 +383,11 @@ export const resetRetaggingState = async () => {
 };
 
 export const loadStockReturnState = async (): Promise<StockReturnPersistedState> => {
-  const [inventoryFile, salesFile, state] = await Promise.all([
+  const [inventoryFile, salesFile, shopifyStockFile, shopifySkuEanFile, state] = await Promise.all([
     getGenericData(STOCK_RETURN_INVENTORY_FILE_KEY),
     getGenericData(STOCK_RETURN_SALES_FILE_KEY),
+    getGenericData(STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY),
+    getGenericData(STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY),
     getGenericData(STOCK_RETURN_STATE_KEY),
   ]);
 
@@ -390,6 +396,8 @@ export const loadStockReturnState = async (): Promise<StockReturnPersistedState>
     ...(state || {}),
     inventoryFile: inventoryFile instanceof File ? inventoryFile : null,
     salesFile: salesFile instanceof File ? salesFile : null,
+    shopifyStockFile: shopifyStockFile instanceof File ? shopifyStockFile : null,
+    shopifySkuEanFile: shopifySkuEanFile instanceof File ? shopifySkuEanFile : null,
   };
 };
 
@@ -407,6 +415,22 @@ export const saveStockReturnSalesFile = async (file: File | null) => {
     return;
   }
   await clearGenericData(STOCK_RETURN_SALES_FILE_KEY);
+};
+
+export const saveStockReturnShopifyStockFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY);
+};
+
+export const saveStockReturnShopifySkuEanFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY);
 };
 
 export const saveStockReturnUiState = async (state: Partial<StockReturnUiState>) => {
@@ -434,6 +458,8 @@ export const resetStockReturnState = async () => {
   await Promise.all([
     clearGenericData(STOCK_RETURN_INVENTORY_FILE_KEY),
     clearGenericData(STOCK_RETURN_SALES_FILE_KEY),
+    clearGenericData(STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY),
+    clearGenericData(STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY),
     clearGenericData(STOCK_RETURN_STATE_KEY),
   ]);
 };

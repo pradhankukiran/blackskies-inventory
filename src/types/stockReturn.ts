@@ -8,8 +8,9 @@ export interface StockReturnConfig {
 
 export interface StockReturnReviewRow {
   "EAN": string;
+  "SKU": string;
   "Article name": string;
-  "Zalando article variant / SKU": string;
+  "Zalando article variant": string;
   "Current ZFS stock": number;
   "Units sold in selected period": number;
   "Average daily sales": number;

@@ -20,6 +20,16 @@ interface SalesItem {
   unitsSold: number;
 }
 
+interface ShopifyStockItem {
+  sku: string;
+  articleName: string;
+}
+
+interface ShopifySkuEanItem {
+  sku: string;
+  ean: string;
+}
+
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const getValue = (row: RawRow, aliases: string[]): string => {
@@ -121,6 +131,45 @@ const normalizeSalesRows = (rows: RawRow[], config: StockReturnConfig): SalesIte
   return Array.from(byVariant.values());
 };
 
+const normalizeShopifyRows = (rows: RawRow[]): ShopifyStockItem[] => {
+  return rows
+    .map((row) => ({
+      sku: normalizeId(firstNonEmpty(
+        getValue(row, ["SKU", "sku"]),
+        getValue(row, ["Article Number", "articleNumber"])
+      )),
+      articleName: firstNonEmpty(
+        getValue(row, ["Title", "title"]),
+        getValue(row, ["Product Name", "product_name"]),
+        getValue(row, ["Article name", "article_name"])
+      ),
+    }))
+    .filter((item) => item.sku);
+};
+
+const normalizeShopifySkuEanRows = (rows: RawRow[]): ShopifySkuEanItem[] => {
+  return rows
+    .map((row) => ({
+      sku: normalizeId(getValue(row, ["SKU", "sku", "Article Number"])),
+      ean: normalizeId(getValue(row, ["EAN", "ean", "barcode", "Barcode"])),
+    }))
+    .filter((item) => item.sku && item.ean);
+};
+
+const buildShopifyMaps = (stockRows: ShopifyStockItem[], skuEanRows: ShopifySkuEanItem[]) => {
+  const bySku = new Map(stockRows.map((item) => [item.sku, item]));
+  const byEan = new Map<string, ShopifyStockItem>();
+
+  skuEanRows.forEach((item) => {
+    const stock = bySku.get(item.sku);
+    if (stock) {
+      byEan.set(item.ean, stock);
+    }
+  });
+
+  return { bySku, byEan };
+};
+
 const distributeKeepStock = (items: InventoryItem[], totalStockToKeep: number) => {
   const totalStock = items.reduce((sum, item) => sum + item.zfsStock, 0);
   if (totalStock <= 0 || totalStockToKeep <= 0) {
@@ -154,19 +203,27 @@ const distributeKeepStock = (items: InventoryItem[], totalStockToKeep: number) =
 export const processStockReturns = ({
   inventoryRows,
   salesRows,
+  shopifyStockRows = [],
+  shopifySkuEanRows = [],
   config,
 }: {
   inventoryRows: RawRow[];
   salesRows: RawRow[];
+  shopifyStockRows?: RawRow[];
+  shopifySkuEanRows?: RawRow[];
   config: StockReturnConfig;
 }): StockReturnResult => {
   const warnings: string[] = [];
   const inventory = normalizeInventoryRows(inventoryRows, config);
   const sales = normalizeSalesRows(salesRows, config);
+  const shopifyStock = normalizeShopifyRows(shopifyStockRows);
+  const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
   const salesByVariant = new Map(sales.map((item) => [item.articleVariant, item]));
+  const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock, shopifySkuEan);
 
   if (!inventory.length) warnings.push("No DE ZFS inventory rows with sellable stock were found.");
   if (!sales.length) warnings.push("No matching DE sales rows were found in the Sales Performance file.");
+  if (!shopifyStock.length) warnings.push("No Shopify stock rows were provided. SKU and article name will fall back to ZFS Inventory data.");
 
   const inventoryByVariant = new Map<string, InventoryItem[]>();
   inventory.forEach((item) => {
@@ -184,14 +241,18 @@ export const processStockReturns = ({
     const keepByEan = distributeKeepStock(items, totalStockToKeep);
 
     items.forEach((item) => {
+      const shopifyMatch = (item.ean ? shopifyByEan.get(item.ean) : undefined) || (item.sku ? shopifyBySku.get(item.sku) : undefined);
       const stockToKeep = keepByEan.get(item.ean) ?? 0;
       const suggestedReturnQty = Math.max(0, Math.floor(item.zfsStock - stockToKeep));
       const estimatedSavings = suggestedReturnQty * config.storageFeePerUnitPerDay * config.forecastPeriodDays;
+      const displaySku = shopifyMatch?.sku || item.sku || item.articleVariant || "N/A";
+      const displayArticleName = shopifyMatch?.articleName || item.articleName || "N/A";
 
       rows.push({
         "EAN": item.ean,
-        "Article name": item.articleName || "N/A",
-        "Zalando article variant / SKU": item.articleVariant || item.sku || "N/A",
+        "SKU": displaySku,
+        "Article name": displayArticleName,
+        "Zalando article variant": item.articleVariant || "N/A",
         "Current ZFS stock": Math.round(item.zfsStock),
         "Units sold in selected period": Math.round(unitsSold),
         "Average daily sales": round4(averageDailySales),
@@ -212,7 +273,7 @@ export const processStockReturns = ({
     .filter((row) => row["Suggested return qty"] > 0)
     .map((row) => ({
       "EAN": row.EAN,
-      "SKU": row["Zalando article variant / SKU"],
+      "SKU": row.SKU,
       "Article name": row["Article name"],
       "Current ZFS stock": row["Current ZFS stock"],
       "Units sold in selected period": row["Units sold in selected period"],
