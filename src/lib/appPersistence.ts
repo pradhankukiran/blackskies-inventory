@@ -231,6 +231,10 @@ export const saveFbaTrendFactor = (trendFactor: number) => {
   writeNumberSetting(FBA_TREND_FACTOR_KEY, trendFactor);
 };
 
+export const clearFbaSettings = () => {
+  removeSettings(FBA_SAFETY_FACTOR_KEY, FBA_TREND_FACTOR_KEY);
+};
+
 export const saveFbaSellerboardStock = async (
   sellerboardStock: ProcessedSellerboardStock[],
   coverageDays: number

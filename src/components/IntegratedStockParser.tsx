@@ -20,6 +20,7 @@ import { storeFiles, getFiles, getStoredData, clearFiles, storeGenericData, getG
 import {
   clearRetaggingResult,
   clearZfsSettings,
+  clearFbaSettings,
   clearFbaTablesData,
   loadRetaggingState,
   loadFbaSettings,
@@ -1175,6 +1176,7 @@ const IntegratedStockParser: React.FC = () => {
     setFbaData({
       sellerboardStock: [],
     });
+    clearFbaSettings();
 
     // Clear only FBA data from IndexedDB
     try {
