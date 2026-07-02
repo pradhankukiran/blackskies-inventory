@@ -8,6 +8,7 @@ import { FileUploadSection } from "@/components/FileUploadSection";
 import { parseFile } from "@/utils/fileParser";
 import { processStockReturns } from "@/utils/processors/stockReturnProcessor";
 import { exportToCSV } from "@/utils/exporters/csvExporter";
+import { exportToXLSX } from "@/utils/exporters/xlsxExporter";
 import { StockReturnResult, StockReturnReviewRow } from "@/types/stockReturn";
 import {
   clearStockReturnResult,
@@ -339,6 +340,11 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
     exportToCSV(stockReturnExportRows, `zfs-stock-return-${new Date().toISOString().split("T")[0]}`);
   };
 
+  const exportZalandoXlsx = () => {
+    if (!stockReturnExportRows.length) return;
+    exportToXLSX(stockReturnExportRows, `zfs-stock-return-${new Date().toISOString().split("T")[0]}`);
+  };
+
   const processButtonLabel = isProcessing
     ? "Processing..."
     : !requiredFilesPresent
@@ -573,15 +579,26 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
                   {rows.length.toLocaleString()} DE EAN rows generated from uploaded ZFS inventory and sales files.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={exportZalandoCsv}
-                disabled={!stockReturnExportRows.length}
-                className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={exportZalandoCsv}
+                  disabled={!stockReturnExportRows.length}
+                  className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={exportZalandoXlsx}
+                  disabled={!stockReturnExportRows.length}
+                  className="ops-button-secondary disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
+              </div>
             </div>
           </div>
 
