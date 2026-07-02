@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Download,
   Filter,
   Search,
   SlidersHorizontal,
@@ -20,7 +21,8 @@ import {
   saveRetaggingUiState,
   saveRetaggingZfsInventoryFile,
 } from "@/lib/appPersistence";
-import { ExportButton } from "./ExportButton";
+import { exportToCSV } from "@/utils/exporters/csvExporter";
+import { exportToXLSX } from "@/utils/exporters/xlsxExporter";
 import { FileUploadSection } from "./FileUploadSection";
 
 interface RetaggingDecisionToolProps {
@@ -122,8 +124,20 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
   const processButtonLabel = isProcessing
     ? "Processing..."
     : !requiredFilesPresent
-    ? "Upload Required CSVs"
-    : "Process Retagging Decisions";
+      ? "Upload Required CSVs"
+      : "Process Retagging Decisions";
+
+  const exportFilename = `retagging-decision-export-${new Date().toISOString().split("T")[0]}`;
+
+  const exportRetaggingCsv = () => {
+    if (!rows.length) return;
+    exportToCSV(rows, exportFilename);
+  };
+
+  const exportRetaggingXlsx = () => {
+    if (!rows.length) return;
+    exportToXLSX(rows, exportFilename);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -634,11 +648,24 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
               </p>
             </div>
             {rows.length > 0 ? (
-              <ExportButton
-                data={rows}
-                label="Export Retagging Decision"
-                filename="retagging-decision-export"
-              />
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={exportRetaggingCsv}
+                  className="ops-button-secondary"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={exportRetaggingXlsx}
+                  className="ops-button-secondary"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
