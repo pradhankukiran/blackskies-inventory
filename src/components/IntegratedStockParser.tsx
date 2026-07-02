@@ -555,6 +555,14 @@ type ShopifySyncMeta = {
   locationName: string;
 };
 
+type ShopifySyncModule = 'zfs' | 'retagging' | 'stock-return';
+
+const shopifySyncModuleLabels: Record<ShopifySyncModule, string> = {
+  zfs: 'ZFS',
+  retagging: 'Retagging',
+  'stock-return': 'Stock Return',
+};
+
 const readShopifySyncMeta = (...keys: string[]): ShopifySyncMeta | null => {
   for (const key of keys) {
     try {
@@ -585,6 +593,13 @@ const IntegratedStockParser: React.FC = () => {
   const onRetaggingRoute = location.pathname === '/retagging';
   const onStockReturnRoute = location.pathname === '/stock-return';
   const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
+  const currentShopifySyncModule: ShopifySyncModule | null = onStockReturnRoute
+    ? 'stock-return'
+    : onRetaggingRoute
+      ? 'retagging'
+      : onZfsRoute
+        ? 'zfs'
+        : null;
   const { tabsRef, setShouldScroll, setHasProcessed } = useScrollToResults();
   const [showZfsBlacklistModal, setShowZfsBlacklistModal] = useState(false);
   const [showFbaBlacklistModal, setShowFbaBlacklistModal] = useState(false);
@@ -681,7 +696,8 @@ const IntegratedStockParser: React.FC = () => {
   const [zfsSafetyFactor, setZfsSafetyFactor] = useState(0);
   const [zfsTrendFactor, setZfsTrendFactor] = useState(0);
 
-  const [isShopifySyncing, setIsShopifySyncing] = useState(false);
+  const [syncingShopifyModule, setSyncingShopifyModule] = useState<ShopifySyncModule | null>(null);
+  const isShopifySyncing = syncingShopifyModule !== null;
   const [zfsShopifySyncMeta, setZfsShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
     readShopifySyncMeta(ZFS_SHOPIFY_SYNC_META_KEY, LEGACY_SHOPIFY_SYNC_META_KEY)
   );
@@ -696,11 +712,11 @@ const IntegratedStockParser: React.FC = () => {
     : onRetaggingRoute
       ? retaggingShopifySyncMeta
       : zfsShopifySyncMeta;
-  const shopifySyncStatusLabel = onStockReturnRoute
-    ? "Fetching Shopify stock for Stock Return"
-    : onRetaggingRoute
-    ? "Fetching Shopify stock for Retagging"
-    : "Fetching Shopify stock for ZFS";
+  const shopifySyncStatusLabel = syncingShopifyModule
+    ? `Fetching Shopify stock for ${shopifySyncModuleLabels[syncingShopifyModule]}`
+    : currentShopifySyncModule
+      ? `Fetching Shopify stock for ${shopifySyncModuleLabels[currentShopifySyncModule]}`
+      : "Fetching Shopify stock";
 
   const clearZfsShopifySyncMeta = () => {
     setZfsShopifySyncMeta(null);
@@ -718,11 +734,21 @@ const IntegratedStockParser: React.FC = () => {
     localStorage.removeItem(STOCK_RETURN_SHOPIFY_SYNC_META_KEY);
   };
 
+  useEffect(() => {
+    if (!filesLoaded || !zfsShopifySyncMeta) return;
+    if (!files.internal || !files.skuEanMapper) {
+      clearZfsShopifySyncMeta();
+    }
+  }, [files.internal, files.skuEanMapper, filesLoaded, zfsShopifySyncMeta]);
+
   const handleShopifySync = async () => {
-    setIsShopifySyncing(true);
-    if (onStockReturnRoute) {
+    if (!currentShopifySyncModule) return;
+
+    const syncTarget = currentShopifySyncModule;
+    setSyncingShopifyModule(syncTarget);
+    if (syncTarget === 'stock-return') {
       setStockReturnShopifySyncError(null);
-    } else if (onRetaggingRoute) {
+    } else if (syncTarget === 'retagging') {
       setRetaggingShopifySyncError(null);
     } else {
       setError(null);
@@ -766,7 +792,7 @@ const IntegratedStockParser: React.FC = () => {
         locationName: typeof data.locationName === 'string' ? data.locationName : 'Lager',
       };
 
-      if (onStockReturnRoute) {
+      if (syncTarget === 'stock-return') {
         setStockReturnShopifyStockFile(internalFile);
         setStockReturnShopifySkuEanFile(mapperFile);
         await saveStockReturnShopifyStockFile(internalFile);
@@ -778,7 +804,7 @@ const IntegratedStockParser: React.FC = () => {
         } catch {
           /* ignore quota errors */
         }
-      } else if (onRetaggingRoute) {
+      } else if (syncTarget === 'retagging') {
         setRetaggingShopifyStockFile(internalFile);
         setRetaggingShopifySkuEanFile(mapperFile);
         await saveRetaggingShopifyStockFile(internalFile);
@@ -803,15 +829,15 @@ const IntegratedStockParser: React.FC = () => {
         }
       }
     } catch (err) {
-      if (onStockReturnRoute) {
+      if (syncTarget === 'stock-return') {
         setStockReturnShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
-      } else if (onRetaggingRoute) {
+      } else if (syncTarget === 'retagging') {
         setRetaggingShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
       } else {
         setError(err instanceof Error ? err.message : 'Shopify sync failed');
       }
     } finally {
-      setIsShopifySyncing(false);
+      setSyncingShopifyModule(null);
     }
   };
 
@@ -999,6 +1025,9 @@ const IntegratedStockParser: React.FC = () => {
         if (!cancelled) {
           setRetaggingShopifyStockFile(savedRetaggingState.shopifyStockFile);
           setRetaggingShopifySkuEanFile(savedRetaggingState.shopifySkuEanFile);
+          if (retaggingShopifySyncMeta && (!savedRetaggingState.shopifyStockFile || !savedRetaggingState.shopifySkuEanFile)) {
+            clearRetaggingShopifySyncMeta();
+          }
         }
       } catch (err) {
         console.error("Error loading Retagging Shopify stock file:", err);
@@ -1025,6 +1054,9 @@ const IntegratedStockParser: React.FC = () => {
         if (!cancelled) {
           setStockReturnShopifyStockFile(savedStockReturnState.shopifyStockFile);
           setStockReturnShopifySkuEanFile(savedStockReturnState.shopifySkuEanFile);
+          if (stockReturnShopifySyncMeta && (!savedStockReturnState.shopifyStockFile || !savedStockReturnState.shopifySkuEanFile)) {
+            clearStockReturnShopifySyncMeta();
+          }
         }
       } catch (err) {
         console.error("Error loading Stock Return Shopify files:", err);
