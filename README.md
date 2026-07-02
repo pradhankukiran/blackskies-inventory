@@ -1,6 +1,6 @@
 # Blackskies Inventory
 
-Internal inventory, replenishment, and Zalando season-retagging tool for Blackskies.
+Internal inventory, replenishment, Zalando retagging, and ZFS stock-return tool for Blackskies.
 
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
@@ -12,11 +12,12 @@ Internal inventory, replenishment, and Zalando season-retagging tool for Blacksk
 
 ## What It Does
 
-The app has three main workflows:
+The app has four main workflows:
 
 - **Zalando ZFS restock recommendations**: combines Shopify internal stock, SKU/EAN mapping, ZFS stock, ZFS shipment files, received shipment files, and ZFS sales exports.
 - **Amazon FBA restock recommendations**: processes Sellerboard stock and sales/returns exports, with its own FBA recommendation table.
 - **Zalando Retagging Decision Tool**: DE-only MVP that uses Zalando CSV exports and Shopify internal stock to recommend season-retagging, basics applications, discount notes, clearance, or manual review.
+- **ZFS Stock Return Tool**: DE-only workflow that identifies slow-moving ZFS overstock and suggests Return to Merchant quantities by EAN.
 
 It runs fully through CSV/file uploads plus the existing Shopify Admin API sync. There is no direct Zalando API integration.
 
@@ -24,10 +25,11 @@ It runs fully through CSV/file uploads plus the existing Shopify Admin API sync.
 
 - Syncs Shopify internal stock from the `Lager` location.
 - Syncs the Shopify SKU/EAN mapper from variant barcodes.
-- Keeps ZFS, FBA, and Retagging files/results scoped separately.
+- Keeps ZFS, FBA, Retagging, and Stock Return files/results scoped separately.
+- Scopes Shopify sync to the active module where sync was started.
 - Persists uploaded files, table results, and UI settings locally using IndexedDB/localStorage.
 - Supports configurable restock controls: coverage days, sales timeline, safety factor, and demand/trend factor.
-- Exports ZFS, FBA, integrated stock, deduction, and retagging decision outputs.
+- Exports ZFS, FBA, Retagging, and Stock Return outputs as CSV and Excel where applicable.
 - Uses sticky table headers and drag-to-scroll behavior for wide data tables.
 
 ## ZFS / FBA Restock Logic
@@ -102,6 +104,88 @@ The retagging logic intentionally separates season decisions from operational wa
 
 This avoids replacing a season decision with an operational task like replenishing ZFS.
 
+## ZFS Stock Return Tool
+
+The Stock Return module helps identify excess ZFS stock that can be returned to Blackskies via Zalando Return to Merchant / Stock Return.
+
+### Inputs
+
+Required:
+
+- Zalando ZFS Inventory CSV.
+- Zalando Sales Performance CSV.
+
+Optional but recommended:
+
+- Shopify Internal Stock from the app's Shopify sync.
+- Shopify SKU/EAN mapper from the same Shopify sync.
+
+Shopify data is used to show Blackskies internal SKUs and Shopify product names in the review table and export. The return-quantity calculation itself is based on ZFS stock and sales velocity.
+
+### Configurable Inputs
+
+- **Sales history period**: source period used for average daily sales, for example `30`, `90`, or `180` days.
+- **Forecast period**: demand window to keep stock for, for example `14`, `30`, `45`, `60`, or `90` days.
+- **Safety buffer**: extra stock kept on top of expected demand.
+- **Storage fee per unit per day**: default `0.0128 EUR`.
+
+### Calculation
+
+For each EAN:
+
+```text
+average daily sales = units sold in selected sales history period / sales history days
+expected demand = average daily sales × forecast period
+stock to keep = expected demand × (1 + safety buffer)
+suggested return qty = current ZFS stock - stock to keep
+estimated savings = return qty × storage fee per unit per day × forecast period
+```
+
+Return quantity is never negative.
+
+### Output
+
+The dashboard table includes review columns such as:
+
+- EAN.
+- Shopify/internal SKU.
+- Article name.
+- Zalando article variant.
+- Current ZFS stock.
+- Units sold in selected period.
+- Average daily sales.
+- Stock to keep.
+- Suggested return quantity.
+- Estimated savings.
+
+Exports:
+
+- **CSV / Excel export** for rows with a suggested return quantity.
+- The export includes Zalando-required `EAN` and `return qty`, plus review columns such as SKU, article name, current ZFS stock, units sold, stock to keep, and estimated savings.
+
+## Shopify Sync And Persistence
+
+Shopify sync creates two CSV files in-app:
+
+- `shopify-internal-stocks.csv`: SKU, title, and internal stock from the configured Shopify location.
+- `shopify-sku-ean.csv`: SKU/EAN mapper from Shopify variant barcodes.
+
+Sync is scoped to the module where the user starts it:
+
+- ZFS sync updates ZFS internal stock and SKU/EAN mapper files.
+- Retagging sync updates Retagging Shopify files.
+- Stock Return sync updates Stock Return Shopify files.
+- FBA does not use Shopify sync.
+
+The header keeps the active sync label tied to the module where sync was started, even if the user changes tabs before the request finishes.
+
+Local persistence:
+
+- ZFS/FBA use IndexedDB stores keyed as `currentZfsFiles`, `currentZfsData`, `currentFbaFiles`, and `currentFbaData`.
+- Retagging and Stock Return use module-scoped generic IndexedDB keys.
+- UI settings such as restock factors and last Shopify sync metadata use localStorage.
+- Reset actions are scoped per module.
+
 ## Local Development
 
 Install dependencies:
@@ -146,6 +230,12 @@ Run the retagging processor tests:
 npm test -- --run src/utils/processors/retaggingDecisionProcessor.test.ts
 ```
 
+Run the stock return processor tests:
+
+```bash
+npm test -- --run src/utils/processors/stockReturnProcessor.test.ts
+```
+
 ## Tech Stack
 
 - React 18
@@ -160,7 +250,7 @@ npm test -- --run src/utils/processors/retaggingDecisionProcessor.test.ts
 
 ## Important Code Paths
 
-- App shell and routing: `src/App.tsx`
+- App shell and routing: `src/App.tsx`, `src/components/IntegratedStockParser.tsx`
 - ZFS/FBA file orchestration: `src/hooks/useFileProcessing.ts`
 - Local persistence: `src/lib/appPersistence.ts`, `src/lib/indexedDB.ts`
 - Shopify sync API: `api/shopify/sync.ts`
@@ -169,3 +259,6 @@ npm test -- --run src/utils/processors/retaggingDecisionProcessor.test.ts
 - Retagging UI: `src/components/RetaggingDecisionTool.tsx`
 - Retagging logic: `src/utils/processors/retaggingDecisionProcessor.ts`
 - Retagging tests: `src/utils/processors/retaggingDecisionProcessor.test.ts`
+- Stock Return UI: `src/components/StockReturnTool.tsx`
+- Stock Return logic: `src/utils/processors/stockReturnProcessor.ts`
+- Stock Return tests: `src/utils/processors/stockReturnProcessor.test.ts`
