@@ -113,7 +113,7 @@ The Stock Return module helps identify excess ZFS stock that can be returned to 
 Required:
 
 - Zalando ZFS Inventory CSV.
-- Zalando Sales Performance CSV.
+- Zalando **Stock performance** CSV.
 
 Optional but recommended:
 
@@ -121,6 +121,8 @@ Optional but recommended:
 - Shopify SKU/EAN mapper from the same Shopify sync.
 
 Shopify data is used to show Blackskies internal SKUs and Shopify product names in the review table and export. The return-quantity calculation itself is based on ZFS stock and sales velocity.
+
+The Stock performance file can include `Days online`. When present, this is used to avoid underestimating sales velocity for newly launched articles.
 
 ### Configurable Inputs
 
@@ -141,6 +143,13 @@ suggested return qty = current ZFS stock - stock to keep
 estimated savings = return qty × storage fee per unit per day × forecast period
 ```
 
+When `Days online` is available:
+
+```text
+sales days used = min(selected sales history period, Days online)
+average daily sales = units sold / sales days used
+```
+
 Return quantity is never negative.
 
 ### Output
@@ -153,6 +162,8 @@ The dashboard table includes review columns such as:
 - Zalando article variant.
 - Current ZFS stock.
 - Units sold in selected period.
+- Days online.
+- Sales days used.
 - Average daily sales.
 - Stock to keep.
 - Suggested return quantity.
