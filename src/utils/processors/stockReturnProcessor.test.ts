@@ -145,7 +145,7 @@ describe("processStockReturns", () => {
     expect(result.exportRows).toEqual([]);
   });
 
-  it("filters inventory and detail sales rows to DE", () => {
+  it("filters inventory rows to DE while aggregating stock performance sales globally", () => {
     const result = processStockReturns({
       inventoryRows: [
         inventoryRow,
@@ -160,7 +160,43 @@ describe("processStockReturns", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].EAN).toBe("4251812300001");
-    expect(result.rows[0]["Units sold in selected period"]).toBe(20);
+    expect(result.rows[0]["Units sold in selected period"]).toBe(120);
+  });
+
+  it("sums Stock performance sold units across countries for the same EAN", () => {
+    const result = processStockReturns({
+      inventoryRows: [{
+        ...inventoryRow,
+        ean: "4251812305975",
+        zalando_article_variant: "BFB52P010-Q11",
+        partner_variant_size: "BS-CAP-054",
+      }],
+      salesRows: [
+        {
+          "Zalando article variant": "BFB52P010-Q11",
+          EAN: "4251812305975",
+          Country: "DE",
+          "Sold articles": "4",
+          "Days online": "1293",
+        },
+        {
+          "Zalando article variant": "BFB52P010-Q11",
+          EAN: "4251812305975",
+          Country: "FR",
+          "Sold articles": "7",
+          "Days online": "1293",
+        },
+      ],
+      config: {
+        ...config,
+        salesHistoryDays: 180,
+      },
+    });
+
+    expect(result.rows[0]["Units sold in selected period"]).toBe(11);
+    expect(result.rows[0]["Sales days used"]).toBe(180);
+    expect(result.rows[0]["Stock to keep"]).toBe(3);
+    expect(result.rows[0]["Suggested return qty"]).toBe(97);
   });
 
   it("uses global article-level sales rows when no country column is present", () => {

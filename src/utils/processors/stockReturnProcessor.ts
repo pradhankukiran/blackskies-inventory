@@ -136,11 +136,10 @@ const normalizeInventoryRows = (rows: RawRow[], config: StockReturnConfig): Inve
     .filter((item) => item.ean && item.zfsStock > 0);
 };
 
-const normalizeSalesRows = (rows: RawRow[], config: StockReturnConfig): SalesItem[] => {
+const normalizeSalesRows = (rows: RawRow[]): SalesItem[] => {
   const byKey = new Map<string, SalesItem>();
 
   rows
-    .filter((row) => sameMarket(row, ["Country"], config.market))
     .forEach((row) => {
       const articleVariant = normalizeId(firstNonEmpty(
         getValue(row, ["Zalando article variant", "zalando_article_variant", "zalando article variant"]),
@@ -249,7 +248,7 @@ export const processStockReturns = ({
 }): StockReturnResult => {
   const warnings: string[] = [];
   const inventory = normalizeInventoryRows(inventoryRows, config);
-  const sales = normalizeSalesRows(salesRows, config);
+  const sales = normalizeSalesRows(salesRows);
   const shopifyStock = normalizeShopifyRows(shopifyStockRows);
   const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
   const salesByEan = new Map<string, SalesItem>();
@@ -282,7 +281,7 @@ export const processStockReturns = ({
   const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock, shopifySkuEan);
 
   if (!inventory.length) warnings.push("No DE ZFS inventory rows with sellable stock were found.");
-  if (!sales.length) warnings.push("No matching DE stock performance rows were found.");
+  if (!sales.length) warnings.push("No stock performance rows were found.");
   if (!shopifyStock.length) warnings.push("No Shopify stock rows were provided. SKU and article name will fall back to ZFS Inventory data.");
 
   const inventoryByVariant = new Map<string, InventoryItem[]>();
