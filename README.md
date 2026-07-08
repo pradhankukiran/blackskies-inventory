@@ -124,7 +124,7 @@ Shopify data is used to show Blackskies internal SKUs and Shopify product names 
 
 The Stock performance file can include `Days online`. When present, this is used to avoid underestimating sales velocity for newly launched articles.
 
-For V1, the current ZFS stock side remains DE-scoped, while Stock performance sold units are aggregated across all countries for the same EAN/Zalando article variant. This avoids underestimating demand when an article sells in multiple Zalando markets.
+For V1, the current ZFS stock side remains DE-scoped, while Stock performance sold units are aggregated across all countries for the same Zalando article variant. This avoids underestimating demand when an article sells in multiple Zalando markets or sizes.
 
 ### Configurable Inputs
 
@@ -140,7 +140,7 @@ For each EAN:
 ```text
 average daily sales = units sold in selected sales history period / sales history days
 expected demand = average daily sales × forecast period
-stock to keep = expected demand × (1 + safety buffer)
+stock to keep = expected demand × (1 + safety buffer), allocated across EAN rows by current stock share
 suggested return qty = current ZFS stock - stock to keep
 estimated savings = return qty × storage fee per unit per day × forecast period
 ```
