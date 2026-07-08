@@ -251,22 +251,9 @@ export const processStockReturns = ({
   const sales = normalizeSalesRows(salesRows);
   const shopifyStock = normalizeShopifyRows(shopifyStockRows);
   const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
-  const salesByEan = new Map<string, SalesItem>();
   const salesByVariant = new Map<string, SalesItem>();
 
   sales.forEach((item) => {
-    if (item.ean) {
-      const existingByEan = salesByEan.get(item.ean) || {
-        articleVariant: item.articleVariant,
-        ean: item.ean,
-        unitsSold: 0,
-        daysOnline: null,
-      };
-      existingByEan.unitsSold += item.unitsSold;
-      existingByEan.daysOnline = mergeDaysOnline(existingByEan.daysOnline, item.daysOnline);
-      salesByEan.set(item.ean, existingByEan);
-    }
-
     const existingByVariant = salesByVariant.get(item.articleVariant) || {
       articleVariant: item.articleVariant,
       ean: "",
@@ -293,41 +280,6 @@ export const processStockReturns = ({
   const rows: StockReturnReviewRow[] = [];
 
   inventoryByVariant.forEach((items, articleVariant) => {
-    const hasEanSales = items.some((item) => item.ean && salesByEan.has(item.ean));
-
-    if (hasEanSales) {
-      items.forEach((item) => {
-        const salesItem = item.ean ? salesByEan.get(item.ean) : undefined;
-        const unitsSold = salesItem?.unitsSold ?? 0;
-        const daysOnline = salesItem?.daysOnline ?? null;
-        const salesDaysUsed = effectiveSalesDays(config.salesHistoryDays, daysOnline);
-        const averageDailySales = unitsSold / salesDaysUsed;
-        const expectedDemand = averageDailySales * config.forecastPeriodDays;
-        const stockToKeep = Math.min(item.zfsStock, Math.ceil(expectedDemand * (1 + config.safetyBufferPercent / 100)));
-        const suggestedReturnQty = Math.max(0, Math.floor(item.zfsStock - stockToKeep));
-        const estimatedSavings = suggestedReturnQty * config.storageFeePerUnitPerDay * config.forecastPeriodDays;
-        const shopifyMatch = (item.ean ? shopifyByEan.get(item.ean) : undefined) || (item.sku ? shopifyBySku.get(item.sku) : undefined);
-        const displaySku = shopifyMatch?.sku || item.sku || item.articleVariant || "N/A";
-        const displayArticleName = shopifyMatch?.articleName || item.articleName || "N/A";
-
-        rows.push({
-          "EAN": item.ean,
-          "SKU": displaySku,
-          "Article name": displayArticleName,
-          "Zalando article variant": item.articleVariant || "N/A",
-          "Current ZFS stock": Math.round(item.zfsStock),
-          "Units sold in selected period": Math.round(unitsSold),
-          "Days online": daysOnline ? Math.round(daysOnline) : "N/A",
-          "Sales days used": salesDaysUsed,
-          "Average daily sales": round4(averageDailySales),
-          "Stock to keep": stockToKeep,
-          "Suggested return qty": suggestedReturnQty,
-          "Estimated savings": round2(estimatedSavings),
-        });
-      });
-      return;
-    }
-
     const variantSales = salesByVariant.get(articleVariant);
     const unitsSold = variantSales?.unitsSold ?? 0;
     const daysOnline = variantSales?.daysOnline ?? null;

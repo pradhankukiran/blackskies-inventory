@@ -465,7 +465,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
             <SlidersHorizontal className="h-4 w-4 text-slate-500" />
             <div>
               <h3 className="ops-title">Return Configuration</h3>
-              <p className="ops-muted">DE ZFS stock with global Stock performance sales velocity.</p>
+              <p className="ops-muted">DE ZFS stock with global article-variant sales velocity.</p>
             </div>
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
@@ -550,7 +550,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-600">
-            Current rules: use {salesHistoryDays} days of global stock performance history, capped by Days online when available, to forecast {forecastPeriodDays} days of demand, keep demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
+            Current rules: use {salesHistoryDays} days of global article-variant Stock performance history, capped by Days online when available, to forecast {forecastPeriodDays} days of demand, allocate stock-to-keep across EANs, then return excess ZFS stock.
           </div>
           <div className="flex flex-wrap gap-3">
             <button

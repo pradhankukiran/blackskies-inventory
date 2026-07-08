@@ -199,6 +199,70 @@ describe("processStockReturns", () => {
     expect(result.rows[0]["Suggested return qty"]).toBe(97);
   });
 
+  it("uses article-variant sold units instead of only the current EAN sold units", () => {
+    const result = processStockReturns({
+      inventoryRows: [
+        {
+          ean: "4251812307870",
+          partner_variant_size: "AK-B-POR-02-21",
+          zalando_article_variant: "AKJ51L000-K12",
+          article_name: "Portus Nautical Rope Bracelet",
+          country: "de",
+          sellable_zfs_stock: "2",
+        },
+        {
+          ean: "4251812307887",
+          partner_variant_size: "AK-B-POR-02-22",
+          zalando_article_variant: "AKJ51L000-K12",
+          article_name: "Portus Nautical Rope Bracelet",
+          country: "de",
+          sellable_zfs_stock: "5",
+        },
+      ],
+      salesRows: [
+        {
+          "Zalando article variant": "AKJ51L000-K12",
+          EAN: "4251812307870",
+          Country: "DE",
+          "Sold articles": "2",
+          "Days online": "920",
+        },
+        {
+          "Zalando article variant": "AKJ51L000-K12",
+          EAN: "4251812307887",
+          Country: "DE",
+          "Sold articles": "2",
+          "Days online": "920",
+        },
+        {
+          "Zalando article variant": "AKJ51L000-K12",
+          EAN: "4251812307849",
+          Country: "NL",
+          "Sold articles": "3",
+          "Days online": "769",
+        },
+        {
+          "Zalando article variant": "AKJ51L000-K12",
+          EAN: "4251812307863",
+          Country: "IT",
+          "Sold articles": "2",
+          "Days online": "842",
+        },
+      ],
+      config: {
+        ...config,
+        salesHistoryDays: 180,
+      },
+    });
+
+    const targetRow = result.rows.find((row) => row.EAN === "4251812307887");
+
+    expect(targetRow?.["Units sold in selected period"]).toBe(9);
+    expect(targetRow?.["Sales days used"]).toBe(180);
+    expect(targetRow?.["Stock to keep"]).toBe(1);
+    expect(targetRow?.["Suggested return qty"]).toBe(4);
+  });
+
   it("uses global article-level sales rows when no country column is present", () => {
     const result = processStockReturns({
       inventoryRows: [inventoryRow],
