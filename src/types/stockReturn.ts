@@ -13,6 +13,8 @@ export interface StockReturnReviewRow {
   "Zalando article variant": string;
   "Current ZFS stock": number;
   "Units sold in selected period": number;
+  "Days online": number | "N/A";
+  "Sales days used": number;
   "Average daily sales": number;
   "Stock to keep": number;
   "Suggested return qty": number;
@@ -25,6 +27,8 @@ export interface StockReturnExportRow {
   "Article name": string;
   "Current ZFS stock": number;
   "Units sold in selected period": number;
+  "Days online": number | "N/A";
+  "Sales days used": number;
   "Stock to keep": number;
   "Estimated savings": number;
   "return qty": number;

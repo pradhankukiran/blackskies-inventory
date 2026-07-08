@@ -17,7 +17,9 @@ interface InventoryItem {
 
 interface SalesItem {
   articleVariant: string;
+  ean: string;
   unitsSold: number;
+  daysOnline: number | null;
 }
 
 interface ShopifyStockItem {
@@ -85,31 +87,57 @@ const sameMarket = (row: RawRow, aliases: string[], market: string) => {
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const round4 = (value: number) => Math.round(value * 10000) / 10000;
 
+const mergeDaysOnline = (current: number | null, next: number | null) => {
+  if (next === null || next <= 0) return current;
+  if (current === null || current <= 0) return next;
+  return Math.max(current, next);
+};
+
+const effectiveSalesDays = (configuredDays: number, daysOnline: number | null) => {
+  const fallbackDays = Math.max(configuredDays, 1);
+  if (daysOnline === null || daysOnline <= 0) return fallbackDays;
+  return Math.max(1, Math.min(fallbackDays, daysOnline));
+};
+
 const normalizeInventoryRows = (rows: RawRow[], config: StockReturnConfig): InventoryItem[] => {
   return rows
     .filter((row) => sameMarket(row, ["country", "Country"], config.market))
+    .filter((row) => {
+      const fulfilledBy = getValue(row, ["Fulfilled by", "fulfilled_by"]);
+      return !fulfilledBy || fulfilledBy.toUpperCase().includes("ZFS");
+    })
     .map((row) => {
       const sku = firstNonEmpty(
         getValue(row, ["partner_variant_size", "Partner Variant Size"]),
+        getValue(row, ["Variant size", "variant_size"]),
         getValue(row, ["sku", "SKU"]),
         getValue(row, ["partner_article_variant", "Partner Article Variant"]),
-        getValue(row, ["partner_article", "Partner Article"])
+        getValue(row, ["partner_article", "Partner Article"]),
+        getValue(row, ["Article variant", "article_variant"])
       );
+      const zfsStock = parseNumber(firstNonEmpty(
+        getValue(row, ["sellable_zfs_stock", "ZFS stock", "ZFS Quantity"]),
+        getValue(row, ["Offerable ZFS stock", "offerable_zfs_stock"]),
+        getValue(row, ["Total sellable stock", "total_sellable_stock"])
+      )) ?? 0;
 
       return {
         ean: normalizeId(getValue(row, ["ean", "EAN", "barcode", "Barcode"])),
         articleVariant: normalizeId(getValue(row, ["zalando_article_variant", "Zalando article variant"])),
         sku: normalizeId(sku),
-        articleName: getValue(row, ["article_name", "Article name", "Product Name"]),
+        articleName: firstNonEmpty(
+          getValue(row, ["article_name", "Article name", "Product Name"]),
+          getValue(row, ["Article type", "article_type"])
+        ),
         country: getValue(row, ["country", "Country"]).toUpperCase(),
-        zfsStock: parseNumber(getValue(row, ["sellable_zfs_stock", "ZFS stock", "ZFS Quantity"])) ?? 0,
+        zfsStock,
       };
     })
     .filter((item) => item.ean && item.zfsStock > 0);
 };
 
 const normalizeSalesRows = (rows: RawRow[], config: StockReturnConfig): SalesItem[] => {
-  const byVariant = new Map<string, SalesItem>();
+  const byKey = new Map<string, SalesItem>();
 
   rows
     .filter((row) => sameMarket(row, ["Country"], config.market))
@@ -120,15 +148,21 @@ const normalizeSalesRows = (rows: RawRow[], config: StockReturnConfig): SalesIte
       ));
       if (!articleVariant) return;
 
-      const existing = byVariant.get(articleVariant) || {
+      const ean = normalizeId(getValue(row, ["EAN", "ean", "barcode", "Barcode"]));
+      const key = `${articleVariant}|${ean}`;
+      const daysOnline = parseNumber(getValue(row, ["Days online", "days_online"]));
+      const existing = byKey.get(key) || {
         articleVariant,
+        ean,
         unitsSold: 0,
+        daysOnline: null,
       };
       existing.unitsSold += parseNumber(getValue(row, ["Sold articles", "Units sold", "Sold units"])) ?? 0;
-      byVariant.set(articleVariant, existing);
+      existing.daysOnline = mergeDaysOnline(existing.daysOnline, daysOnline);
+      byKey.set(key, existing);
     });
 
-  return Array.from(byVariant.values());
+  return Array.from(byKey.values());
 };
 
 const normalizeShopifyRows = (rows: RawRow[]): ShopifyStockItem[] => {
@@ -218,11 +252,37 @@ export const processStockReturns = ({
   const sales = normalizeSalesRows(salesRows, config);
   const shopifyStock = normalizeShopifyRows(shopifyStockRows);
   const shopifySkuEan = normalizeShopifySkuEanRows(shopifySkuEanRows);
-  const salesByVariant = new Map(sales.map((item) => [item.articleVariant, item]));
+  const salesByEan = new Map<string, SalesItem>();
+  const salesByVariant = new Map<string, SalesItem>();
+
+  sales.forEach((item) => {
+    if (item.ean) {
+      const existingByEan = salesByEan.get(item.ean) || {
+        articleVariant: item.articleVariant,
+        ean: item.ean,
+        unitsSold: 0,
+        daysOnline: null,
+      };
+      existingByEan.unitsSold += item.unitsSold;
+      existingByEan.daysOnline = mergeDaysOnline(existingByEan.daysOnline, item.daysOnline);
+      salesByEan.set(item.ean, existingByEan);
+    }
+
+    const existingByVariant = salesByVariant.get(item.articleVariant) || {
+      articleVariant: item.articleVariant,
+      ean: "",
+      unitsSold: 0,
+      daysOnline: null,
+    };
+    existingByVariant.unitsSold += item.unitsSold;
+    existingByVariant.daysOnline = mergeDaysOnline(existingByVariant.daysOnline, item.daysOnline);
+    salesByVariant.set(item.articleVariant, existingByVariant);
+  });
+
   const { bySku: shopifyBySku, byEan: shopifyByEan } = buildShopifyMaps(shopifyStock, shopifySkuEan);
 
   if (!inventory.length) warnings.push("No DE ZFS inventory rows with sellable stock were found.");
-  if (!sales.length) warnings.push("No matching DE sales rows were found in the Sales Performance file.");
+  if (!sales.length) warnings.push("No matching DE stock performance rows were found.");
   if (!shopifyStock.length) warnings.push("No Shopify stock rows were provided. SKU and article name will fall back to ZFS Inventory data.");
 
   const inventoryByVariant = new Map<string, InventoryItem[]>();
@@ -234,8 +294,46 @@ export const processStockReturns = ({
   const rows: StockReturnReviewRow[] = [];
 
   inventoryByVariant.forEach((items, articleVariant) => {
-    const unitsSold = salesByVariant.get(articleVariant)?.unitsSold ?? 0;
-    const averageDailySales = unitsSold / Math.max(config.salesHistoryDays, 1);
+    const hasEanSales = items.some((item) => item.ean && salesByEan.has(item.ean));
+
+    if (hasEanSales) {
+      items.forEach((item) => {
+        const salesItem = item.ean ? salesByEan.get(item.ean) : undefined;
+        const unitsSold = salesItem?.unitsSold ?? 0;
+        const daysOnline = salesItem?.daysOnline ?? null;
+        const salesDaysUsed = effectiveSalesDays(config.salesHistoryDays, daysOnline);
+        const averageDailySales = unitsSold / salesDaysUsed;
+        const expectedDemand = averageDailySales * config.forecastPeriodDays;
+        const stockToKeep = Math.min(item.zfsStock, Math.ceil(expectedDemand * (1 + config.safetyBufferPercent / 100)));
+        const suggestedReturnQty = Math.max(0, Math.floor(item.zfsStock - stockToKeep));
+        const estimatedSavings = suggestedReturnQty * config.storageFeePerUnitPerDay * config.forecastPeriodDays;
+        const shopifyMatch = (item.ean ? shopifyByEan.get(item.ean) : undefined) || (item.sku ? shopifyBySku.get(item.sku) : undefined);
+        const displaySku = shopifyMatch?.sku || item.sku || item.articleVariant || "N/A";
+        const displayArticleName = shopifyMatch?.articleName || item.articleName || "N/A";
+
+        rows.push({
+          "EAN": item.ean,
+          "SKU": displaySku,
+          "Article name": displayArticleName,
+          "Zalando article variant": item.articleVariant || "N/A",
+          "Current ZFS stock": Math.round(item.zfsStock),
+          "Units sold in selected period": Math.round(unitsSold),
+          "Days online": daysOnline ? Math.round(daysOnline) : "N/A",
+          "Sales days used": salesDaysUsed,
+          "Average daily sales": round4(averageDailySales),
+          "Stock to keep": stockToKeep,
+          "Suggested return qty": suggestedReturnQty,
+          "Estimated savings": round2(estimatedSavings),
+        });
+      });
+      return;
+    }
+
+    const variantSales = salesByVariant.get(articleVariant);
+    const unitsSold = variantSales?.unitsSold ?? 0;
+    const daysOnline = variantSales?.daysOnline ?? null;
+    const salesDaysUsed = effectiveSalesDays(config.salesHistoryDays, daysOnline);
+    const averageDailySales = unitsSold / salesDaysUsed;
     const expectedDemand = averageDailySales * config.forecastPeriodDays;
     const totalStockToKeep = Math.ceil(expectedDemand * (1 + config.safetyBufferPercent / 100));
     const keepByEan = distributeKeepStock(items, totalStockToKeep);
@@ -255,6 +353,8 @@ export const processStockReturns = ({
         "Zalando article variant": item.articleVariant || "N/A",
         "Current ZFS stock": Math.round(item.zfsStock),
         "Units sold in selected period": Math.round(unitsSold),
+        "Days online": daysOnline ? Math.round(daysOnline) : "N/A",
+        "Sales days used": salesDaysUsed,
         "Average daily sales": round4(averageDailySales),
         "Stock to keep": stockToKeep,
         "Suggested return qty": suggestedReturnQty,
@@ -277,6 +377,8 @@ export const processStockReturns = ({
       "Article name": row["Article name"],
       "Current ZFS stock": row["Current ZFS stock"],
       "Units sold in selected period": row["Units sold in selected period"],
+      "Days online": row["Days online"],
+      "Sales days used": row["Sales days used"],
       "Stock to keep": row["Stock to keep"],
       "Estimated savings": row["Estimated savings"],
       "return qty": row["Suggested return qty"],

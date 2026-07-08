@@ -43,6 +43,8 @@ const columns: Array<keyof StockReturnReviewRow> = [
   "Zalando article variant",
   "Current ZFS stock",
   "Units sold in selected period",
+  "Days online",
+  "Sales days used",
   "Average daily sales",
   "Stock to keep",
   "Suggested return qty",
@@ -52,6 +54,8 @@ const columns: Array<keyof StockReturnReviewRow> = [
 const numericColumns = new Set<keyof StockReturnReviewRow>([
   "Current ZFS stock",
   "Units sold in selected period",
+  "Days online",
+  "Sales days used",
   "Average daily sales",
   "Stock to keep",
   "Suggested return qty",
@@ -110,6 +114,8 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
         "Article name": row["Article name"],
         "Current ZFS stock": row["Current ZFS stock"],
         "Units sold in selected period": row["Units sold in selected period"],
+        "Days online": row["Days online"],
+        "Sales days used": row["Sales days used"],
         "Stock to keep": row["Stock to keep"],
         "Estimated savings": row["Estimated savings"],
         "return qty": row["Suggested return qty"],
@@ -269,7 +275,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
 
   const processFiles = async () => {
     if (!requiredFilesPresent) {
-      setError("Upload the ZFS Inventory CSV and Sales Performance CSV first.");
+      setError("Upload the ZFS Inventory CSV and Stock performance CSV first.");
       return;
     }
 
@@ -279,7 +285,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
       setProcessingStatus("Parsing ZFS Inventory file...");
       const inventoryRows = await parseFile(files.inventory!);
 
-      setProcessingStatus("Parsing Sales Performance file...");
+      setProcessingStatus("Parsing Stock performance file...");
       const salesRows = await parseFile(files.sales!);
 
       let shopifyRows: any[] = [];
@@ -428,7 +434,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
             acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
           />
           <FileUploadSection
-            title="Sales Performance CSV"
+            title="Stock performance"
             onChange={(event) => handleFileChange(event, "sales")}
             onRemove={(fileName) => handleRemoveFile(fileName, "sales")}
             files={files.sales ? [files.sales] : []}
@@ -544,7 +550,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-600">
-            Current rules: use {salesHistoryDays} days of sales history to forecast {forecastPeriodDays} days of demand, keep demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
+            Current rules: use {salesHistoryDays} days of stock performance history, capped by Days online when available, to forecast {forecastPeriodDays} days of demand, keep demand plus {safetyBufferPercent}% buffer, then return excess ZFS stock.
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -582,7 +588,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
               <div>
                 <h3 className="ops-title">ZFS Stock Return Dashboard</h3>
                 <p className="ops-muted mt-1">
-                  {rows.length.toLocaleString()} DE EAN rows generated from uploaded ZFS inventory and sales files.
+                  {rows.length.toLocaleString()} DE EAN rows generated from uploaded ZFS inventory and stock performance files.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -655,7 +661,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
             onPointerCancel={stopTableDrag}
             onPointerLeave={stopTableDrag}
           >
-            <table className="ops-table min-w-[1250px]">
+            <table className="ops-table min-w-[1450px]">
               <thead>
                 <tr>
                   {columns.map((column) => (

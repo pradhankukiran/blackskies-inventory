@@ -45,6 +45,8 @@ describe("processStockReturns", () => {
         "Article name": "Test Cap",
         "Current ZFS stock": 100,
         "Units sold in selected period": 20,
+        "Days online": "N/A",
+        "Sales days used": 30,
         "Stock to keep": 24,
         "Estimated savings": 29.18,
         "return qty": 76,
@@ -66,6 +68,51 @@ describe("processStockReturns", () => {
     expect(result.rows[0]["Average daily sales"]).toBe(1);
     expect(result.rows[0]["Stock to keep"]).toBe(36);
     expect(result.rows[0]["Suggested return qty"]).toBe(64);
+  });
+
+  it("caps sales velocity denominator by Days online from Stock performance rows", () => {
+    const result = processStockReturns({
+      inventoryRows: [inventoryRow],
+      salesRows: [{
+        ...salesRow,
+        EAN: "4251812300001",
+        "Sold articles": "20",
+        "Days online": "40",
+      }],
+      config: {
+        ...config,
+        salesHistoryDays: 180,
+        forecastPeriodDays: 30,
+      },
+    });
+
+    expect(result.rows[0]["Units sold in selected period"]).toBe(20);
+    expect(result.rows[0]["Days online"]).toBe(40);
+    expect(result.rows[0]["Sales days used"]).toBe(40);
+    expect(result.rows[0]["Average daily sales"]).toBe(0.5);
+    expect(result.rows[0]["Stock to keep"]).toBe(18);
+    expect(result.rows[0]["Suggested return qty"]).toBe(82);
+  });
+
+  it("does not use size availability from Stock performance rows", () => {
+    const result = processStockReturns({
+      inventoryRows: [inventoryRow],
+      salesRows: [{
+        ...salesRow,
+        EAN: "4251812300001",
+        "Sold articles": "20",
+        "Days online": "40",
+        "Size availability rate (%)": "1",
+      }],
+      config: {
+        ...config,
+        salesHistoryDays: 180,
+        forecastPeriodDays: 30,
+      },
+    });
+
+    expect(result.rows[0]["Average daily sales"]).toBe(0.5);
+    expect(result.rows[0]["Suggested return qty"]).toBe(82);
   });
 
   it("allocates article-level demand across EAN rows by stock share", () => {
@@ -142,5 +189,36 @@ describe("processStockReturns", () => {
     expect(result.rows[0]["Zalando article variant"]).toBe("BFBTEST-Q11");
     expect(result.exportRows[0].SKU).toBe("BS-CAP-203");
     expect(result.exportRows[0]["Article name"]).toBe("Shopify Cap Name");
+  });
+
+  it("accepts zDirect Stock performance rows as a ZFS stock source", () => {
+    const result = processStockReturns({
+      inventoryRows: [{
+        "Article variant": "BS-PRO-P-1_light blue",
+        "Zalando article variant": "BFB52B00H-K11",
+        "Variant size": "BS-PRO-015",
+        EAN: "4251812347098",
+        Country: "DE",
+        "Fulfilled by": "ZFS and partner",
+        "Offerable ZFS stock": "79",
+        "Article type": "Headgear",
+      }],
+      salesRows: [{
+        "Zalando article variant": "BFB52B00H-K11",
+        EAN: "4251812347098",
+        Country: "DE",
+        "Sold articles": "1",
+        "Days online": "27",
+      }],
+      config: {
+        ...config,
+        salesHistoryDays: 180,
+      },
+    });
+
+    expect(result.rows[0].SKU).toBe("BS-PRO-015");
+    expect(result.rows[0]["Article name"]).toBe("Headgear");
+    expect(result.rows[0]["Current ZFS stock"]).toBe(79);
+    expect(result.rows[0]["Sales days used"]).toBe(27);
   });
 });
