@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Filter, Search, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { FileUploadSection } from "@/components/FileUploadSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -195,6 +196,42 @@ export const ZalandoSalePriceTool: React.FC = () => {
       console.error("Could not save the Sale Prices state:", saveError);
     });
   }, [isLoadingPersistedState, localResult, searchTerm, shopifyResult, statusFilter]);
+
+  useEffect(() => {
+    if (!showConfirmation) return;
+
+    const body = document.body;
+    const root = document.documentElement;
+    const scrollTop = window.scrollY;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyWidth = body.style.width;
+    const previousRootOverflow = root.style.overflow;
+
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollTop}px`;
+    body.style.width = "100%";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setShowConfirmation(false);
+      setSelectedProductIds([]);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      root.style.overflow = previousRootOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.width = previousBodyWidth;
+      window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+    };
+  }, [showConfirmation]);
 
   const payloadRows = useMemo(
     () => (localResult ? payloadFromResult(localResult) : []),
@@ -771,13 +808,13 @@ export const ZalandoSalePriceTool: React.FC = () => {
         </section>
       )}
 
-      {showConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      {showConfirmation && createPortal(
+        <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen overscroll-none items-center justify-center overflow-hidden bg-slate-950/60 p-4 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="sale-price-confirmation-title"
-            className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col border border-slate-200 bg-white shadow-2xl"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col overscroll-contain border border-slate-200 bg-white shadow-2xl"
           >
             <div className="border-b border-slate-200 px-6 py-5">
               <h3 id="sale-price-confirmation-title" className="text-xl font-semibold text-slate-950">
@@ -811,7 +848,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="max-h-[min(50vh,30rem)] overflow-auto">
+            <div className="min-h-0 flex-1 touch-pan-x touch-pan-y overscroll-contain overflow-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="sticky top-0 bg-slate-100 text-slate-600">
                   <tr>
@@ -888,7 +925,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
