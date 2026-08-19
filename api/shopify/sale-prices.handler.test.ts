@@ -1,5 +1,20 @@
-import { describe, expect, it } from "vitest";
-import handler from "./sale-prices";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { getShopifyClientMock } = vi.hoisted(() => ({
+  getShopifyClientMock: vi.fn(),
+}));
+
+vi.mock("./client.js", () => ({
+  getShopifyClient: getShopifyClientMock,
+  ShopifyApiError: class ShopifyApiError extends Error {
+    constructor(message: string, public readonly status?: number) {
+      super(message);
+      this.name = "ShopifyApiError";
+    }
+  },
+}));
+
+import handler, { parseUpdateSelection } from "./sale-prices";
 
 type TestResponse = {
   statusCode: number;
@@ -40,6 +55,61 @@ const validRows = [
   },
 ];
 
+const firstProductId = "gid://shopify/Product/1";
+const secondProductId = "gid://shopify/Product/2";
+
+const configureShopify = (variants: unknown[]) => {
+  const gql = vi.fn(async (query: string, variables?: Record<string, unknown>) => {
+    if (query.includes("metafieldDefinitions")) {
+      return {
+        metafieldDefinitions: {
+          nodes: [{ id: "definition-id", name: "Sale Price Zalando", type: { name: "number_decimal" } }],
+        },
+      };
+    }
+
+    if (query.includes("productVariants")) {
+      return {
+        productVariants: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          edges: variants.map((node) => ({ node })),
+        },
+      };
+    }
+
+    if (query.includes("metafieldsSet")) {
+      const metafields = (variables?.metafields as unknown[] | undefined) ?? [];
+      return {
+        metafieldsSet: {
+          metafields: metafields.map((_, index) => ({ id: `metafield-${index}` })),
+          userErrors: [],
+        },
+      };
+    }
+
+    throw new Error(`Unexpected Shopify query: ${query}`);
+  });
+
+  getShopifyClientMock.mockResolvedValue({ shop: "test-shop", gql });
+  return gql;
+};
+
+const variant = (
+  id: string,
+  productId: string,
+  sku: string,
+  barcode: string
+) => ({
+  id,
+  sku,
+  barcode,
+  product: { id: productId, title: `Product ${productId.slice(-1)}` },
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("Shopify sale-price endpoint safeguards", () => {
   it("accepts POST only", async () => {
     const res = response();
@@ -58,6 +128,7 @@ describe("Shopify sale-price endpoint safeguards", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body?.error).toBe("invalid_action");
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
   });
 
   it("rejects empty row lists before contacting Shopify", async () => {
@@ -69,6 +140,7 @@ describe("Shopify sale-price endpoint safeguards", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body?.error).toBe("invalid_rows");
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
   });
 
   it("rejects cross-origin updates before contacting Shopify", async () => {
@@ -80,12 +152,126 @@ describe("Shopify sale-price endpoint safeguards", () => {
           host: "inventory.example.com",
           origin: "https://attacker.example.com",
         },
-        body: { action: "update", rows: validRows },
+        body: { action: "update", selection: { mode: "all" }, rows: validRows },
       },
       res
     );
 
     expect(res.statusCode).toBe(403);
     expect(res.body?.error).toBe("invalid_origin");
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing update selections before contacting Shopify", async () => {
+    const res = response();
+    await handler(
+      { method: "POST", headers: {}, body: { action: "update", rows: validRows } },
+      res
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.error).toBe("invalid_selection");
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale selected product before any metafield write", async () => {
+    const gql = configureShopify([
+      variant("gid://shopify/ProductVariant/1", firstProductId, validRows[0].sku, validRows[0].ean),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          selection: { mode: "selected", productIds: [secondProductId] },
+          rows: validRows,
+        },
+      },
+      res
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body?.error).toBe("selection_stale");
+    expect(res.body?.invalidProductIds).toEqual([secondProductId]);
+    expect(res.body?.rows).toHaveLength(1);
+    expect(res.body?.products).toHaveLength(1);
+    expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
+  });
+
+  it("updates only selected ready products and leaves the other ready products unchanged", async () => {
+    const rows = [
+      validRows[0],
+      {
+        rowNumber: 2,
+        statusDetail: "ZABLO_01",
+        sku: "AK-R-PUR-03-12",
+        ean: "4251812338837",
+        regularPrice: 49.99,
+      },
+    ];
+    const gql = configureShopify([
+      variant("gid://shopify/ProductVariant/1", firstProductId, rows[0].sku, rows[0].ean),
+      variant("gid://shopify/ProductVariant/2", secondProductId, rows[1].sku, rows[1].ean),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          selection: { mode: "selected", productIds: [secondProductId] },
+          rows,
+        },
+      },
+      res
+    );
+
+    const mutationCall = gql.mock.calls.find(([query]) => query.includes("metafieldsSet"));
+    const mutationVariables = mutationCall?.[1] as
+      | { metafields: Array<{ ownerId: string; value: string }> }
+      | undefined;
+    const products = res.body?.products as Array<{ productId: string; status: string }>;
+
+    expect(res.statusCode).toBe(200);
+    expect(mutationVariables?.metafields).toEqual([
+      expect.objectContaining({ ownerId: secondProductId, value: "39.99" }),
+    ]);
+    expect(products).toEqual([
+      expect.objectContaining({ productId: firstProductId, status: "ready" }),
+      expect.objectContaining({ productId: secondProductId, status: "updated" }),
+    ]);
+  });
+});
+
+describe("parseUpdateSelection", () => {
+  it("accepts all mode and normalizes selected IDs", () => {
+    expect(parseUpdateSelection({ mode: "all" }, 1)).toEqual({
+      selection: { mode: "all" },
+    });
+    expect(
+      parseUpdateSelection(
+        { mode: "selected", productIds: [" gid://shopify/Product/1 "] },
+        1
+      )
+    ).toEqual({
+      selection: { mode: "selected", productIds: ["gid://shopify/Product/1"] },
+    });
+  });
+
+  it("rejects invalid selected scopes", () => {
+    expect(parseUpdateSelection({ mode: "selected", productIds: [] }, 1)).toEqual(
+      expect.objectContaining({ error: expect.any(String) })
+    );
+    expect(
+      parseUpdateSelection({ mode: "selected", productIds: ["one", "one"] }, 2)
+    ).toEqual(expect.objectContaining({ error: expect.any(String) }));
+    expect(
+      parseUpdateSelection({ mode: "selected", productIds: ["one", "two"] }, 1)
+    ).toEqual(expect.objectContaining({ error: expect.any(String) }));
   });
 });

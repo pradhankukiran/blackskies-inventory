@@ -207,7 +207,7 @@ The Sale Prices module accepts the Zalando `ZABLO_01 - Old Season Cleaning` CSV.
 
 The preview matches Shopify variants by SKU first and EAN second. Matches are grouped by parent product because `custom.attr5` belongs to the product, not the variant. Products with conflicting calculated prices are skipped for manual review.
 
-The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. The tool displays a confirmation dialog before sending an update.
+The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. The confirmation dialog lists each ready parent product and its source CSV rows, lets the user update selected products, or explicitly update every product shown.
 
 ## Local Development
 
