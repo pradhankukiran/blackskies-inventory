@@ -207,7 +207,7 @@ The Sale Prices module accepts the Zalando `ZABLO_01 - Old Season Cleaning` CSV.
 
 The preview matches Shopify variants by SKU first and EAN second. Matches are grouped by parent product because `custom.attr5` belongs to the product, not the variant. Products with conflicting calculated prices are skipped for manual review.
 
-The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. Updates require the server-side `SHOPIFY_SALE_PRICE_UPDATE_SECRET`; the user enters the matching secret in the confirmation dialog, and it is not stored in the browser.
+The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. The tool displays a confirmation dialog before sending an update.
 
 ## Local Development
 
@@ -235,7 +235,6 @@ Shopify sync requires environment variables in `.env` / Vercel env:
 - `SHOPIFY_CLIENT_ID`
 - `SHOPIFY_CLIENT_SECRET`
 - `SHOPIFY_LOCATION_NAME`
-- `SHOPIFY_SALE_PRICE_UPDATE_SECRET`
 
 Build:
 

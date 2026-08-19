@@ -1,7 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import handler from "./sale-prices";
-
-const originalUpdateSecret = process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET;
 
 type TestResponse = {
   statusCode: number;
@@ -42,14 +40,6 @@ const validRows = [
   },
 ];
 
-afterEach(() => {
-  if (originalUpdateSecret === undefined) {
-    delete process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET;
-  } else {
-    process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET = originalUpdateSecret;
-  }
-});
-
 describe("Shopify sale-price endpoint safeguards", () => {
   it("accepts POST only", async () => {
     const res = response();
@@ -59,36 +49,29 @@ describe("Shopify sale-price endpoint safeguards", () => {
     expect(res.headers.Allow).toBe("POST");
   });
 
-  it("fails closed when the update secret is not configured", async () => {
-    delete process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET;
+  it("rejects unknown actions before contacting Shopify", async () => {
     const res = response();
     await handler(
-      { method: "POST", headers: {}, body: { action: "update", rows: validRows } },
+      { method: "POST", headers: {}, body: { action: "delete", rows: validRows } },
       res
     );
 
-    expect(res.statusCode).toBe(503);
-    expect(res.body?.error).toBe("update_not_configured");
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.error).toBe("invalid_action");
   });
 
-  it("rejects an incorrect update secret", async () => {
-    process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET = "correct-secret";
+  it("rejects empty row lists before contacting Shopify", async () => {
     const res = response();
     await handler(
-      {
-        method: "POST",
-        headers: { "x-sale-price-update-secret": "wrong-secret" },
-        body: { action: "update", rows: validRows },
-      },
+      { method: "POST", headers: {}, body: { action: "update", rows: [] } },
       res
     );
 
-    expect(res.statusCode).toBe(401);
-    expect(res.body?.error).toBe("invalid_update_secret");
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.error).toBe("invalid_rows");
   });
 
   it("rejects cross-origin updates before contacting Shopify", async () => {
-    process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET = "correct-secret";
     const res = response();
     await handler(
       {
@@ -96,7 +79,6 @@ describe("Shopify sale-price endpoint safeguards", () => {
         headers: {
           host: "inventory.example.com",
           origin: "https://attacker.example.com",
-          "x-sale-price-update-secret": "correct-secret",
         },
         body: { action: "update", rows: validRows },
       },

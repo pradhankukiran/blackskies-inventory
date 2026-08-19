@@ -83,14 +83,12 @@ const apiErrorMessage = (body: ShopifySalePriceApiError, status: number) =>
 
 const postShopifySalePrices = async (
   action: SalePriceAction,
-  rows: SalePricePayloadRow[],
-  updateSecret?: string
+  rows: SalePricePayloadRow[]
 ): Promise<ShopifySalePriceApiResponse> => {
   const response = await fetch("/api/shopify/sale-prices", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(updateSecret ? { "x-sale-price-update-secret": updateSecret } : {}),
     },
     body: JSON.stringify({ action, rows }),
   });
@@ -138,7 +136,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const [processingStatus, setProcessingStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [updateSecret, setUpdateSecret] = useState("");
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
   const tableDragRef = useRef({
@@ -288,7 +285,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setShowConfirmation(false);
-    setUpdateSecret("");
     saveZalandoSalePriceFile(selected).catch((saveError) => {
       console.error("Could not save the Sale Prices CSV:", saveError);
     });
@@ -302,7 +298,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setShowConfirmation(false);
-    setUpdateSecret("");
     saveZalandoSalePriceFile(null).catch((saveError) => {
       console.error("Could not remove the saved Sale Prices CSV:", saveError);
     });
@@ -316,7 +311,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setShowConfirmation(false);
-    setUpdateSecret("");
 
     try {
       await Promise.all([
@@ -340,7 +334,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setShowConfirmation(false);
-    setUpdateSecret("");
 
     try {
       await saveZalandoSalePriceUiState({
@@ -388,17 +381,15 @@ export const ZalandoSalePriceTool: React.FC = () => {
   };
 
   const updateShopify = async () => {
-    if (!payloadRows.length || !updateSecret) return;
+    if (!payloadRows.length) return;
 
-    const secret = updateSecret;
     setShowConfirmation(false);
-    setUpdateSecret("");
     setIsUpdating(true);
     setProcessingStatus("Updating parent product metafields in Shopify...");
     setError(null);
 
     try {
-      const result = await postShopifySalePrices("update", payloadRows, secret);
+      const result = await postShopifySalePrices("update", payloadRows);
       setShopifyResult(result);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Could not update Shopify sale prices.");
@@ -705,30 +696,15 @@ export const ZalandoSalePriceTool: React.FC = () => {
                 Normal Shopify and variant prices will not change.
               </p>
             </div>
-            <div className="space-y-4 px-6 py-5">
-              <label className="block">
-                <span className="text-base font-medium text-slate-700">Update authorization secret</span>
-                <input
-                  type="password"
-                  value={updateSecret}
-                  onChange={(event) => setUpdateSecret(event.target.value)}
-                  autoComplete="off"
-                  className="ops-input mt-2 w-full"
-                  placeholder="Enter the configured update secret"
-                  autoFocus
-                />
-              </label>
-              <p className="text-sm text-slate-500">
-                The secret is sent only with this update request and is not saved in the browser.
+            <div className="px-6 py-5">
+              <p className="text-base leading-6 text-slate-600">
+                Only products marked Ready to update will be changed. Shopify matching and sale prices are checked again before writing.
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button
                 type="button"
-                onClick={() => {
-                  setShowConfirmation(false);
-                  setUpdateSecret("");
-                }}
+                onClick={() => setShowConfirmation(false)}
                 className="ops-button-secondary"
               >
                 Cancel
@@ -736,7 +712,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
               <button
                 type="button"
                 onClick={updateShopify}
-                disabled={!updateSecret}
+                disabled={isUpdating || !readyProducts}
                 className="ops-button-primary"
               >
                 Confirm Update

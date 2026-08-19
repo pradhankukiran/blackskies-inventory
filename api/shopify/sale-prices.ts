@@ -1,5 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
 import {
   applyProductUpdateResults,
@@ -86,16 +84,6 @@ function toInputRows(rows: RawRequestRow[]): SalePriceInputRow[] {
         ? String(row.statusDetail ?? row.status_detail)
         : null,
   }));
-}
-
-function constantTimeSecretMatches(expected: string, supplied: string | null): boolean {
-  if (!supplied) return false;
-  const expectedBuffer = Buffer.from(expected);
-  const suppliedBuffer = Buffer.from(supplied);
-  return (
-    expectedBuffer.length === suppliedBuffer.length &&
-    timingSafeEqual(expectedBuffer, suppliedBuffer)
-  );
 }
 
 function hasSameOrigin(req: any): boolean {
@@ -261,20 +249,6 @@ export default async function handler(req: any, res: any) {
   if (action === 'update') {
     if (!hasSameOrigin(req)) {
       return sendError(res, 403, 'invalid_origin', 'Update requests must come from this application.');
-    }
-
-    const configuredSecret = process.env.SHOPIFY_SALE_PRICE_UPDATE_SECRET;
-    if (!configuredSecret) {
-      return sendError(
-        res,
-        503,
-        'update_not_configured',
-        'Set SHOPIFY_SALE_PRICE_UPDATE_SECRET before enabling Shopify updates.'
-      );
-    }
-
-    if (!constantTimeSecretMatches(configuredSecret, header(req, 'x-sale-price-update-secret'))) {
-      return sendError(res, 401, 'invalid_update_secret', 'The update secret is missing or incorrect.');
     }
   }
 
