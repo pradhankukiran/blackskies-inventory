@@ -1,12 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client';
+import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
 import {
   applyProductUpdateResults,
   prepareSalePriceUpdate,
   type SalePriceInputRow,
   type ShopifySalePriceVariant,
-} from './sale-prices.logic';
+} from './sale-prices.logic.js';
 
 const MAX_SALE_PRICE_ROWS = 500;
 const METAFIELDS_SET_BATCH_SIZE = 25;

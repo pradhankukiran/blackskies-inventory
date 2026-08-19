@@ -2,7 +2,7 @@
 // using client_credentials grant, returns data shaped for the existing
 // internalStockProcessor and skuEanProcessor in the React app.
 
-import { getShopifyClient } from './client';
+import { getShopifyClient } from './client.js';
 
 const DEFAULT_LOCATION_NAME = 'Lager';
 
