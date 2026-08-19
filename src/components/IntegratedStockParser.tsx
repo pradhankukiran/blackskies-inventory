@@ -41,6 +41,7 @@ import { FileState, ParsedData } from "@/types/stock";
 import RelativeStockTable from "./RelativeStockTable";
 import BlacklistModal from "./BlacklistModal";
 import { RetaggingDecisionTool } from "./RetaggingDecisionTool";
+import { ZalandoSalePriceTool } from "./ZalandoSalePriceTool";
 import { StockReturnTool } from "./StockReturnTool";
 
 interface TabContentProps {
@@ -141,75 +142,96 @@ const ZFSContent: React.FC<TabContentProps> = ({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {error && (
         <Alert variant="destructive">
           <AlertTitle>{error}</AlertTitle>
         </Alert>
       )}
 
-      <FileUploadGrid
-        files={files}
-        onFileChange={handleFileChange}
-        onFileRemove={handleRemoveFile}
-        timeline={timeline}
-        onTimelineChange={setTimeline}
-      />
+      <section className="ops-surface rounded-[8px] p-5">
+        <FileUploadGrid
+          files={files}
+          onFileChange={handleFileChange}
+          onFileRemove={handleRemoveFile}
+          timeline={timeline}
+          onTimelineChange={setTimeline}
+        />
+      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={resetFiles}
-            className="ops-button-secondary"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset Files
-          </button>
-          <button
-            onClick={onOpenBlacklist}
-            className="ops-button-secondary"
-          >
-            Manage Blacklist
-            {blacklistCount > 0 && (
-              <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
-                {blacklistCount}
-              </span>
-            )}
-          </button>
-          {showTabs && (
-            <button
-              onClick={clearTables}
-              className="ops-button-danger"
-            >
-              Clear Tables
-            </button>
-          )}
+      <section className="ops-surface rounded-[8px]">
+        <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="ops-title">ZFS Operations</h3>
+            <p className="ops-muted">Process uploaded stock, shipment, mapper, and sales files together.</p>
+          </div>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
+            Sales timeline is required when a sales file is uploaded
+          </span>
         </div>
-        <button
-          onClick={() => {
-            if (!hasAnyZfsInput) {
-              setError("Please upload at least one ZFS file before processing");
-              return;
-            }
-            if (files.zfsSales && timeline === "none") {
-              setError("Please select a timeline for the sales file");
-              return;
-            }
-            processFiles(timeline);
-          }}
-          disabled={isProcessDisabled}
-          title={
-            !hasAnyZfsInput
-              ? "Upload at least one file before processing"
-              : isTimelineMissing
-                ? "Select a timeline for the ZFS Sales file"
-                : "Process uploaded ZFS files"
-          }
-          className="ops-button-primary px-6"
-        >
-          {processButtonLabel}
-        </button>
-      </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-4">
+          <div className="max-w-3xl text-base text-slate-600">
+            Upload at least one ZFS file. Add a sales timeline before processing a ZFS Sales file.
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={resetFiles}
+              className="ops-button-secondary"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset Files
+            </button>
+            <button
+              type="button"
+              onClick={onOpenBlacklist}
+              className="ops-button-secondary"
+            >
+              Manage Blacklist
+              {blacklistCount > 0 && (
+                <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
+                  {blacklistCount}
+                </span>
+              )}
+            </button>
+            {showTabs && (
+              <button
+                type="button"
+                onClick={clearTables}
+                className="ops-button-danger"
+              >
+                Clear Tables
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!hasAnyZfsInput) {
+                  setError("Please upload at least one ZFS file before processing");
+                  return;
+                }
+                if (files.zfsSales && timeline === "none") {
+                  setError("Please select a timeline for the sales file");
+                  return;
+                }
+                processFiles(timeline);
+              }}
+              disabled={isProcessDisabled}
+              title={
+                !hasAnyZfsInput
+                  ? "Upload at least one file before processing"
+                  : isTimelineMissing
+                    ? "Select a timeline for the ZFS Sales file"
+                    : "Process uploaded ZFS files"
+              }
+              className="ops-button-primary px-6"
+            >
+              {processButtonLabel}
+            </button>
+          </div>
+        </div>
+      </section>
 
       <div ref={tabsRef} id="results-section">
         {showTabs && (
@@ -260,8 +282,7 @@ const FBAContent: React.FC<FBAContentProps> = ({
     fbaData.sellerboardStock.filter((item) => !blacklistSet.has((item.SKU || '').trim().toUpperCase()))
   ), [fbaData.sellerboardStock, blacklistSet]);
 
-  // Update showTabs when fbaData changes
-  const showTabs = filteredSellerboardStock.length > 0;
+  const hasResults = filteredSellerboardStock.length > 0;
   const isProcessDisabled = isProcessing || !fbaFiles.sellerboardExport;
   const processButtonLabel = isProcessing
     ? "Processing..."
@@ -429,90 +450,100 @@ const FBAContent: React.FC<FBAContentProps> = ({
     }
   };
 
-  const tabs = [
-    {
-      id: "stock",
-      label: "FBA Stock Overview & Recommendation",
-      content:
-        filteredSellerboardStock.length > 0 ? (
-          <FBAStockTable data={filteredSellerboardStock} />
-        ) : null,
-    },
-    // Add more tabs here in the future like recommendations if needed
-  ];
-
   return (
     <>
       <LoadingOverlay isLoading={isProcessing} message={processingStatus} />
-      <div className="space-y-4">
+      <div className="space-y-5">
         {error && (
           <Alert variant="destructive">
             <AlertTitle>{error}</AlertTitle>
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FileUploadSection
-            title="Sellerboard Export"
-            onChange={(e) => handleFileChange(e, "sellerboardExport")}
-            onRemove={(name) => handleRemoveFile(name, "sellerboardExport")}
-            files={fbaFiles.sellerboardExport ? [fbaFiles.sellerboardExport] : []}
-            acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
-          />
-          <FileUploadSection
-            title="Sellerboard Sales + Returns"
-            onChange={(e) => handleFileChange(e, "sellerboardReturns")}
-            onRemove={(name) => handleRemoveFile(name, "sellerboardReturns")}
-            files={fbaFiles.sellerboardReturns ? [fbaFiles.sellerboardReturns] : []}
-            acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
-          />
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={resetFiles}
-              className="ops-button-secondary"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reset Files
-            </button>
-            <button
-              onClick={onOpenBlacklist}
-              className="ops-button-secondary"
-            >
-              Manage Blacklist
-              {blacklist.length > 0 && (
-                <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
-                  {blacklist.length}
-                </span>
-              )}
-            </button>
-            {showTabs && (
-              <button
-                onClick={clearTables}
-                className="ops-button-danger"
-              >
-                Clear Tables
-              </button>
-            )}
+        <section className="ops-surface rounded-[8px] p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <FileUploadSection
+              title="Sellerboard Export"
+              onChange={(e) => handleFileChange(e, "sellerboardExport")}
+              onRemove={(name) => handleRemoveFile(name, "sellerboardExport")}
+              files={fbaFiles.sellerboardExport ? [fbaFiles.sellerboardExport] : []}
+              acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+            />
+            <FileUploadSection
+              title="Sellerboard Sales + Returns"
+              onChange={(e) => handleFileChange(e, "sellerboardReturns")}
+              onRemove={(name) => handleRemoveFile(name, "sellerboardReturns")}
+              files={fbaFiles.sellerboardReturns ? [fbaFiles.sellerboardReturns] : []}
+              acceptedFileTypes=".csv,.tsv,.txt,.xlsx,.xls"
+            />
           </div>
-          <button
-            onClick={() => {
-              if (!fbaFiles.sellerboardExport) {
-                setError("Please upload a Sellerboard Export before processing");
-                return;
-              }
-              processFiles();
-            }}
-            disabled={isProcessDisabled}
-            className="ops-button-primary px-6"
-          >
-            {processButtonLabel}
-          </button>
-        </div>
+        </section>
+
+        <section className="ops-surface rounded-[8px]">
+          <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="ops-title">FBA Operations</h3>
+              <p className="ops-muted">Create stock recommendations from the Sellerboard export.</p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
+              Sales and returns file is optional
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-4">
+            <div className="max-w-3xl text-base text-slate-600">
+              Upload the Sellerboard Export to calculate recommendations. Add Sales + Returns for return-rate adjustments.
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={resetFiles}
+                className="ops-button-secondary"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset Files
+              </button>
+              <button
+                type="button"
+                onClick={onOpenBlacklist}
+                className="ops-button-secondary"
+              >
+                Manage Blacklist
+                {blacklist.length > 0 && (
+                  <span className="inline-flex min-w-[20px] items-center justify-center rounded-[999px] bg-slate-950 px-2 py-0.5 text-sm font-semibold text-white">
+                    {blacklist.length}
+                  </span>
+                )}
+              </button>
+              {hasResults && (
+                <button
+                  type="button"
+                  onClick={clearTables}
+                  className="ops-button-danger"
+                >
+                  Clear Tables
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!fbaFiles.sellerboardExport) {
+                    setError("Please upload a Sellerboard Export before processing");
+                    return;
+                  }
+                  processFiles();
+                }}
+                disabled={isProcessDisabled}
+                className="ops-button-primary px-6"
+              >
+                {processButtonLabel}
+              </button>
+            </div>
+          </div>
+        </section>
 
         <div ref={tabsRef} id="fba-results-section">
-          {showTabs && <Tabs tabs={tabs} id="fba-tabs" />}
+          {hasResults && <FBAStockTable data={filteredSellerboardStock} />}
         </div>
       </div>
     </>
@@ -591,6 +622,7 @@ const IntegratedStockParser: React.FC = () => {
   const location = useLocation();
   const onZfsRoute = location.pathname === '/zfs' || location.pathname === '/';
   const onRetaggingRoute = location.pathname === '/retagging';
+  const onSalePricesRoute = location.pathname === '/sale-prices';
   const onStockReturnRoute = location.pathname === '/stock-return';
   const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
   const currentShopifySyncModule: ShopifySyncModule | null = onStockReturnRoute
@@ -1531,10 +1563,6 @@ const IntegratedStockParser: React.FC = () => {
               alt="Blackskies Logo"
               className="h-14 sm:h-16"
             />
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Inventory Management</h1>
-              <p className="mt-0.5 hidden text-base text-slate-500 sm:block">ZFS, FBA, retagging, and stock return operations</p>
-            </div>
           </div>
 
           <nav className="flex flex-wrap justify-center gap-1 border border-slate-200 bg-slate-50 p-1 shadow-inner" aria-label="Primary">
@@ -1575,6 +1603,18 @@ const IntegratedStockParser: React.FC = () => {
               Retagging
             </NavLink>
             <NavLink
+              to="/sale-prices"
+              className={({ isActive }) =>
+                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
+                  isActive
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                }`
+              }
+            >
+              Sale Prices
+            </NavLink>
+            <NavLink
               to="/stock-return"
               className={({ isActive }) =>
                 `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
@@ -1597,7 +1637,9 @@ const IntegratedStockParser: React.FC = () => {
                 title={
                   canSyncShopify
                     ? "Pull Internal Stocks and SKU/EAN data directly from Shopify"
-                    : "Shopify sync is used by ZFS, Retagging, and Stock Return"
+                    : onSalePricesRoute
+                      ? "Sale Prices connects to Shopify during Process and Match"
+                      : "Shopify sync is used by ZFS, Retagging, and Stock Return"
                 }
               >
                 {isShopifySyncing && (
@@ -1705,7 +1747,7 @@ const IntegratedStockParser: React.FC = () => {
         {/* Main Card */}
         <div className="overflow-hidden bg-slate-50">
           {/* Content Area */}
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <Routes>
               <Route path="/" element={<Navigate to="/zfs" replace />} />
               <Route path="/zfs" element={
@@ -1758,6 +1800,7 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isRetaggingShopifyStockLoading}
               />
               } />
+              <Route path="/sale-prices" element={<ZalandoSalePriceTool />} />
               <Route path="/stock-return" element={
               <StockReturnTool
                 shopifyStockFile={stockReturnShopifyStockFile}

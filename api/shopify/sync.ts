@@ -2,91 +2,18 @@
 // using client_credentials grant, returns data shaped for the existing
 // internalStockProcessor and skuEanProcessor in the React app.
 
-const API_VERSION = '2025-04';
+import { getShopifyClient } from './client';
+
 const DEFAULT_LOCATION_NAME = 'Lager';
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-async function getAccessToken(
-  shop: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-    return cachedToken.token;
-  }
-
-  const res = await fetch(
-    `https://${shop}.myshopify.com/admin/oauth/access_token`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token request failed: ${res.status} ${text}`);
-  }
-
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-  return data.access_token;
-}
-
-async function gql(
-  shop: string,
-  token: string,
-  query: string,
-  variables?: Record<string, unknown>
-): Promise<any> {
-  const res = await fetch(
-    `https://${shop}.myshopify.com/admin/api/${API_VERSION}/graphql.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': token,
-      },
-      body: JSON.stringify({ query, variables }),
-    }
-  );
-
-  const data = (await res.json()) as { data?: any; errors?: any };
-  if (data.errors) {
-    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-  }
-  return data.data;
-}
-
 export default async function handler(_req: any, res: any) {
-  const shop = process.env.SHOPIFY_SHOP_DOMAIN;
-  const clientId = process.env.SHOPIFY_CLIENT_ID;
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
   const locationName = process.env.SHOPIFY_LOCATION_NAME || DEFAULT_LOCATION_NAME;
 
-  if (!shop || !clientId || !clientSecret) {
-    return res.status(500).json({
-      error:
-        'Missing one of: SHOPIFY_SHOP_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET',
-    });
-  }
-
   try {
-    const token = await getAccessToken(shop, clientId, clientSecret);
+    const shopify = await getShopifyClient();
 
     // 1. Find the target location by name
-    const locationsResp = await gql(
-      shop,
-      token,
+    const locationsResp = await shopify.gql<any>(
       `query Locations { locations(first: 25) { edges { node { id name } } } }`
     );
 
@@ -109,9 +36,7 @@ export default async function handler(_req: any, res: any) {
     let cursor: string | null = null;
 
     while (true) {
-      const variantsResp: any = await gql(
-        shop,
-        token,
+      const variantsResp = await shopify.gql<any>(
         `query Variants($cursor: String, $locationId: ID!) {
           productVariants(first: 100, after: $cursor) {
             pageInfo { hasNextPage endCursor }

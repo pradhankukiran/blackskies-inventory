@@ -690,7 +690,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
-          <label className="relative min-w-[260px] flex-1">
+          <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
@@ -806,7 +806,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
           <div className="text-base text-slate-500">
             Showing {filteredRows.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredRows.length)} of{" "}

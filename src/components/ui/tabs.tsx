@@ -52,7 +52,7 @@ export function Tabs({ tabs, id = "default-tabs" }: TabsProps) {
           ))}
         </nav>
       </div>
-      <div className="mt-5 w-full h-[calc(100vh-100px)] overflow-hidden">
+      <div className="mt-5 w-full">
         {tabs.find((tab) => tab.id === activeTab)?.content}
       </div>
     </div>

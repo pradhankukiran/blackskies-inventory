@@ -150,7 +150,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
-          <label className="relative min-w-[260px] flex-1">
+          <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
@@ -164,7 +164,7 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
 
         <div
           ref={tableScrollRef}
-          className={`flex-1 overflow-auto ${
+          className={`max-h-[calc(100vh-260px)] flex-1 overflow-auto ${
             isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
           }`}
           title="Drag horizontally to scroll the table"
@@ -204,9 +204,9 @@ export const StockTable: React.FC<StockTableProps> = ({ data }) => {
             </tbody>
           </table>
         </div>
-        <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-500">
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            Showing {filteredData.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
             {filteredData.length} entries
           </div>

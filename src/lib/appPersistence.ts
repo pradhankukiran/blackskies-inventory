@@ -3,7 +3,9 @@ import { ParsedData } from '@/types/stock';
 import { ArticleRecommendation } from '@/types/sales';
 import { ProcessedSellerboardStock } from '@/types/processors';
 import { RetaggingDecisionResult } from '@/types/retagging';
+import { ShopifySalePriceApiResponse } from '@/types/shopifySalePrice';
 import { StockReturnResult } from '@/types/stockReturn';
+import { ZalandoSalePriceResult } from '@/types/zalandoSalePrice';
 import { clearGenericData, getGenericData, getStoredData, storeData, storeGenericData, StoredData } from './indexedDB';
 
 export interface RecommendationSettings {
@@ -39,6 +41,8 @@ const STOCK_RETURN_SALES_FILE_KEY = 'stockReturnSalesFile';
 const STOCK_RETURN_SHOPIFY_STOCK_FILE_KEY = 'stockReturnShopifyStockFile';
 const STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY = 'stockReturnShopifySkuEanFile';
 const STOCK_RETURN_STATE_KEY = 'stockReturnState';
+const ZALANDO_SALE_PRICE_FILE_KEY = 'zalandoSalePriceFile';
+const ZALANDO_SALE_PRICE_STATE_KEY = 'zalandoSalePriceState';
 
 export interface RetaggingUiState {
   sarThreshold: number;
@@ -79,6 +83,17 @@ export interface StockReturnPersistedState extends StockReturnUiState {
   shopifySkuEanFile: File | null;
 }
 
+export interface ZalandoSalePriceUiState {
+  localResult: ZalandoSalePriceResult | null;
+  shopifyResult: ShopifySalePriceApiResponse | null;
+  searchTerm: string;
+  statusFilter: string;
+}
+
+export interface ZalandoSalePricePersistedState extends ZalandoSalePriceUiState {
+  file: File | null;
+}
+
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
   sarThreshold: 85,
   nmvThreshold: 1000,
@@ -101,6 +116,13 @@ const DEFAULT_STOCK_RETURN_STATE: StockReturnUiState = {
   showReturnOnly: false,
   hasProcessed: false,
   result: null,
+};
+
+const DEFAULT_ZALANDO_SALE_PRICE_STATE: ZalandoSalePriceUiState = {
+  localResult: null,
+  shopifyResult: null,
+  searchTerm: '',
+  statusFilter: 'all',
 };
 
 const createEmptyParsedData = (): ParsedData => ({
@@ -466,4 +488,36 @@ export const resetStockReturnState = async () => {
     clearGenericData(STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY),
     clearGenericData(STOCK_RETURN_STATE_KEY),
   ]);
+};
+
+export const loadZalandoSalePriceFile = async (): Promise<File | null> => {
+  const file = await getGenericData(ZALANDO_SALE_PRICE_FILE_KEY);
+  return file instanceof File ? file : null;
+};
+
+export const loadZalandoSalePriceState = async (): Promise<ZalandoSalePricePersistedState> => {
+  const [file, state] = await Promise.all([
+    loadZalandoSalePriceFile(),
+    getGenericData(ZALANDO_SALE_PRICE_STATE_KEY),
+  ]);
+
+  return {
+    ...DEFAULT_ZALANDO_SALE_PRICE_STATE,
+    ...(state || {}),
+    file,
+  };
+};
+
+export const saveZalandoSalePriceFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(ZALANDO_SALE_PRICE_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(ZALANDO_SALE_PRICE_FILE_KEY);
+};
+
+export const saveZalandoSalePriceUiState = async (
+  state: ZalandoSalePriceUiState
+) => {
+  await storeGenericData(ZALANDO_SALE_PRICE_STATE_KEY, state);
 };

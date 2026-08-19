@@ -192,7 +192,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                 {timelineLabel} · Safety {safetyFactor}% · Demand {trendFactor}%
               </div>
             </div>
-            <label className="relative min-w-[260px] flex-1 lg:max-w-md">
+            <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px] lg:max-w-md">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
@@ -206,7 +206,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
         </div>
         <div
           ref={tableScrollRef}
-          className={`flex-1 overflow-auto ${
+          className={`max-h-[calc(100vh-260px)] flex-1 overflow-auto ${
             isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
           }`}
           title="Drag horizontally to scroll the table"
@@ -260,15 +260,22 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                 )})
               ) : (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
-                    No recommendations available with the current selection
+                  <td colSpan={11} className="px-4 py-12 text-center">
+                    <div className="mx-auto max-w-lg">
+                      <div className="text-base font-semibold text-slate-950">
+                        No matching recommendations
+                      </div>
+                      <div className="mt-1 text-base text-slate-500">
+                        Adjust the search or confirm the uploaded files contain ZFS sales rows.
+                      </div>
+                    </div>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <div className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <div className="text-base text-slate-500">
             Showing {filteredRecommendations.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to{" "}
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredRecommendations.length)} of{" "}

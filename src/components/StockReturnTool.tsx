@@ -626,7 +626,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
-            <label className="relative min-w-[260px] flex-1">
+            <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"

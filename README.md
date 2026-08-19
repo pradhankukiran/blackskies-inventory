@@ -12,12 +12,13 @@ Internal inventory, replenishment, Zalando retagging, and ZFS stock-return tool 
 
 ## What It Does
 
-The app has four main workflows:
+The app has five main workflows:
 
 - **Zalando ZFS restock recommendations**: combines Shopify internal stock, SKU/EAN mapping, ZFS stock, ZFS shipment files, received shipment files, and ZFS sales exports.
 - **Amazon FBA restock recommendations**: processes Sellerboard stock and sales/returns exports, with its own FBA recommendation table.
 - **Zalando Retagging Decision Tool**: DE-only MVP that uses Zalando CSV exports and Shopify internal stock to recommend season-retagging, basics applications, discount notes, clearance, or manual review.
 - **ZFS Stock Return Tool**: DE-only workflow that identifies slow-moving ZFS overstock and suggests Return to Merchant quantities by EAN.
+- **Zalando Sale Prices**: processes `ZABLO_01` old-season rows, calculates a 20% discount, matches Shopify variants by SKU/EAN, and updates the parent product metafield `custom.attr5` after confirmation.
 
 It runs fully through CSV/file uploads plus the existing Shopify Admin API sync. There is no direct Zalando API integration.
 
@@ -30,6 +31,7 @@ It runs fully through CSV/file uploads plus the existing Shopify Admin API sync.
 - Persists uploaded files, table results, and UI settings locally using IndexedDB/localStorage.
 - Supports configurable restock controls: coverage days, sales timeline, safety factor, and demand/trend factor.
 - Exports ZFS, FBA, Retagging, and Stock Return outputs as CSV and Excel where applicable.
+- Previews and exports Zalando sale-price matching results before any Shopify write.
 - Uses sticky table headers and drag-to-scroll behavior for wide data tables.
 
 ## ZFS / FBA Restock Logic
@@ -199,6 +201,14 @@ Local persistence:
 - UI settings such as restock factors and last Shopify sync metadata use localStorage.
 - Reset actions are scoped per module.
 
+## Zalando Sale Prices
+
+The Sale Prices module accepts the Zalando `ZABLO_01 - Old Season Cleaning` CSV. It reads each row's SKU/EAN and regular price, calculates `regular price x 0.80`, and rounds the result to two decimal places.
+
+The preview matches Shopify variants by SKU first and EAN second. Matches are grouped by parent product because `custom.attr5` belongs to the product, not the variant. Products with conflicting calculated prices are skipped for manual review.
+
+The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. Updates require the server-side `SHOPIFY_SALE_PRICE_UPDATE_SECRET`; the user enters the matching secret in the confirmation dialog, and it is not stored in the browser.
+
 ## Local Development
 
 Install dependencies:
@@ -221,9 +231,11 @@ vercel dev --listen 5173
 
 Shopify sync requires environment variables in `.env` / Vercel env:
 
-- `SHOPIFY_STORE_DOMAIN`
-- `SHOPIFY_ADMIN_ACCESS_TOKEN`
+- `SHOPIFY_SHOP_DOMAIN`
+- `SHOPIFY_CLIENT_ID`
+- `SHOPIFY_CLIENT_SECRET`
 - `SHOPIFY_LOCATION_NAME`
+- `SHOPIFY_SALE_PRICE_UPDATE_SECRET`
 
 Build:
 
