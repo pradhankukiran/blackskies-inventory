@@ -1075,7 +1075,7 @@ const IntegratedStockParser: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retaggingShopifySyncMeta]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1104,7 +1104,7 @@ const IntegratedStockParser: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [stockReturnShopifySyncMeta]);
 
   const handleRetaggingShopifyStockFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -402,7 +402,7 @@ export const RetaggingDecisionTool: React.FC<RetaggingDecisionToolProps> = ({
     }
   };
 
-  const rows = result?.rows || [];
+  const rows = useMemo(() => result?.rows ?? [], [result]);
   const summaryCards = [
     { label: "Total Articles", value: result?.summary.totalArticles ?? 0 },
     { label: "Retag Candidates", value: result?.summary.retagCandidates ?? 0 },

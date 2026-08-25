@@ -44,7 +44,7 @@ const RelativeStockTable: React.FC<RelativeStockTableProps> = ({ data }) => {
 
   useEffect(() => {
     goToPage(1);
-  }, [searchTerm, positiveStockData]);
+  }, [goToPage, searchTerm, positiveStockData]);
 
   if (!isClient) {
     return null;

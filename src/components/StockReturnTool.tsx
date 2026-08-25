@@ -104,7 +104,7 @@ export const StockReturnTool: React.FC<StockReturnToolProps> = ({
   const [isTableDragging, setIsTableDragging] = useState(false);
 
   const requiredFilesPresent = Boolean(files.inventory && files.sales);
-  const rows = result?.rows || [];
+  const rows = useMemo(() => result?.rows ?? [], [result]);
   const stockReturnExportRows = useMemo(() => (
     rows
       .filter((row) => row["Suggested return qty"] > 0)

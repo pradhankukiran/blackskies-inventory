@@ -262,7 +262,7 @@ export function calculateStockRecommendations(
     const statusCluster = stockItem["Status Cluster"] || 'Live';
 
     // Calculate recommended stock considering current inventory, status, and price
-    let recommendedStock = calculateRecommendedStock(
+    const recommendedStock = calculateRecommendedStock(
       {
         totalSales: salesData.totalSales,
         timelineDays: timelineDays,
@@ -309,7 +309,7 @@ export function calculateStockRecommendations(
       });
 
       // Ensure the total allocated stock matches the recommended stock
-      let allocatedTotal = Object.values(countryAllocations).reduce((sum, val) => sum + val, 0);
+      const allocatedTotal = Object.values(countryAllocations).reduce((sum, val) => sum + val, 0);
       const difference = adjustedRecommendedStock - allocatedTotal;
 
       // Adjust for any rounding differences by adding/removing from highest sales countries
@@ -361,17 +361,6 @@ export function calculateStockRecommendations(
 
     // IMPROVED: Enhanced logging with details on multipliers and scaling factors
   });
-
-  // IMPROVED: Log summary statistics
-  const coverageStats = recommendations.reduce((stats, rec) => {
-    stats.totalStock += rec.recommendedStock;
-    stats.count++;
-    return stats;
-  }, { totalStock: 0, count: 0 });
-
-  if (coverageStats.count > 0) {
-
-  }
 
   // Sort by total sales descending, then by average daily sales
   return recommendations.sort((a, b) => {
