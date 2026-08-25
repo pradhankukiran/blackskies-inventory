@@ -21,6 +21,17 @@ export function integrateStockData(
     _normSKU: normalizeSku(item.SKU),
   }));
 
+  // Zalando can report the same EAN once per country with inconsistent stock.
+  // Use the highest reported stock so a zero-stock country does not hide stock
+  // that is available for the same EAN in another country.
+  const zfsByEan = new Map<string, ProcessedZFSStock>();
+  zfsStock.forEach((item) => {
+    const current = zfsByEan.get(item.EAN);
+    if (!current || item["ZFS Quantity"] > current["ZFS Quantity"]) {
+      zfsByEan.set(item.EAN, item);
+    }
+  });
+
   const integrated = skuEanMapping
     .map((mapping) => {
       const normMappingSKU = normalizeSku(mapping.SKU);
@@ -57,7 +68,7 @@ export function integrateStockData(
       };
 
       // Find matching ZFS stock (by EAN); allow missing and default to zeros
-      const zfsData = zfsStock.find((item) => item.EAN === mapping.EAN) || {
+      const zfsData = zfsByEan.get(mapping.EAN) || {
         EAN: mapping.EAN,
         "Product Name": "",
         "ZFS Quantity": 0,
