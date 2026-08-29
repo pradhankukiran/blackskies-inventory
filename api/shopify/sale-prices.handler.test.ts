@@ -204,7 +204,11 @@ describe("Shopify sale-price endpoint safeguards", () => {
         headers: {},
         body: {
           action: "update",
-          selection: { mode: "selected", productIds: [secondProductId] },
+          selection: {
+            mode: "selected",
+            productId: secondProductId,
+            compareDigest: null,
+          },
           rows: validRows,
         },
       },
@@ -216,6 +220,42 @@ describe("Shopify sale-price endpoint safeguards", () => {
     expect(res.body?.invalidProductIds).toEqual([secondProductId]);
     expect(res.body?.rows).toHaveLength(1);
     expect(res.body?.products).toHaveLength(1);
+    expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
+  });
+
+  it("rejects approval when the Shopify value changed after preview", async () => {
+    const gql = configureShopify([
+      variant(
+        "gid://shopify/ProductVariant/1",
+        firstProductId,
+        validRows[0].sku,
+        validRows[0].ean,
+        "25.00",
+        "digest-after-preview"
+      ),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          selection: {
+            mode: "selected",
+            productId: firstProductId,
+            compareDigest: "digest-from-preview",
+          },
+          rows: validRows,
+        },
+      },
+      res
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body?.error).toBe("selection_stale");
+    expect(res.body?.invalidProductIds).toEqual([firstProductId]);
     expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
   });
 
@@ -277,7 +317,11 @@ describe("Shopify sale-price endpoint safeguards", () => {
         headers: {},
         body: {
           action: "update",
-          selection: { mode: "selected", productIds: [secondProductId] },
+          selection: {
+            mode: "selected",
+            productId: secondProductId,
+            compareDigest: null,
+          },
           rows,
         },
       },
@@ -338,7 +382,11 @@ describe("Shopify sale-price endpoint safeguards", () => {
         headers: {},
         body: {
           action: "update",
-          selection: { mode: "selected", productIds: [firstProductId] },
+          selection: {
+            mode: "selected",
+            productId: firstProductId,
+            compareDigest: "digest-before-update",
+          },
           rows: validRows,
         },
       },
@@ -367,29 +415,31 @@ describe("Shopify sale-price endpoint safeguards", () => {
 });
 
 describe("parseUpdateSelection", () => {
-  it("accepts all mode and normalizes selected IDs", () => {
-    expect(parseUpdateSelection({ mode: "all" }, 1)).toEqual({
-      selection: { mode: "all" },
-    });
+  it("accepts one parent approval and normalizes its ID", () => {
     expect(
-      parseUpdateSelection(
-        { mode: "selected", productIds: [" gid://shopify/Product/1 "] },
-        1
-      )
+      parseUpdateSelection({
+        mode: "selected",
+        productId: " gid://shopify/Product/1 ",
+        compareDigest: "digest-preview",
+      })
     ).toEqual({
-      selection: { mode: "selected", productIds: ["gid://shopify/Product/1"] },
+      selection: {
+        mode: "selected",
+        productId: "gid://shopify/Product/1",
+        compareDigest: "digest-preview",
+      },
     });
   });
 
-  it("rejects invalid selected scopes", () => {
-    expect(parseUpdateSelection({ mode: "selected", productIds: [] }, 1)).toEqual(
+  it("rejects bulk mode, missing products, and missing preview digests", () => {
+    expect(parseUpdateSelection({ mode: "all" })).toEqual(
+      expect.objectContaining({ error: expect.any(String) })
+    );
+    expect(parseUpdateSelection({ mode: "selected", productId: "" })).toEqual(
       expect.objectContaining({ error: expect.any(String) })
     );
     expect(
-      parseUpdateSelection({ mode: "selected", productIds: ["one", "one"] }, 2)
-    ).toEqual(expect.objectContaining({ error: expect.any(String) }));
-    expect(
-      parseUpdateSelection({ mode: "selected", productIds: ["one", "two"] }, 1)
+      parseUpdateSelection({ mode: "selected", productId: "one" })
     ).toEqual(expect.objectContaining({ error: expect.any(String) }));
   });
 });

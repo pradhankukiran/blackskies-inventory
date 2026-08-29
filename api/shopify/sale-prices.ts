@@ -16,9 +16,11 @@ type RequestAction = 'preview' | 'update';
 
 type RawRequestRow = Record<string, unknown>;
 
-export type SalePriceUpdateSelection =
-  | { mode: 'all' }
-  | { mode: 'selected'; productIds: string[] };
+export type SalePriceUpdateSelection = {
+  mode: 'selected';
+  productId: string;
+  compareDigest: string | null;
+};
 
 type ProductMetafieldDefinitionResponse = {
   metafieldDefinitions: {
@@ -72,64 +74,49 @@ function isRequestAction(value: unknown): value is RequestAction {
 }
 
 /**
- * Validates the client-supplied update scope before any Shopify request.
- * Product IDs are trimmed here so that the later stale-selection check uses
- * the exact values that will be matched against fresh Shopify results.
+ * Validates one parent approval and the metafield digest shown in its preview.
+ * The digest binds the approval to the Shopify value the user reviewed.
  */
 export function parseUpdateSelection(
-  value: unknown,
-  maxProductIds: number
+  value: unknown
 ): { selection: SalePriceUpdateSelection } | { error: string } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {
       error:
-        'Update requests must include selection.mode as "all" or "selected".',
+        'Update requests must include one selected parent product.',
     };
   }
 
-  const selection = value as { mode?: unknown; productIds?: unknown };
-  if (selection.mode === 'all') {
-    return { selection: { mode: 'all' } };
-  }
-
+  const selection = value as {
+    mode?: unknown;
+    productId?: unknown;
+    compareDigest?: unknown;
+  };
   if (selection.mode !== 'selected') {
     return {
-      error: 'Selection mode must be either "all" or "selected".',
+      error: 'Only one-at-a-time parent product approval is supported.',
     };
   }
 
-  if (!Array.isArray(selection.productIds) || selection.productIds.length === 0) {
+  if (typeof selection.productId !== 'string' || !selection.productId.trim()) {
     return {
-      error: 'Selected updates require at least one Shopify parent product ID.',
+      error: 'A selected Shopify parent product ID is required.',
     };
   }
 
-  if (selection.productIds.length > maxProductIds) {
+  if (selection.compareDigest !== null && typeof selection.compareDigest !== 'string') {
     return {
-      error: 'The number of selected products cannot exceed the submitted CSV rows.',
+      error: 'The selected product must include its preview compare digest.',
     };
   }
 
-  if (!selection.productIds.every((productId) => typeof productId === 'string')) {
-    return {
-      error: 'Selected product IDs must be non-empty strings.',
-    };
-  }
-
-  const productIds = selection.productIds.map((productId) => productId.trim());
-  if (productIds.some((productId) => !productId)) {
-    return {
-      error: 'Selected product IDs must be non-empty strings.',
-    };
-  }
-
-  if (new Set(productIds).size !== productIds.length) {
-    return {
-      error: 'Selected product IDs must be unique.',
-    };
-  }
-
-  return { selection: { mode: 'selected', productIds } };
+  return {
+    selection: {
+      mode: 'selected',
+      productId: selection.productId.trim(),
+      compareDigest: selection.compareDigest,
+    },
+  };
 }
 
 function stringOrNumberOrNull(value: unknown): string | number | null {
@@ -343,7 +330,7 @@ export default async function handler(req: any, res: any) {
       return sendError(res, 403, 'invalid_origin', 'Update requests must come from this application.');
     }
 
-    const parsedSelection = parseUpdateSelection(selection, rows.length);
+    const parsedSelection = parseUpdateSelection(selection);
     if ('error' in parsedSelection) {
       return sendError(res, 400, 'invalid_selection', parsedSelection.error);
     }
@@ -383,21 +370,19 @@ export default async function handler(req: any, res: any) {
     }
 
     const readyProducts = preparation.products.filter((product) => product.status === 'ready');
-    const selectedProductIds =
-      updateSelection!.mode === 'selected'
-        ? new Set(updateSelection!.productIds)
-        : null;
-    const staleProductIds = selectedProductIds
-      ? updateSelection!.productIds.filter(
-          (productId) => !readyProducts.some((product) => product.productId === productId)
-        )
-      : [];
+    const selectedProduct = readyProducts.find(
+      (product) => product.productId === updateSelection!.productId
+    );
+    const selectionChanged =
+      selectedProduct?.compareDigest !== updateSelection!.compareDigest;
+    const staleProductIds =
+      !selectedProduct || selectionChanged ? [updateSelection!.productId] : [];
 
     if (staleProductIds.length > 0) {
       return res.status(409).json({
         error: 'selection_stale',
         message:
-          'One or more selected products are no longer ready to update. Refresh the preview and select only ready products.',
+          'This parent product changed after it was previewed. Review its refreshed Shopify value before approving again.',
         invalidProductIds: staleProductIds,
         action,
         targetStatus: TARGET_STATUS,
@@ -408,9 +393,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const productsToUpdate = selectedProductIds
-      ? readyProducts.filter((product) => selectedProductIds.has(product.productId))
-      : readyProducts;
+    const productsToUpdate = [selectedProduct!];
     const outcomes = await updateProductMetafields(shopify, productsToUpdate);
     const result = applyProductUpdateResults(preparation, outcomes);
     const updatedProducts = result.products.filter((product) => product.status === 'updated').length;

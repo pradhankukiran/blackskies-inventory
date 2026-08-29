@@ -29,7 +29,11 @@ const TARGET_STATUS = "ZABLO_01";
 
 type SalePriceAction = "preview" | "update";
 
-type SalePriceUpdateSelection = { mode: "selected"; productIds: string[] };
+type SalePriceUpdateSelection = {
+  mode: "selected";
+  productId: string;
+  compareDigest: string | null;
+};
 
 interface SalePricePayloadRow {
   rowNumber: number;
@@ -56,6 +60,7 @@ interface ShopifyProductReview {
   productTitle: string;
   salePrice: string;
   currentSalePrice: string;
+  compareDigest: string | null;
   currency: string;
   status: string;
   message: string;
@@ -353,6 +358,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
         productTitle: product.productTitle || "Untitled Shopify product",
         salePrice: product.salePrice || "",
         currentSalePrice: product.currentSalePrice || "",
+        compareDigest: product.compareDigest ?? null,
         currency:
           product.sourceRowNumbers
             .map((rowNumber) => rowsByNumber.get(rowNumber)?.source.currency)
@@ -517,8 +523,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setConfirmationProductId(productId);
   };
 
-  const updateShopify = async (productId: string) => {
-    if (!payloadRows.length || !productId) return;
+  const updateShopify = async (product: ShopifyProductReview) => {
+    if (!payloadRows.length || !product.productId) return;
 
     setConfirmationProductId(null);
     setIsUpdating(true);
@@ -528,7 +534,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     try {
       const result = await postShopifySalePrices("update", payloadRows, {
         mode: "selected",
-        productIds: [productId],
+        productId: product.productId,
+        compareDigest: product.compareDigest,
       });
       setShopifyResult(result);
     } catch (updateError) {
@@ -995,7 +1002,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => updateShopify(confirmationProduct.productId)}
+                onClick={() => updateShopify(confirmationProduct)}
                 disabled={isUpdating}
                 className="ops-button-primary"
               >
