@@ -17,6 +17,9 @@ export type ShopifySalePriceVariant = {
   product: {
     id: string;
     title: string;
+    salePriceMetafield?: {
+      value: string;
+    } | null;
   };
 };
 
@@ -30,6 +33,7 @@ export type SalePriceRowStatus =
   | 'ambiguous_ean'
   | 'identifier_conflict'
   | 'product_price_conflict'
+  | 'already_up_to_date'
   | 'updated'
   | 'update_failed';
 
@@ -40,6 +44,7 @@ export type SalePriceRowResult = {
   ean: string | null;
   regularPrice: number | null;
   salePrice: string | null;
+  currentSalePrice: string | null;
   minimumPriceApplied: boolean;
   status: SalePriceRowStatus;
   message: string | null;
@@ -58,6 +63,7 @@ export type SalePriceRowResult = {
 export type SalePriceProductStatus =
   | 'ready'
   | 'product_price_conflict'
+  | 'already_up_to_date'
   | 'updated'
   | 'update_failed';
 
@@ -65,6 +71,7 @@ export type SalePriceProductResult = {
   productId: string;
   productTitle: string;
   salePrice: string | null;
+  currentSalePrice: string | null;
   minimumPriceApplied: boolean;
   status: SalePriceProductStatus;
   message: string | null;
@@ -86,6 +93,8 @@ export type SalePriceSummary = {
   readyProducts: number;
   productPriceConflicts: number;
   minimumPriceAppliedRows: number;
+  alreadyUpToDateRows: number;
+  alreadyUpToDateProducts: number;
 };
 
 export type SalePricePreparation = {
@@ -159,6 +168,16 @@ function containsTargetStatus(statusDetail: string): boolean {
     .includes('ZABLO_01');
 }
 
+function currentMetafieldValue(variant: ShopifySalePriceVariant | null): string | null {
+  const value = text(variant?.product.salePriceMetafield?.value);
+  return value || null;
+}
+
+function normalizedPrice(value: string | null): string | null {
+  const parsed = parseRegularPrice(value);
+  return parsed === null ? null : parsed.toFixed(2);
+}
+
 function createIndex(
   variants: ShopifySalePriceVariant[],
   identifier: (variant: ShopifySalePriceVariant) => string
@@ -200,6 +219,7 @@ function rowResult(
     ean: ean || null,
     regularPrice,
     salePrice,
+    currentSalePrice: currentMetafieldValue(variant),
     minimumPriceApplied:
       salePrice !== null && discountedPrice !== null && discountedPrice < MINIMUM_SALE_PRICE,
     status,
@@ -239,6 +259,11 @@ function createSummary(
       (product) => product.status === 'product_price_conflict'
     ).length,
     minimumPriceAppliedRows: rows.filter((row) => row.minimumPriceApplied).length,
+    alreadyUpToDateRows: rows.filter((row) => row.status === 'already_up_to_date')
+      .length,
+    alreadyUpToDateProducts: products.filter(
+      (product) => product.status === 'already_up_to_date'
+    ).length,
   };
 }
 
@@ -428,16 +453,28 @@ export function prepareSalePriceUpdate(
       distinctPrices.size > 1
         ? `Using the highest calculated sale price from ${productRows.length} matched SKU rows.`
         : null;
+    const currentSalePrice = productRows[0].currentSalePrice;
+    const alreadyUpToDate = normalizedPrice(currentSalePrice) === highestSalePrice;
+
+    if (alreadyUpToDate) {
+      for (const row of productRows) {
+        row.status = 'already_up_to_date';
+        row.message = 'Shopify already has the proposed parent sale price.';
+      }
+    }
 
     products.push({
       productId,
       productTitle: product.title,
       salePrice: highestSalePrice,
+      currentSalePrice,
       minimumPriceApplied:
         Number(highestSalePrice) === MINIMUM_SALE_PRICE &&
         productRows.some((row) => row.minimumPriceApplied),
-      status: 'ready',
-      message,
+      status: alreadyUpToDate ? 'already_up_to_date' : 'ready',
+      message: alreadyUpToDate
+        ? 'Shopify already has the proposed parent sale price.'
+        : message,
       sourceRowNumbers,
     });
   }
@@ -456,11 +493,13 @@ export function applyProductUpdateResults(
 
     product.status = outcome.updated ? 'updated' : 'update_failed';
     product.message = outcome.message;
+    if (outcome.updated) product.currentSalePrice = product.salePrice;
 
     for (const row of preparation.rows) {
       if (row.status !== 'ready' || row.shopifyProduct?.id !== product.productId) continue;
       row.status = outcome.updated ? 'updated' : 'update_failed';
       row.message = outcome.message;
+      if (outcome.updated) row.currentSalePrice = product.salePrice;
     }
   }
 

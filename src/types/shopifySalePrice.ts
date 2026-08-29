@@ -10,6 +10,7 @@ export type ShopifySalePriceRowStatus =
   | "ambiguous_ean"
   | "identifier_conflict"
   | "product_price_conflict"
+  | "already_up_to_date"
   | "outside_target_status";
 
 export interface ShopifySalePriceApiRow {
@@ -19,6 +20,7 @@ export interface ShopifySalePriceApiRow {
   ean: string | null;
   regularPrice: number | null;
   salePrice: string | null;
+  currentSalePrice: string | null;
   minimumPriceApplied: boolean;
   status: ShopifySalePriceRowStatus;
   message: string | null;
@@ -38,12 +40,14 @@ export type ShopifySalePriceProductStatus =
   | "ready"
   | "updated"
   | "update_failed"
+  | "already_up_to_date"
   | "product_price_conflict";
 
 export interface ShopifySalePriceApiProduct {
   productId: string;
   productTitle: string;
   salePrice: string | null;
+  currentSalePrice: string | null;
   minimumPriceApplied: boolean;
   status: ShopifySalePriceProductStatus;
   message: string | null;
@@ -65,6 +69,8 @@ export interface ShopifySalePriceApiSummary {
   readyProducts: number;
   productPriceConflicts: number;
   minimumPriceAppliedRows: number;
+  alreadyUpToDateRows: number;
+  alreadyUpToDateProducts: number;
   updatedProducts?: number;
   failedProducts?: number;
 }

@@ -199,7 +199,7 @@ async function getAllVariants(
   while (true) {
     const response: ProductVariantsResponse =
       await shopify.gql<ProductVariantsResponse>(
-        `query SalePriceVariants($cursor: String) {
+        `query SalePriceVariants($cursor: String, $namespace: String!, $key: String!) {
           productVariants(first: 250, after: $cursor) {
             pageInfo { hasNextPage endCursor }
             edges {
@@ -207,12 +207,18 @@ async function getAllVariants(
                 id
                 sku
                 barcode
-                product { id title }
+                product {
+                  id
+                  title
+                  salePriceMetafield: metafield(namespace: $namespace, key: $key) {
+                    value
+                  }
+                }
               }
             }
           }
         }`,
-        { cursor }
+        { cursor, namespace: METAFIELD_NAMESPACE, key: METAFIELD_KEY }
       );
 
     variants.push(...response.productVariants.edges.map((edge) => edge.node));

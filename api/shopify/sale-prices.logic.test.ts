@@ -129,6 +129,37 @@ describe('sale-price preparation', () => {
     expect(result.summary).toMatchObject({ readyProducts: 1, productPriceConflicts: 0 });
   });
 
+  it('excludes a parent whose current Shopify metafield already matches', () => {
+    const currentVariants: ShopifySalePriceVariant[] = [
+      {
+        ...variants[0],
+        product: {
+          ...variants[0].product,
+          salePriceMetafield: { value: '27.190' },
+        },
+      },
+    ];
+    const result = prepareSalePriceUpdate(
+      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],
+      currentVariants
+    );
+
+    expect(result.rows[0]).toMatchObject({
+      status: 'already_up_to_date',
+      currentSalePrice: '27.190',
+    });
+    expect(result.products[0]).toMatchObject({
+      status: 'already_up_to_date',
+      currentSalePrice: '27.190',
+      salePrice: '27.19',
+    });
+    expect(result.summary).toMatchObject({
+      readyProducts: 0,
+      alreadyUpToDateRows: 1,
+      alreadyUpToDateProducts: 1,
+    });
+  });
+
   it('changes prepared rows and products only after a reported update outcome', () => {
     const result = prepareSalePriceUpdate(
       [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],

@@ -98,12 +98,18 @@ const variant = (
   id: string,
   productId: string,
   sku: string,
-  barcode: string
+  barcode: string,
+  currentSalePrice?: string
 ) => ({
   id,
   sku,
   barcode,
-  product: { id: productId, title: `Product ${productId.slice(-1)}` },
+  product: {
+    id: productId,
+    title: `Product ${productId.slice(-1)}`,
+    salePriceMetafield:
+      currentSalePrice === undefined ? null : { value: currentSalePrice },
+  },
 });
 
 beforeEach(() => {
@@ -198,6 +204,41 @@ describe("Shopify sale-price endpoint safeguards", () => {
     expect(res.body?.invalidProductIds).toEqual([secondProductId]);
     expect(res.body?.rows).toHaveLength(1);
     expect(res.body?.products).toHaveLength(1);
+    expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
+  });
+
+  it("does not offer or write a parent whose metafield is already current", async () => {
+    const gql = configureShopify([
+      variant(
+        "gid://shopify/ProductVariant/1",
+        firstProductId,
+        validRows[0].sku,
+        validRows[0].ean,
+        "27.190"
+      ),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: { action: "preview", rows: validRows },
+      },
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.summary).toEqual(
+      expect.objectContaining({ readyProducts: 0, alreadyUpToDateProducts: 1 })
+    );
+    expect(res.body?.products).toEqual([
+      expect.objectContaining({
+        productId: firstProductId,
+        status: "already_up_to_date",
+        currentSalePrice: "27.190",
+      }),
+    ]);
     expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
   });
 
