@@ -29,9 +29,7 @@ const TARGET_STATUS = "ZABLO_01";
 
 type SalePriceAction = "preview" | "update";
 
-type SalePriceUpdateSelection =
-  | { mode: "all" }
-  | { mode: "selected"; productIds: string[] };
+type SalePriceUpdateSelection = { mode: "selected"; productIds: string[] };
 
 interface SalePricePayloadRow {
   rowNumber: number;
@@ -49,13 +47,19 @@ interface DisplayRow {
   productTitle: string;
   productId: string;
   salePrice: string;
+  currentSalePrice: string;
+  parentSalePrice: string;
 }
 
-interface ReadyShopifyProduct {
+interface ShopifyProductReview {
   productId: string;
   productTitle: string;
   salePrice: string;
+  currentSalePrice: string;
   currency: string;
+  status: string;
+  message: string;
+  minimumPriceApplied: boolean;
   sourceRowNumbers: number[];
   sourceIdentifiers: string[];
 }
@@ -64,6 +68,8 @@ const statusLabels: Record<string, string> = {
   ready: "Ready to update",
   updated: "Updated",
   update_failed: "Update failed",
+  update_conflict: "Shopify value changed",
+  already_up_to_date: "Already up to date",
   skipped_non_zablo_01: "Skipped: other status",
   error_missing_identifier: "Missing SKU/EAN",
   error_missing_regular_price: "Missing regular price",
@@ -80,7 +86,9 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusClassName = (status: string) => {
-  if (status === "updated") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (status === "updated" || status === "already_up_to_date") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
   if (status === "ready") return "bg-blue-50 text-blue-700 ring-blue-200";
   if (status === "skipped_non_zablo_01" || status === "outside_target_status") {
     return "bg-slate-100 text-slate-600 ring-slate-200";
@@ -150,8 +158,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const [isLoadingPersistedState, setIsLoadingPersistedState] = useState(true);
   const [processingStatus, setProcessingStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [confirmationProductId, setConfirmationProductId] = useState<string | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
   const tableDragRef = useRef({
@@ -198,7 +205,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
   }, [isLoadingPersistedState, localResult, searchTerm, shopifyResult, statusFilter]);
 
   useEffect(() => {
-    if (!showConfirmation) return;
+    if (!confirmationProductId) return;
 
     const body = document.body;
     const root = document.documentElement;
@@ -217,8 +224,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setShowConfirmation(false);
-      setSelectedProductIds([]);
+      setConfirmationProductId(null);
     };
     document.addEventListener("keydown", handleKeyDown);
 
@@ -231,7 +237,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
       body.style.width = previousBodyWidth;
       window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
     };
-  }, [showConfirmation]);
+  }, [confirmationProductId]);
 
   const payloadRows = useMemo(
     () => (localResult ? payloadFromResult(localResult) : []),
@@ -243,11 +249,18 @@ export const ZalandoSalePriceTool: React.FC = () => {
     [shopifyResult]
   );
 
+  const apiProductsById = useMemo(
+    () => new Map((shopifyResult?.products || []).map((product) => [product.productId, product])),
+    [shopifyResult]
+  );
+
   const displayRows = useMemo<DisplayRow[]>(
     () =>
       (localResult?.rows || []).map((source) => {
         const apiRow = apiRowsByNumber.get(source.sourceRowNumber);
         const usesApiStatus = source.status === "ready" && apiRow;
+        const productId = usesApiStatus ? apiRow.shopifyProduct?.id || "" : "";
+        const apiProduct = productId ? apiProductsById.get(productId) : undefined;
         return {
           source,
           status: usesApiStatus
@@ -258,15 +271,17 @@ export const ZalandoSalePriceTool: React.FC = () => {
           message: usesApiStatus ? apiRow.message || "" : source.message,
           matchingMethod: usesApiStatus ? apiRow.matchingMethod || "" : "",
           productTitle: usesApiStatus ? apiRow.shopifyProduct?.title || "" : "",
-          productId: usesApiStatus ? apiRow.shopifyProduct?.id || "" : "",
+          productId,
           salePrice: usesApiStatus
             ? apiRow.salePrice || ""
             : source.salePrice === null
               ? ""
               : source.salePrice.toFixed(2),
+          currentSalePrice: usesApiStatus ? apiRow.currentSalePrice || "" : "",
+          parentSalePrice: apiProduct?.salePrice || "",
         };
       }),
-    [apiRowsByNumber, localResult]
+    [apiProductsById, apiRowsByNumber, localResult]
   );
 
   const statuses = useMemo(
@@ -302,7 +317,9 @@ export const ZalandoSalePriceTool: React.FC = () => {
         Article: row.source.articleName,
         Currency: row.source.currency,
         "Regular price": row.source.regularPrice ?? "",
-        "Sale price": row.salePrice,
+        "SKU calculated sale price": row.salePrice,
+        "Current Shopify parent sale price": row.currentSalePrice,
+        "Proposed Shopify parent sale price": row.parentSalePrice,
         "Shopify parent product": row.productTitle,
         "Matched by": row.matchingMethod,
         Message: row.message,
@@ -310,12 +327,12 @@ export const ZalandoSalePriceTool: React.FC = () => {
     [displayRows]
   );
 
-  const readyShopifyProducts = useMemo<ReadyShopifyProduct[]>(() => {
+  const shopifyProductReviews = useMemo<ShopifyProductReview[]>(() => {
     const rowsByNumber = new Map(displayRows.map((row) => [row.source.sourceRowNumber, row]));
-    const productsById = new Map<string, ReadyShopifyProduct>();
+    const productsById = new Map<string, ShopifyProductReview>();
 
     for (const product of shopifyResult?.products || []) {
-      if (product.status !== "ready" || !product.productId || !product.salePrice) continue;
+      if (!product.productId) continue;
 
       const sourceIdentifiers = Array.from(
         new Set(
@@ -334,11 +351,15 @@ export const ZalandoSalePriceTool: React.FC = () => {
       productsById.set(product.productId, {
         productId: product.productId,
         productTitle: product.productTitle || "Untitled Shopify product",
-        salePrice: product.salePrice,
+        salePrice: product.salePrice || "",
+        currentSalePrice: product.currentSalePrice || "",
         currency:
           product.sourceRowNumbers
             .map((rowNumber) => rowsByNumber.get(rowNumber)?.source.currency)
             .find(Boolean) || "",
+        status: product.status,
+        message: product.message || "",
+        minimumPriceApplied: Boolean(product.minimumPriceApplied),
         sourceRowNumbers: product.sourceRowNumbers,
         sourceIdentifiers,
       });
@@ -349,26 +370,33 @@ export const ZalandoSalePriceTool: React.FC = () => {
     );
   }, [displayRows, shopifyResult]);
 
+  const readyShopifyProducts = useMemo(
+    () => shopifyProductReviews.filter((product) => product.status === "ready"),
+    [shopifyProductReviews]
+  );
+
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
     filteredRows,
     ITEMS_PER_PAGE
   );
 
   const readyProducts = readyShopifyProducts.length;
-  const readyProductIds = useMemo(
-    () => readyShopifyProducts.map((product) => product.productId),
-    [readyShopifyProducts]
+  const confirmationProduct = useMemo(
+    () =>
+      confirmationProductId
+        ? readyShopifyProducts.find((product) => product.productId === confirmationProductId) || null
+        : null,
+    [confirmationProductId, readyShopifyProducts]
   );
-  const selectedReadyProductIds = useMemo(() => {
-    const readyIdSet = new Set(readyProductIds);
-    return selectedProductIds.filter((productId) => readyIdSet.has(productId));
-  }, [readyProductIds, selectedProductIds]);
-  const allReadyProductsSelected =
-    readyProducts > 0 && selectedReadyProductIds.length === readyProducts;
   const updatedProducts = shopifyResult?.products.filter((product) => product.status === "updated").length || 0;
+  const alreadyCurrentProducts =
+    shopifyResult?.products.filter((product) => product.status === "already_up_to_date").length || 0;
   const hasProcessed = Boolean(localResult);
   const reviewRows = displayRows.filter(
-    (row) => !["ready", "updated", "skipped_non_zablo_01"].includes(row.status)
+    (row) =>
+      !["ready", "updated", "already_up_to_date", "skipped_non_zablo_01"].includes(
+        row.status
+      )
   ).length;
   const processButtonLabel = isProcessing
     ? "Processing..."
@@ -385,8 +413,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setError(null);
     setSearchTerm("");
     setStatusFilter("all");
-    setShowConfirmation(false);
-    setSelectedProductIds([]);
+    setConfirmationProductId(null);
     saveZalandoSalePriceFile(selected).catch((saveError) => {
       console.error("Could not save the Sale Prices CSV:", saveError);
     });
@@ -399,8 +426,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setError(null);
     setSearchTerm("");
     setStatusFilter("all");
-    setShowConfirmation(false);
-    setSelectedProductIds([]);
+    setConfirmationProductId(null);
     saveZalandoSalePriceFile(null).catch((saveError) => {
       console.error("Could not remove the saved Sale Prices CSV:", saveError);
     });
@@ -413,8 +439,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setError(null);
     setSearchTerm("");
     setStatusFilter("all");
-    setShowConfirmation(false);
-    setSelectedProductIds([]);
+    setConfirmationProductId(null);
 
     try {
       await Promise.all([
@@ -437,8 +462,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setError(null);
     setSearchTerm("");
     setStatusFilter("all");
-    setShowConfirmation(false);
-    setSelectedProductIds([]);
+    setConfirmationProductId(null);
 
     try {
       await saveZalandoSalePriceUiState({
@@ -466,6 +490,9 @@ export const ZalandoSalePriceTool: React.FC = () => {
       const rawRows = await parseFile(file);
       const processed = processZalandoSalePrices(rawRows);
       setLocalResult(processed);
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
 
       const rows = payloadFromResult(processed);
       if (rows.length) {
@@ -474,9 +501,6 @@ export const ZalandoSalePriceTool: React.FC = () => {
         setShopifyResult(preview);
       }
 
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
     } catch (processError) {
       setError(processError instanceof Error ? processError.message : "Could not process the Sale Prices CSV.");
     } finally {
@@ -486,45 +510,38 @@ export const ZalandoSalePriceTool: React.FC = () => {
   };
 
   const closeConfirmation = () => {
-    setShowConfirmation(false);
-    setSelectedProductIds([]);
+    setConfirmationProductId(null);
   };
 
-  const openConfirmation = () => {
-    setSelectedProductIds([]);
-    setShowConfirmation(true);
+  const openConfirmation = (productId: string) => {
+    setConfirmationProductId(productId);
   };
 
-  const toggleProductSelection = (productId: string) => {
-    setSelectedProductIds((currentIds) =>
-      currentIds.includes(productId)
-        ? currentIds.filter((id) => id !== productId)
-        : [...currentIds, productId]
-    );
-  };
+  const updateShopify = async (productId: string) => {
+    if (!payloadRows.length || !productId) return;
 
-  const updateShopify = async (productIds: string[]) => {
-    if (!payloadRows.length || !productIds.length) return;
-
-    setShowConfirmation(false);
+    setConfirmationProductId(null);
     setIsUpdating(true);
     setProcessingStatus("Updating parent product metafields in Shopify...");
     setError(null);
 
     try {
       const result = await postShopifySalePrices("update", payloadRows, {
-        // Send the ready IDs displayed in this dialog. This ensures that
-        // "Update all" never re-updates a product from an earlier partial update.
         mode: "selected",
-        productIds,
+        productIds: [productId],
       });
       setShopifyResult(result);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Could not update Shopify sale prices.");
+      try {
+        const refreshedPreview = await postShopifySalePrices("preview", payloadRows);
+        setShopifyResult(refreshedPreview);
+      } catch (refreshError) {
+        console.error("Could not refresh the Shopify sale-price preview:", refreshError);
+      }
     } finally {
       setIsUpdating(false);
       setProcessingStatus("");
-      setSelectedProductIds([]);
     }
   };
 
@@ -604,7 +621,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             </div>
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
-            {TARGET_STATUS} only
+            Contains {TARGET_STATUS}
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
@@ -673,23 +690,15 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   Export Sale Price Results
                 </button>
               )}
-              <button
-                type="button"
-                onClick={openConfirmation}
-                disabled={!readyProducts || isUpdating}
-                className="ops-button-primary"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Update {readyProducts.toLocaleString()} Shopify Product{readyProducts === 1 ? "" : "s"}
-              </button>
             </div>
           </div>
 
-          <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
             {[
               { label: "CSV rows", value: localResult.summary.totalRows },
-              { label: "Valid ZABLO_01 rows", value: localResult.summary.readyRows },
+              { label: "Eligible ZABLO_01 rows", value: localResult.summary.readyRows },
               { label: "Ready products", value: readyProducts },
+              { label: "Already current", value: alreadyCurrentProducts },
               { label: "Updated products", value: updatedProducts },
               { label: "Needs review", value: reviewRows },
             ].map((card) => (
@@ -699,6 +708,97 @@ export const ZalandoSalePriceTool: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {shopifyProductReviews.length > 0 && (
+            <div className="border-b border-slate-200">
+              <div className="px-5 py-4">
+                <h4 className="text-base font-semibold text-slate-950">Parent product approvals</h4>
+                <p className="mt-1 text-sm text-slate-600">
+                  Approve one parent product at a time. The proposed value is the highest calculated price from its matched SKUs.
+                </p>
+              </div>
+              <div className="max-h-[480px] overflow-auto border-t border-slate-200">
+                <table className="ops-table min-w-[1180px]">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Shopify parent product</th>
+                      <th>Current custom.attr5</th>
+                      <th>Proposed custom.attr5</th>
+                      <th>Matched SKUs / EANs</th>
+                      <th>Review note</th>
+                      <th>Approval</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shopifyProductReviews.map((product) => (
+                      <tr key={product.productId}>
+                        <td>
+                          <span
+                            className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ring-1 ${statusClassName(product.status)}`}
+                          >
+                            {statusLabels[product.status] || product.status}
+                          </span>
+                        </td>
+                        <td className="font-medium" title={product.productId}>
+                          {product.productTitle}
+                        </td>
+                        <td>
+                          {product.currentSalePrice
+                            ? `${product.currentSalePrice} ${product.currency}`.trim()
+                            : "Not set"}
+                        </td>
+                        <td className="font-semibold">
+                          {product.salePrice
+                            ? `${product.salePrice} ${product.currency}`.trim()
+                            : "—"}
+                        </td>
+                        <td className="max-w-[360px] whitespace-normal text-slate-600">
+                          <div className="font-medium text-slate-800">
+                            Row{product.sourceRowNumbers.length === 1 ? "" : "s"} {product.sourceRowNumbers.join(", ")}
+                          </div>
+                          <div className="mt-1">
+                            {product.sourceIdentifiers.length
+                              ? product.sourceIdentifiers.join(" · ")
+                              : "—"}
+                          </div>
+                        </td>
+                        <td className="max-w-[340px] whitespace-normal">
+                          {product.minimumPriceApplied && (
+                            <div className="font-medium text-amber-700">
+                              Warning: €15.00 minimum applied.
+                            </div>
+                          )}
+                          <div className={product.minimumPriceApplied ? "mt-1 text-slate-600" : "text-slate-600"}>
+                            {product.message || "—"}
+                          </div>
+                        </td>
+                        <td>
+                          {product.status === "ready" ? (
+                            <button
+                              type="button"
+                              onClick={() => openConfirmation(product.productId)}
+                              disabled={isUpdating}
+                              className="ops-button-primary whitespace-nowrap"
+                            >
+                              <ShieldCheck className="h-4 w-4" />
+                              Review and update
+                            </button>
+                          ) : (
+                            <span className="text-sm text-slate-500">
+                              {product.status === "updated" || product.status === "already_up_to_date"
+                                ? "No action required"
+                                : "Reprocess to review"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
             <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
@@ -740,7 +840,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             onPointerCancel={stopTableDrag}
             onPointerLeave={stopTableDrag}
           >
-            <table className="ops-table min-w-[1500px]">
+            <table className="ops-table min-w-[1780px]">
               <thead>
                 <tr>
                   <th>Row</th>
@@ -749,7 +849,9 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   <th>EAN</th>
                   <th>Article</th>
                   <th>Regular price</th>
-                  <th>Sale price</th>
+                  <th>SKU calculated price</th>
+                  <th>Current parent custom.attr5</th>
+                  <th>Proposed parent custom.attr5</th>
                   <th>Shopify parent product</th>
                   <th>Matched by</th>
                   <th>Message</th>
@@ -776,6 +878,16 @@ export const ZalandoSalePriceTool: React.FC = () => {
                       <td className="font-semibold">
                         {row.salePrice ? `${row.salePrice} ${row.source.currency}`.trim() : "—"}
                       </td>
+                      <td>
+                        {row.currentSalePrice
+                          ? `${row.currentSalePrice} ${row.source.currency}`.trim()
+                          : "Not set"}
+                      </td>
+                      <td className="font-semibold">
+                        {row.parentSalePrice
+                          ? `${row.parentSalePrice} ${row.source.currency}`.trim()
+                          : "—"}
+                      </td>
                       <td title={row.productId}>{row.productTitle || "—"}</td>
                       <td>{row.matchingMethod ? row.matchingMethod.replace(/_/g, " + ") : "—"}</td>
                       <td className="max-w-[420px] whitespace-normal text-slate-600">{row.message || "—"}</td>
@@ -783,7 +895,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center">
+                    <td colSpan={12} className="px-4 py-12 text-center">
                       <div className="mx-auto max-w-lg">
                         <div className="text-base font-semibold text-slate-950">No matching sale price rows</div>
                         <div className="mt-1 text-base text-slate-500">
@@ -808,120 +920,86 @@ export const ZalandoSalePriceTool: React.FC = () => {
         </section>
       )}
 
-      {showConfirmation && createPortal(
+      {confirmationProduct && createPortal(
         <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen overscroll-none items-center justify-center overflow-hidden bg-slate-950/60 p-4 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="sale-price-confirmation-title"
-            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col overscroll-contain border border-slate-200 bg-white shadow-2xl"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overscroll-contain border border-slate-200 bg-white shadow-2xl"
           >
             <div className="border-b border-slate-200 px-6 py-5">
               <h3 id="sale-price-confirmation-title" className="text-xl font-semibold text-slate-950">
-                Confirm Shopify metafield update
+                Confirm parent product update
               </h3>
               <p className="mt-2 text-base leading-6 text-slate-600">
-                Review the {readyProducts.toLocaleString()} ready parent Shopify product{readyProducts === 1 ? "" : "s"} below.
-                Only custom.attr5 changes. Normal Shopify and variant prices will not change.
+                This approval updates one Shopify parent product. Only custom.attr5 changes.
+                Normal Shopify and variant prices will not change.
               </p>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <p className="text-base text-slate-600">
-                {selectedReadyProductIds.length.toLocaleString()} of {readyProducts.toLocaleString()} product{readyProducts === 1 ? "" : "s"} selected
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductIds(readyProductIds)}
-                  disabled={allReadyProductsSelected}
-                  className="ops-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductIds([])}
-                  disabled={!selectedReadyProductIds.length}
-                  className="ops-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear Selection
-                </button>
+            <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+              <div className="border border-slate-200">
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-sm font-medium uppercase tracking-wide text-slate-500">
+                    Shopify parent product
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950">
+                    {confirmationProduct.productTitle}
+                  </div>
+                </div>
+                <div className="grid gap-4 px-4 py-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-medium text-slate-500">Current custom.attr5</div>
+                    <div className="mt-1 text-xl font-semibold text-slate-950">
+                      {confirmationProduct.currentSalePrice
+                        ? `${confirmationProduct.currentSalePrice} ${confirmationProduct.currency}`.trim()
+                        : "Not set"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-slate-500">Proposed custom.attr5</div>
+                    <div className="mt-1 text-xl font-semibold text-blue-700">
+                      {`${confirmationProduct.salePrice} ${confirmationProduct.currency}`.trim()}
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-slate-200 px-4 py-4">
+                  <div className="text-sm font-medium text-slate-500">Matched SKUs and EANs</div>
+                  <div className="mt-2 text-sm font-medium text-slate-800">
+                    Row{confirmationProduct.sourceRowNumbers.length === 1 ? "" : "s"} {confirmationProduct.sourceRowNumbers.join(", ")}
+                  </div>
+                  <div className="mt-1 break-words text-sm leading-6 text-slate-700">
+                    {confirmationProduct.sourceIdentifiers.length
+                      ? confirmationProduct.sourceIdentifiers.join(" · ")
+                      : "—"}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="min-h-0 flex-1 touch-pan-x touch-pan-y overscroll-contain overflow-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-slate-600">
-                  <tr>
-                    <th className="w-12 border-b border-slate-200 px-4 py-3">
-                      <span className="sr-only">Select product</span>
-                    </th>
-                    <th className="border-b border-slate-200 px-4 py-3 font-medium">Shopify parent product</th>
-                    <th className="border-b border-slate-200 px-4 py-3 font-medium">Sale price</th>
-                    <th className="border-b border-slate-200 px-4 py-3 font-medium">CSV rows and source identifiers</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {readyShopifyProducts.map((product) => {
-                    const isSelected = selectedReadyProductIds.includes(product.productId);
-                    return (
-                      <tr key={product.productId} className={isSelected ? "bg-blue-50" : "bg-white"}>
-                        <td className="border-b border-slate-200 px-4 py-3 align-top">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleProductSelection(product.productId)}
-                            aria-label={`Select ${product.productTitle}`}
-                            className="h-4 w-4 border-slate-300 text-blue-700 focus:ring-blue-600"
-                          />
-                        </td>
-                        <td className="border-b border-slate-200 px-4 py-3 align-top font-medium text-slate-950">
-                          {product.productTitle}
-                        </td>
-                        <td className="border-b border-slate-200 px-4 py-3 align-top font-semibold text-slate-950">
-                          {`${product.salePrice} ${product.currency}`.trim()}
-                        </td>
-                        <td className="border-b border-slate-200 px-4 py-3 align-top text-slate-600">
-                          <div className="font-medium text-slate-800">
-                            Row{product.sourceRowNumbers.length === 1 ? "" : "s"} {product.sourceRowNumbers.join(", ")}
-                          </div>
-                          <div className="mt-1">
-                            {product.sourceIdentifiers.length ? product.sourceIdentifiers.join(" · ") : "—"}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-6 py-5">
-              <p className="text-base leading-6 text-slate-600">
-                Shopify matching and sale prices are checked again before writing.
+              {confirmationProduct.minimumPriceApplied && (
+                <div className="mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Warning: the discounted value was below €15.00, so the €15.00 minimum was applied.
+                </div>
+              )}
+              <p className="mt-4 text-base leading-6 text-slate-600">
+                Shopify matching, the existing value, and concurrent changes are checked again before writing.
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button
                 type="button"
                 onClick={closeConfirmation}
+                autoFocus
                 className="ops-button-secondary"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => updateShopify(selectedReadyProductIds)}
-                disabled={isUpdating || !selectedReadyProductIds.length}
-                className="ops-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Update Selected ({selectedReadyProductIds.length.toLocaleString()})
-              </button>
-              <button
-                type="button"
-                onClick={() => updateShopify(readyProductIds)}
-                disabled={isUpdating || !readyProducts}
+                onClick={() => updateShopify(confirmationProduct.productId)}
+                disabled={isUpdating}
                 className="ops-button-primary"
               >
-                Confirm Update All ({readyProducts.toLocaleString()})
+                Confirm parent update
               </button>
             </div>
           </div>
