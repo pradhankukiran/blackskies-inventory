@@ -212,6 +212,7 @@ async function getAllVariants(
                   title
                   salePriceMetafield: metafield(namespace: $namespace, key: $key) {
                     value
+                    compareDigest
                   }
                 }
               }
@@ -240,9 +241,16 @@ function chunks<T>(values: T[], size: number): T[][] {
 
 async function updateProductMetafields(
   shopify: ShopifyClient,
-  products: Array<{ productId: string; salePrice: string | null }>
+  products: Array<{
+    productId: string;
+    salePrice: string | null;
+    compareDigest: string | null;
+  }>
 ) {
-  const outcomes = new Map<string, { updated: boolean; message: string | null }>();
+  const outcomes = new Map<
+    string,
+    { updated: boolean; conflict?: boolean; message: string | null }
+  >();
 
   for (const batch of chunks(products, METAFIELDS_SET_BATCH_SIZE)) {
     try {
@@ -261,6 +269,7 @@ async function updateProductMetafields(
             namespace: METAFIELD_NAMESPACE,
             key: METAFIELD_KEY,
             value: product.salePrice,
+            compareDigest: product.compareDigest,
           })),
         }
       );
@@ -273,7 +282,14 @@ async function updateProductMetafields(
               error.code ? `${error.code}: ${error.message}` : error.message
             )
             .join(' ') || 'Shopify did not confirm every metafield update.';
-        for (const product of batch) outcomes.set(product.productId, { updated: false, message });
+        const conflict = userErrors.some(
+          (error) =>
+            error.code === 'STALE_OBJECT' ||
+            /compare\s*digest|stale|changed since/i.test(error.message)
+        );
+        for (const product of batch) {
+          outcomes.set(product.productId, { updated: false, conflict, message });
+        }
         continue;
       }
 
@@ -401,12 +417,20 @@ export default async function handler(req: any, res: any) {
     const failedProducts = result.products.filter(
       (product) => product.status === 'update_failed'
     ).length;
+    const conflictedProducts = result.products.filter(
+      (product) => product.status === 'update_conflict'
+    ).length;
 
     return res.status(200).json({
       action,
       targetStatus: TARGET_STATUS,
       metafield,
-      summary: { ...result.summary, updatedProducts, failedProducts },
+      summary: {
+        ...result.summary,
+        updatedProducts,
+        failedProducts,
+        conflictedProducts,
+      },
       rows: result.rows,
       products: result.products,
     });

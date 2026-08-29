@@ -19,6 +19,7 @@ export type ShopifySalePriceVariant = {
     title: string;
     salePriceMetafield?: {
       value: string;
+      compareDigest: string;
     } | null;
   };
 };
@@ -34,6 +35,7 @@ export type SalePriceRowStatus =
   | 'identifier_conflict'
   | 'product_price_conflict'
   | 'already_up_to_date'
+  | 'update_conflict'
   | 'updated'
   | 'update_failed';
 
@@ -45,6 +47,7 @@ export type SalePriceRowResult = {
   regularPrice: number | null;
   salePrice: string | null;
   currentSalePrice: string | null;
+  compareDigest: string | null;
   minimumPriceApplied: boolean;
   status: SalePriceRowStatus;
   message: string | null;
@@ -64,6 +67,7 @@ export type SalePriceProductStatus =
   | 'ready'
   | 'product_price_conflict'
   | 'already_up_to_date'
+  | 'update_conflict'
   | 'updated'
   | 'update_failed';
 
@@ -72,6 +76,7 @@ export type SalePriceProductResult = {
   productTitle: string;
   salePrice: string | null;
   currentSalePrice: string | null;
+  compareDigest: string | null;
   minimumPriceApplied: boolean;
   status: SalePriceProductStatus;
   message: string | null;
@@ -95,6 +100,8 @@ export type SalePriceSummary = {
   minimumPriceAppliedRows: number;
   alreadyUpToDateRows: number;
   alreadyUpToDateProducts: number;
+  updateConflictRows: number;
+  updateConflictProducts: number;
 };
 
 export type SalePricePreparation = {
@@ -178,6 +185,10 @@ function normalizedPrice(value: string | null): string | null {
   return parsed === null ? null : parsed.toFixed(2);
 }
 
+function currentMetafieldDigest(variant: ShopifySalePriceVariant | null): string | null {
+  return variant?.product.salePriceMetafield?.compareDigest ?? null;
+}
+
 function createIndex(
   variants: ShopifySalePriceVariant[],
   identifier: (variant: ShopifySalePriceVariant) => string
@@ -220,6 +231,7 @@ function rowResult(
     regularPrice,
     salePrice,
     currentSalePrice: currentMetafieldValue(variant),
+    compareDigest: currentMetafieldDigest(variant),
     minimumPriceApplied:
       salePrice !== null && discountedPrice !== null && discountedPrice < MINIMUM_SALE_PRICE,
     status,
@@ -263,6 +275,10 @@ function createSummary(
       .length,
     alreadyUpToDateProducts: products.filter(
       (product) => product.status === 'already_up_to_date'
+    ).length,
+    updateConflictRows: rows.filter((row) => row.status === 'update_conflict').length,
+    updateConflictProducts: products.filter(
+      (product) => product.status === 'update_conflict'
     ).length,
   };
 }
@@ -468,6 +484,7 @@ export function prepareSalePriceUpdate(
       productTitle: product.title,
       salePrice: highestSalePrice,
       currentSalePrice,
+      compareDigest: productRows[0].compareDigest,
       minimumPriceApplied:
         Number(highestSalePrice) === MINIMUM_SALE_PRICE &&
         productRows.some((row) => row.minimumPriceApplied),
@@ -484,20 +501,31 @@ export function prepareSalePriceUpdate(
 
 export function applyProductUpdateResults(
   preparation: SalePricePreparation,
-  outcomes: Map<string, { updated: boolean; message: string | null }>
+  outcomes: Map<
+    string,
+    { updated: boolean; conflict?: boolean; message: string | null }
+  >
 ): SalePricePreparation {
   for (const product of preparation.products) {
     if (product.status !== 'ready') continue;
     const outcome = outcomes.get(product.productId);
     if (!outcome) continue;
 
-    product.status = outcome.updated ? 'updated' : 'update_failed';
+    product.status = outcome.updated
+      ? 'updated'
+      : outcome.conflict
+        ? 'update_conflict'
+        : 'update_failed';
     product.message = outcome.message;
     if (outcome.updated) product.currentSalePrice = product.salePrice;
 
     for (const row of preparation.rows) {
       if (row.status !== 'ready' || row.shopifyProduct?.id !== product.productId) continue;
-      row.status = outcome.updated ? 'updated' : 'update_failed';
+      row.status = outcome.updated
+        ? 'updated'
+        : outcome.conflict
+          ? 'update_conflict'
+          : 'update_failed';
       row.message = outcome.message;
       if (outcome.updated) row.currentSalePrice = product.salePrice;
     }

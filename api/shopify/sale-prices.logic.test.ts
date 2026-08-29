@@ -135,7 +135,7 @@ describe('sale-price preparation', () => {
         ...variants[0],
         product: {
           ...variants[0].product,
-          salePriceMetafield: { value: '27.190' },
+          salePriceMetafield: { value: '27.190', compareDigest: 'digest-current' },
         },
       },
     ];
@@ -173,5 +173,29 @@ describe('sale-price preparation', () => {
     expect(updated.rows[0].status).toBe('updated');
     expect(updated.products[0].status).toBe('updated');
     expect(updated.summary.readyProducts).toBe(0);
+  });
+
+  it('marks a parent for another review when Shopify reports a concurrent change', () => {
+    const result = prepareSalePriceUpdate(
+      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],
+      variants
+    );
+    const conflicted = applyProductUpdateResults(
+      result,
+      new Map([
+        [
+          'gid://shopify/Product/1',
+          {
+            updated: false,
+            conflict: true,
+            message: 'STALE_OBJECT: The metafield changed after it was read.',
+          },
+        ],
+      ])
+    );
+
+    expect(conflicted.rows[0].status).toBe('update_conflict');
+    expect(conflicted.products[0].status).toBe('update_conflict');
+    expect(conflicted.summary.updateConflictProducts).toBe(1);
   });
 });

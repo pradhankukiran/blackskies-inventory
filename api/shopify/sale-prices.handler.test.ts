@@ -58,7 +58,14 @@ const validRows = [
 const firstProductId = "gid://shopify/Product/1";
 const secondProductId = "gid://shopify/Product/2";
 
-const configureShopify = (variants: unknown[]) => {
+const configureShopify = (
+  variants: unknown[],
+  metafieldSetUserErrors: Array<{
+    field: string[] | null;
+    message: string;
+    code: string | null;
+  }> = []
+) => {
   const gql = vi.fn(async (query: string, variables?: Record<string, unknown>) => {
     if (query.includes("metafieldDefinitions")) {
       return {
@@ -81,8 +88,10 @@ const configureShopify = (variants: unknown[]) => {
       const metafields = (variables?.metafields as unknown[] | undefined) ?? [];
       return {
         metafieldsSet: {
-          metafields: metafields.map((_, index) => ({ id: `metafield-${index}` })),
-          userErrors: [],
+          metafields: metafieldSetUserErrors.length
+            ? []
+            : metafields.map((_, index) => ({ id: `metafield-${index}` })),
+          userErrors: metafieldSetUserErrors,
         },
       };
     }
@@ -99,7 +108,8 @@ const variant = (
   productId: string,
   sku: string,
   barcode: string,
-  currentSalePrice?: string
+  currentSalePrice?: string,
+  compareDigest = "digest-current"
 ) => ({
   id,
   sku,
@@ -108,7 +118,9 @@ const variant = (
     id: productId,
     title: `Product ${productId.slice(-1)}`,
     salePriceMetafield:
-      currentSalePrice === undefined ? null : { value: currentSalePrice },
+      currentSalePrice === undefined
+        ? null
+        : { value: currentSalePrice, compareDigest },
   },
 });
 
@@ -274,18 +286,83 @@ describe("Shopify sale-price endpoint safeguards", () => {
 
     const mutationCall = gql.mock.calls.find(([query]) => query.includes("metafieldsSet"));
     const mutationVariables = mutationCall?.[1] as
-      | { metafields: Array<{ ownerId: string; value: string }> }
+      | {
+          metafields: Array<{
+            ownerId: string;
+            value: string;
+            compareDigest: string | null;
+          }>;
+        }
       | undefined;
     const products = res.body?.products as Array<{ productId: string; status: string }>;
 
     expect(res.statusCode).toBe(200);
     expect(mutationVariables?.metafields).toEqual([
-      expect.objectContaining({ ownerId: secondProductId, value: "39.99" }),
+      expect.objectContaining({
+        ownerId: secondProductId,
+        value: "39.99",
+        compareDigest: null,
+      }),
     ]);
     expect(products).toEqual([
       expect.objectContaining({ productId: firstProductId, status: "ready" }),
       expect.objectContaining({ productId: secondProductId, status: "updated" }),
     ]);
+  });
+
+  it("rejects a concurrent Shopify change instead of overwriting it", async () => {
+    const gql = configureShopify(
+      [
+        variant(
+          "gid://shopify/ProductVariant/1",
+          firstProductId,
+          validRows[0].sku,
+          validRows[0].ean,
+          "25.00",
+          "digest-before-update"
+        ),
+      ],
+      [
+        {
+          field: ["metafields", "0", "compareDigest"],
+          message: "The metafield changed after it was read.",
+          code: "STALE_OBJECT",
+        },
+      ]
+    );
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          selection: { mode: "selected", productIds: [firstProductId] },
+          rows: validRows,
+        },
+      },
+      res
+    );
+
+    const mutationCall = gql.mock.calls.find(([query]) => query.includes("metafieldsSet"));
+    const mutationVariables = mutationCall?.[1] as
+      | { metafields: Array<{ compareDigest: string | null }> }
+      | undefined;
+
+    expect(mutationVariables?.metafields[0].compareDigest).toBe(
+      "digest-before-update"
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.products).toEqual([
+      expect.objectContaining({
+        productId: firstProductId,
+        status: "update_conflict",
+      }),
+    ]);
+    expect(res.body?.summary).toEqual(
+      expect.objectContaining({ conflictedProducts: 1, updateConflictProducts: 1 })
+    );
   });
 });
 
