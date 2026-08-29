@@ -33,6 +33,7 @@ describe('sale-price preparation', () => {
   it('parses European prices and calculates a two-decimal 20% discount', () => {
     expect(parseRegularPrice('€ 1.234,56')).toBe(1234.56);
     expect(calculateSalePrice(33.99)).toBe('27.19');
+    expect(calculateSalePrice(12.57)).toBe('15.00');
   });
 
   it('matches SKU first and falls back to EAN', () => {
@@ -68,7 +69,7 @@ describe('sale-price preparation', () => {
     });
   });
 
-  it('skips non-ZABLO_01 rows and SKU/EAN disagreements', () => {
+  it('accepts combined ZABLO_01 statuses and skips rows without that status', () => {
     const result = prepareSalePriceUpdate(
       [
         {
@@ -77,9 +78,8 @@ describe('sale-price preparation', () => {
           regularPrice: 33.99,
         },
         {
-          statusDetail: 'ZABLO_01',
+          statusDetail: 'ZABLO_15, ZABLO_01, ZANOS_01',
           sku: 'AK-R-PUR-03-11',
-          ean: '9999999999999',
           regularPrice: 33.99,
         },
       ],
@@ -88,10 +88,24 @@ describe('sale-price preparation', () => {
 
     expect(result.rows.map((row) => row.status)).toEqual([
       'outside_target_status',
-      'identifier_conflict',
+      'ready',
     ]);
     expect(result.summary.outsideTargetStatusRows).toBe(1);
-    expect(result.summary.identifierConflictRows).toBe(1);
+  });
+
+  it('marks rows where the €15.00 minimum was applied', () => {
+    const result = prepareSalePriceUpdate(
+      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 12.57 }],
+      variants
+    );
+
+    expect(result.rows[0]).toMatchObject({
+      status: 'ready',
+      salePrice: '15.00',
+      minimumPriceApplied: true,
+      message: expect.stringContaining('€15.00 minimum'),
+    });
+    expect(result.summary.minimumPriceAppliedRows).toBe(1);
   });
 
   it('skips every matched row for a parent product with conflicting prices', () => {

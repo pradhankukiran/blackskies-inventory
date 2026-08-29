@@ -24,6 +24,8 @@ export interface ZalandoSalePriceRow {
   currency: string;
   regularPrice: number | null;
   salePrice: number | null;
+  /** True when the discounted price was raised to the €15.00 minimum. */
+  minimumPriceApplied: boolean;
   message: string;
 }
 
@@ -36,6 +38,7 @@ export interface ZalandoSalePriceSummary {
   missingIdentifierRows: number;
   missingRegularPriceRows: number;
   invalidRegularPriceRows: number;
+  minimumPriceAppliedRows: number;
 }
 
 export interface ZalandoSalePriceResult {

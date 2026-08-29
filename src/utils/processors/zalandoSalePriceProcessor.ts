@@ -8,6 +8,7 @@ import {
 
 const TARGET_STATUS = "ZABLO_01";
 const SALE_PRICE_MULTIPLIER = 0.8;
+export const MINIMUM_ZALANDO_SALE_PRICE = 15;
 
 const STATUS_ALIASES = ["status_detail", "status detail", "status code", "zalando status code"];
 const PRIMARY_SKU_ALIASES = ["partner_variant_size", "partner variant size"];
@@ -101,7 +102,16 @@ export const parseZalandoPrice = (value: unknown): number | null => {
 const roundToTwoDecimals = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const calculateZalandoSalePrice = (regularPrice: number) =>
-  roundToTwoDecimals(regularPrice * SALE_PRICE_MULTIPLIER);
+  Math.max(
+    MINIMUM_ZALANDO_SALE_PRICE,
+    roundToTwoDecimals(regularPrice * SALE_PRICE_MULTIPLIER)
+  );
+
+const containsTargetStatus = (statusDetail: string) =>
+  statusDetail
+    .split(",")
+    .map((status) => status.trim().toUpperCase())
+    .includes(TARGET_STATUS);
 
 const sourceRowId = (sourceRowNumber: number) => `zablo-sale-price-row-${sourceRowNumber}`;
 
@@ -115,8 +125,12 @@ const makeRow = ({
   currency,
   regularPrice,
   salePrice = null,
+  minimumPriceApplied = false,
   message,
-}: Omit<ZalandoSalePriceRow, "sourceRowId" | "salePrice"> & { salePrice?: number | null }): ZalandoSalePriceRow => ({
+}: Omit<ZalandoSalePriceRow, "sourceRowId" | "salePrice" | "minimumPriceApplied"> & {
+  salePrice?: number | null;
+  minimumPriceApplied?: boolean;
+}): ZalandoSalePriceRow => ({
   sourceRowNumber,
   sourceRowId: sourceRowId(sourceRowNumber),
   status,
@@ -127,6 +141,7 @@ const makeRow = ({
   currency,
   regularPrice,
   salePrice,
+  minimumPriceApplied,
   message,
 });
 
@@ -146,6 +161,7 @@ const createSummary = (rows: ZalandoSalePriceRow[]): ZalandoSalePriceSummary => 
     missingIdentifierRows,
     missingRegularPriceRows,
     invalidRegularPriceRows,
+    minimumPriceAppliedRows: rows.filter((row) => row.minimumPriceApplied).length,
   };
 };
 
@@ -158,6 +174,11 @@ const createWarnings = (summary: ZalandoSalePriceSummary): string[] => {
   }
   if (summary.invalidRows > 0) {
     warnings.push(`${summary.invalidRows} ${TARGET_STATUS} row(s) need correction before Shopify matching.`);
+  }
+  if (summary.minimumPriceAppliedRows > 0) {
+    warnings.push(
+      `${summary.minimumPriceAppliedRows} row(s) were raised to the minimum Zalando sale price of €15.00.`
+    );
   }
 
   return warnings;
@@ -179,7 +200,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
     const regularPriceValue = readValue(rawRow, REGULAR_PRICE_ALIASES);
     const regularPrice = parseZalandoPrice(regularPriceValue);
 
-    if (statusDetail.toUpperCase() !== TARGET_STATUS) {
+    if (!containsTargetStatus(statusDetail)) {
       return makeRow({
         sourceRowNumber,
         status: "skipped_non_zablo_01",
@@ -189,7 +210,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
         articleName,
         currency,
         regularPrice,
-        message: `Skipped: status_detail is ${statusDetail || "empty"}, not ${TARGET_STATUS}.`,
+        message: `Skipped: status_detail does not contain ${TARGET_STATUS}.`,
       });
     }
 
@@ -235,6 +256,9 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       });
     }
 
+    const discountedSalePrice = roundToTwoDecimals(regularPrice * SALE_PRICE_MULTIPLIER);
+    const minimumPriceApplied = discountedSalePrice < MINIMUM_ZALANDO_SALE_PRICE;
+
     return makeRow({
       sourceRowNumber,
       status: "ready",
@@ -245,7 +269,10 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       currency,
       regularPrice,
       salePrice: calculateZalandoSalePrice(regularPrice),
-      message: "Ready to match Shopify by SKU or EAN.",
+      minimumPriceApplied,
+      message: minimumPriceApplied
+        ? `Warning: discounted price ${discountedSalePrice.toFixed(2)} was raised to the €15.00 minimum.`
+        : "Ready to match Shopify by SKU or EAN.",
     });
   });
 

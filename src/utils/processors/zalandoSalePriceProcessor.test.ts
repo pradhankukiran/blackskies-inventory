@@ -29,20 +29,24 @@ describe("processZalandoSalePrices", () => {
     expect(result.summary).toMatchObject({ totalRows: 1, readyRows: 1, invalidRows: 0, skippedRows: 0 });
   });
 
-  it("only prepares rows with status_detail exactly ZABLO_01, case-insensitively", () => {
+  it("prepares rows whose status list contains ZABLO_01, case-insensitively", () => {
     const result = processZalandoSalePrices([
-      { status_detail: " zablo_01 ", partner_variant_size: "ready-sku", regular_price: "10" },
+      { status_detail: " zablo_01 ", partner_variant_size: "ready-sku", regular_price: "20" },
       { status_detail: "ZABLO_02", partner_variant_size: "skipped-sku", regular_price: "10" },
-      { status_detail: "prefix-ZABLO_01", partner_variant_size: "also-skipped", regular_price: "10" },
+      {
+        status_detail: "ZABLO_15, ZABLO_01, ZANOS_01",
+        partner_variant_size: "combined-status",
+        regular_price: "20",
+      },
     ]);
 
     expect(result.rows.map((row) => row.status)).toEqual([
       "ready",
       "skipped_non_zablo_01",
-      "skipped_non_zablo_01",
+      "ready",
     ]);
     expect(result.rows[1].salePrice).toBeNull();
-    expect(result.summary).toMatchObject({ readyRows: 1, skippedRows: 2, skippedNonZablo01Rows: 2 });
+    expect(result.summary).toMatchObject({ readyRows: 2, skippedRows: 1, skippedNonZablo01Rows: 1 });
   });
 
   it("reports ZABLO_01 rows that lack both Shopify identifiers", () => {
@@ -80,14 +84,23 @@ describe("processZalandoSalePrices", () => {
     });
   });
 
-  it("rounds calculated sale prices to two decimal places", () => {
+  it("rounds calculated sale prices and applies the €15.00 minimum with a warning", () => {
     const result = processZalandoSalePrices([{
       status_detail: "ZABLO_01",
       sku: "ROUND-1",
       regular_price: "12.57",
     }]);
 
-    expect(result.rows[0]).toMatchObject({ regularPrice: 12.57, salePrice: 10.06 });
+    expect(result.rows[0]).toMatchObject({
+      regularPrice: 12.57,
+      salePrice: 15,
+      minimumPriceApplied: true,
+      message: expect.stringContaining("€15.00 minimum"),
+    });
+    expect(result.summary.minimumPriceAppliedRows).toBe(1);
+    expect(result.warnings).toContain(
+      "1 row(s) were raised to the minimum Zalando sale price of €15.00."
+    );
   });
 
   it("supports common aliases, prioritizes partner_variant_size, and normalizes identifiers", () => {

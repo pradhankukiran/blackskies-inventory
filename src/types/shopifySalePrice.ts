@@ -19,6 +19,7 @@ export interface ShopifySalePriceApiRow {
   ean: string | null;
   regularPrice: number | null;
   salePrice: string | null;
+  minimumPriceApplied: boolean;
   status: ShopifySalePriceRowStatus;
   message: string | null;
   matchingMethod: "sku" | "ean" | "sku_and_ean" | null;
@@ -62,6 +63,7 @@ export interface ShopifySalePriceApiSummary {
   outsideTargetStatusRows: number;
   readyProducts: number;
   productPriceConflicts: number;
+  minimumPriceAppliedRows: number;
   updatedProducts?: number;
   failedProducts?: number;
 }

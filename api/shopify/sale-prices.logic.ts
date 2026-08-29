@@ -1,4 +1,5 @@
 export const SALE_PRICE_DISCOUNT = 0.8;
+export const MINIMUM_SALE_PRICE = 15;
 
 export type SalePriceInputRow = {
   rowNumber?: number;
@@ -39,6 +40,7 @@ export type SalePriceRowResult = {
   ean: string | null;
   regularPrice: number | null;
   salePrice: string | null;
+  minimumPriceApplied: boolean;
   status: SalePriceRowStatus;
   message: string | null;
   matchingMethod: 'sku' | 'ean' | 'sku_and_ean' | null;
@@ -82,6 +84,7 @@ export type SalePriceSummary = {
   productPriceConflictRows: number;
   readyProducts: number;
   productPriceConflicts: number;
+  minimumPriceAppliedRows: number;
 };
 
 export type SalePricePreparation = {
@@ -140,9 +143,19 @@ export function parseRegularPrice(
 }
 
 export function calculateSalePrice(regularPrice: number): string {
-  return (
-    Math.round((regularPrice * SALE_PRICE_DISCOUNT + Number.EPSILON) * 100) / 100
-  ).toFixed(2);
+  const discountedPrice = calculateDiscountedSalePrice(regularPrice);
+  return Math.max(MINIMUM_SALE_PRICE, discountedPrice).toFixed(2);
+}
+
+function calculateDiscountedSalePrice(regularPrice: number): number {
+  return Math.round((regularPrice * SALE_PRICE_DISCOUNT + Number.EPSILON) * 100) / 100;
+}
+
+function containsTargetStatus(statusDetail: string): boolean {
+  return statusDetail
+    .split(',')
+    .map((status) => status.trim().toUpperCase())
+    .includes('ZABLO_01');
 }
 
 function createIndex(
@@ -174,6 +187,11 @@ function rowResult(
   variant: ShopifySalePriceVariant | null = null,
   matchingMethod: SalePriceRowResult['matchingMethod'] = null
 ): SalePriceRowResult {
+  const discountedPrice =
+    regularPrice === null
+      ? null
+      : calculateDiscountedSalePrice(regularPrice);
+
   return {
     rowNumber,
     statusDetail: statusDetail || null,
@@ -181,6 +199,8 @@ function rowResult(
     ean: ean || null,
     regularPrice,
     salePrice,
+    minimumPriceApplied:
+      salePrice !== null && discountedPrice !== null && discountedPrice < MINIMUM_SALE_PRICE,
     status,
     message,
     matchingMethod,
@@ -217,6 +237,7 @@ function createSummary(
     productPriceConflicts: products.filter(
       (product) => product.status === 'product_price_conflict'
     ).length,
+    minimumPriceAppliedRows: rows.filter((row) => row.minimumPriceApplied).length,
   };
 }
 
@@ -245,7 +266,7 @@ export function prepareSalePriceUpdate(
     const statusDetail = text(input.statusDetail).toUpperCase();
     const regularPrice = parseRegularPrice(input.regularPrice);
 
-    if (statusDetail !== 'ZABLO_01') {
+    if (!containsTargetStatus(statusDetail)) {
       rows.push(
         rowResult(
           rowNumber,
@@ -255,7 +276,7 @@ export function prepareSalePriceUpdate(
           regularPrice,
           null,
           'outside_target_status',
-          'Only rows with status_detail ZABLO_01 are eligible for this update.'
+          'Only rows whose status_detail contains ZABLO_01 are eligible for this update.'
         )
       );
       return;
@@ -365,6 +386,9 @@ export function prepareSalePriceUpdate(
       return;
     }
 
+    const minimumPriceApplied =
+      calculateDiscountedSalePrice(regularPrice) < MINIMUM_SALE_PRICE;
+
     rows.push(
       rowResult(
         rowNumber,
@@ -374,7 +398,9 @@ export function prepareSalePriceUpdate(
         regularPrice,
         salePrice,
         'ready',
-        null,
+        minimumPriceApplied
+          ? `Warning: discounted price was raised to the €${MINIMUM_SALE_PRICE.toFixed(2)} minimum.`
+          : null,
         variant,
         skuMatch && eanMatch ? 'sku_and_ean' : skuMatch ? 'sku' : 'ean'
       )
