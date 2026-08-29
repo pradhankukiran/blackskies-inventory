@@ -164,14 +164,14 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const [processingStatus, setProcessingStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmationProductId, setConfirmationProductId] = useState<string | null>(null);
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
   const tableDragRef = useRef({
     isDragging: false,
+    container: null as HTMLDivElement | null,
     startX: 0,
     scrollLeft: 0,
   });
-  const [isTableDragging, setIsTableDragging] = useState(false);
+  const [draggingTable, setDraggingTable] = useState<"approvals" | "details" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -562,31 +562,37 @@ export const ZalandoSalePriceTool: React.FC = () => {
     exportToXLSX(salePriceExportRows, `zalando-sale-price-results-${new Date().toISOString().split("T")[0]}`);
   };
 
-  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || !tableScrollRef.current) return;
+  const handleTablePointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+    table: "approvals" | "details"
+  ) => {
+    if (event.button !== 0) return;
     const target = event.target as HTMLElement;
     if (target.closest("button,input,select,a")) return;
 
     tableDragRef.current = {
       isDragging: true,
+      container: event.currentTarget,
       startX: event.clientX,
-      scrollLeft: tableScrollRef.current.scrollLeft,
+      scrollLeft: event.currentTarget.scrollLeft,
     };
-    setIsTableDragging(true);
+    setDraggingTable(table);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    const drag = tableDragRef.current;
+    if (!drag.isDragging || drag.container !== event.currentTarget) return;
     event.preventDefault();
-    const deltaX = event.clientX - tableDragRef.current.startX;
-    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+    const deltaX = event.clientX - drag.startX;
+    event.currentTarget.scrollLeft = drag.scrollLeft - deltaX;
   };
 
   const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!tableDragRef.current.isDragging) return;
     tableDragRef.current.isDragging = false;
-    setIsTableDragging(false);
+    tableDragRef.current.container = null;
+    setDraggingTable(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -724,7 +730,17 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   Approve one parent product at a time. The proposed value is the highest calculated price from its matched SKUs.
                 </p>
               </div>
-              <div className="max-h-[480px] overflow-auto border-t border-slate-200">
+              <div
+                className={`max-h-[480px] overflow-auto border-t border-slate-200 ${
+                  draggingTable === "approvals" ? "cursor-grabbing select-none" : "cursor-grab"
+                }`}
+                title="Drag horizontally to scroll the table"
+                onPointerDown={(event) => handleTablePointerDown(event, "approvals")}
+                onPointerMove={handleTablePointerMove}
+                onPointerUp={stopTableDrag}
+                onPointerCancel={stopTableDrag}
+                onPointerLeave={stopTableDrag}
+              >
                 <table className="ops-table min-w-[1180px]">
                   <thead>
                     <tr>
@@ -836,12 +852,11 @@ export const ZalandoSalePriceTool: React.FC = () => {
           </div>
 
           <div
-            ref={tableScrollRef}
             className={`max-h-[calc(100vh-260px)] overflow-auto ${
-              isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+              draggingTable === "details" ? "cursor-grabbing select-none" : "cursor-grab"
             }`}
             title="Drag horizontally to scroll the table"
-            onPointerDown={handleTablePointerDown}
+            onPointerDown={(event) => handleTablePointerDown(event, "details")}
             onPointerMove={handleTablePointerMove}
             onPointerUp={stopTableDrag}
             onPointerCancel={stopTableDrag}
