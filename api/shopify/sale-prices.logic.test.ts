@@ -108,7 +108,7 @@ describe('sale-price preparation', () => {
     expect(result.summary.minimumPriceAppliedRows).toBe(1);
   });
 
-  it('skips every matched row for a parent product with conflicting prices', () => {
+  it('uses the highest calculated sale price for SKUs sharing a parent product', () => {
     const result = prepareSalePriceUpdate(
       [
         { statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 20 },
@@ -117,17 +117,16 @@ describe('sale-price preparation', () => {
       variants
     );
 
-    expect(result.rows.map((row) => row.status)).toEqual([
-      'product_price_conflict',
-      'product_price_conflict',
-    ]);
+    expect(result.rows.map((row) => row.status)).toEqual(['ready', 'ready']);
     expect(result.products).toEqual([
       expect.objectContaining({
         productId: 'gid://shopify/Product/1',
-        status: 'product_price_conflict',
-        salePrice: null,
+        status: 'ready',
+        salePrice: '24.00',
+        message: expect.stringContaining('highest calculated sale price'),
       }),
     ]);
+    expect(result.summary).toMatchObject({ readyProducts: 1, productPriceConflicts: 0 });
   });
 
   it('changes prepared rows and products only after a reported update outcome', () => {

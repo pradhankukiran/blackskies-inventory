@@ -65,6 +65,7 @@ export type SalePriceProductResult = {
   productId: string;
   productTitle: string;
   salePrice: string | null;
+  minimumPriceApplied: boolean;
   status: SalePriceProductStatus;
   message: string | null;
   sourceRowNumbers: number[];
@@ -418,33 +419,25 @@ export function prepareSalePriceUpdate(
   const products: SalePriceProductResult[] = [];
   for (const [productId, productRows] of grouped) {
     const product = productRows[0].shopifyProduct!;
-    const prices = new Set(productRows.map((row) => row.salePrice));
     const sourceRowNumbers = productRows.map((row) => row.rowNumber);
-
-    if (prices.size > 1) {
-      const message =
-        'This parent product has multiple calculated sale prices and was skipped.';
-      for (const row of productRows) {
-        row.status = 'product_price_conflict';
-        row.message = message;
-      }
-      products.push({
-        productId,
-        productTitle: product.title,
-        salePrice: null,
-        status: 'product_price_conflict',
-        message,
-        sourceRowNumbers,
-      });
-      continue;
-    }
+    const highestSalePrice = Math.max(
+      ...productRows.map((row) => Number(row.salePrice))
+    ).toFixed(2);
+    const distinctPrices = new Set(productRows.map((row) => row.salePrice));
+    const message =
+      distinctPrices.size > 1
+        ? `Using the highest calculated sale price from ${productRows.length} matched SKU rows.`
+        : null;
 
     products.push({
       productId,
       productTitle: product.title,
-      salePrice: productRows[0].salePrice,
+      salePrice: highestSalePrice,
+      minimumPriceApplied:
+        Number(highestSalePrice) === MINIMUM_SALE_PRICE &&
+        productRows.some((row) => row.minimumPriceApplied),
       status: 'ready',
-      message: null,
+      message,
       sourceRowNumbers,
     });
   }

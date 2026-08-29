@@ -44,6 +44,7 @@ export interface ShopifySalePriceApiProduct {
   productId: string;
   productTitle: string;
   salePrice: string | null;
+  minimumPriceApplied: boolean;
   status: ShopifySalePriceProductStatus;
   message: string | null;
   sourceRowNumbers: number[];
