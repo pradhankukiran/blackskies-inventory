@@ -86,6 +86,8 @@ export interface StockReturnPersistedState extends StockReturnUiState {
 export interface ZalandoSalePriceUiState {
   localResult: ZalandoSalePriceResult | null;
   shopifyResult: ShopifySalePriceApiResponse | null;
+  productSearchTerm: string;
+  productStatusFilter: string;
   searchTerm: string;
   statusFilter: string;
 }
@@ -121,6 +123,8 @@ const DEFAULT_STOCK_RETURN_STATE: StockReturnUiState = {
 const DEFAULT_ZALANDO_SALE_PRICE_STATE: ZalandoSalePriceUiState = {
   localResult: null,
   shopifyResult: null,
+  productSearchTerm: '',
+  productStatusFilter: 'all',
   searchTerm: '',
   statusFilter: 'all',
 };

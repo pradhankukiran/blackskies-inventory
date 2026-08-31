@@ -166,6 +166,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [localResult, setLocalResult] = useState<ZalandoSalePriceResult | null>(null);
   const [shopifyResult, setShopifyResult] = useState<ShopifySalePriceApiResponse | null>(null);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productStatusFilter, setProductStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -191,6 +193,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
         setFile(persisted.file);
         setLocalResult(persisted.localResult);
         setShopifyResult(persisted.shopifyResult);
+        setProductSearchTerm(persisted.productSearchTerm);
+        setProductStatusFilter(persisted.productStatusFilter);
         setSearchTerm(persisted.searchTerm);
         setStatusFilter(persisted.statusFilter);
       })
@@ -212,12 +216,22 @@ export const ZalandoSalePriceTool: React.FC = () => {
     saveZalandoSalePriceUiState({
       localResult,
       shopifyResult,
+      productSearchTerm,
+      productStatusFilter,
       searchTerm,
       statusFilter,
     }).catch((saveError) => {
       console.error("Could not save the Sale Prices state:", saveError);
     });
-  }, [isLoadingPersistedState, localResult, searchTerm, shopifyResult, statusFilter]);
+  }, [
+    isLoadingPersistedState,
+    localResult,
+    productSearchTerm,
+    productStatusFilter,
+    searchTerm,
+    shopifyResult,
+    statusFilter,
+  ]);
 
   useEffect(() => {
     if (!confirmationProductId) return;
@@ -389,6 +403,31 @@ export const ZalandoSalePriceTool: React.FC = () => {
     );
   }, [displayRows, shopifyResult]);
 
+  const productStatuses = useMemo(
+    () => Array.from(new Set(shopifyProductReviews.map((product) => product.status))).sort(),
+    [shopifyProductReviews]
+  );
+
+  const filteredShopifyProductReviews = useMemo(() => {
+    const search = productSearchTerm.trim().toLowerCase();
+    return shopifyProductReviews.filter((product) => {
+      const matchesSearch =
+        !search ||
+        [
+          product.productTitle,
+          product.productId,
+          product.status,
+          statusLabels[product.status] || "",
+          product.message,
+          product.sourceRowNumbers.join(" "),
+          product.sourceIdentifiers.join(" "),
+        ].some((value) => String(value ?? "").toLowerCase().includes(search));
+      const matchesStatus =
+        productStatusFilter === "all" || product.status === productStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [productSearchTerm, productStatusFilter, shopifyProductReviews]);
+
   const readyShopifyProducts = useMemo(
     () => shopifyProductReviews.filter((product) => product.status === "ready"),
     [shopifyProductReviews]
@@ -435,6 +474,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setProductSearchTerm("");
+    setProductStatusFilter("all");
     setSearchTerm("");
     setStatusFilter("all");
     setConfirmationProductId(null);
@@ -448,6 +489,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setProductSearchTerm("");
+    setProductStatusFilter("all");
     setSearchTerm("");
     setStatusFilter("all");
     setConfirmationProductId(null);
@@ -461,6 +504,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setProductSearchTerm("");
+    setProductStatusFilter("all");
     setSearchTerm("");
     setStatusFilter("all");
     setConfirmationProductId(null);
@@ -471,6 +516,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
         saveZalandoSalePriceUiState({
           localResult: null,
           shopifyResult: null,
+          productSearchTerm: "",
+          productStatusFilter: "all",
           searchTerm: "",
           statusFilter: "all",
         }),
@@ -484,6 +531,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setProductSearchTerm("");
+    setProductStatusFilter("all");
     setSearchTerm("");
     setStatusFilter("all");
     setConfirmationProductId(null);
@@ -492,6 +541,8 @@ export const ZalandoSalePriceTool: React.FC = () => {
       await saveZalandoSalePriceUiState({
         localResult: null,
         shopifyResult: null,
+        productSearchTerm: "",
+        productStatusFilter: "all",
         searchTerm: "",
         statusFilter: "all",
       });
@@ -748,6 +799,36 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   Approve one parent product at a time. The proposed value is the highest calculated price from its matched SKUs.
                 </p>
               </div>
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-5 py-4">
+                <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    value={productSearchTerm}
+                    onChange={(event) => setProductSearchTerm(event.target.value)}
+                    placeholder="Search parent product, SKU, EAN, or product ID"
+                    className="ops-input w-full pl-10 pr-4"
+                  />
+                </label>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-slate-400" />
+                  <select
+                    value={productStatusFilter}
+                    onChange={(event) => setProductStatusFilter(event.target.value)}
+                    className="ops-input"
+                  >
+                    <option value="all">All statuses</option>
+                    {productStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {statusLabels[status] || status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-sm text-slate-500">
+                  Showing {filteredShopifyProductReviews.length} of {shopifyProductReviews.length} parent products
+                </div>
+              </div>
               <div
                 className={`max-h-[480px] overflow-auto border-t border-slate-200 ${
                   draggingTable === "approvals" ? "cursor-grabbing select-none" : "cursor-grab"
@@ -772,69 +853,77 @@ export const ZalandoSalePriceTool: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {shopifyProductReviews.map((product) => (
-                      <tr key={product.productId}>
-                        <td>
-                          <span
-                            className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ring-1 ${statusClassName(product.status)}`}
-                          >
-                            {statusLabels[product.status] || product.status}
-                          </span>
-                        </td>
-                        <td className="font-medium" title={product.productId}>
-                          {product.productTitle}
-                        </td>
-                        <td>
-                          {product.currentSalePrice
-                            ? `${product.currentSalePrice} ${product.currency}`.trim()
-                            : "Not set"}
-                        </td>
-                        <td className="font-semibold">
-                          {product.salePrice
-                            ? `${product.salePrice} ${product.currency}`.trim()
-                            : "—"}
-                        </td>
-                        <td className="max-w-[360px] whitespace-normal text-slate-600">
-                          <div className="font-medium text-slate-800">
-                            Row{product.sourceRowNumbers.length === 1 ? "" : "s"} {product.sourceRowNumbers.join(", ")}
-                          </div>
-                          <div className="mt-1">
-                            {product.sourceIdentifiers.length
-                              ? product.sourceIdentifiers.join(" · ")
-                              : "—"}
-                          </div>
-                        </td>
-                        <td className="max-w-[340px] whitespace-normal">
-                          {product.minimumPriceApplied && (
-                            <div className="font-medium text-amber-700">
-                              Warning: €15.00 minimum applied.
-                            </div>
-                          )}
-                          <div className={product.minimumPriceApplied ? "mt-1 text-slate-600" : "text-slate-600"}>
-                            {product.message || "—"}
-                          </div>
-                        </td>
-                        <td>
-                          {product.status === "ready" ? (
-                            <button
-                              type="button"
-                              onClick={() => openConfirmation(product.productId)}
-                              disabled={isUpdating}
-                              className="ops-button-primary whitespace-nowrap"
+                    {filteredShopifyProductReviews.length > 0 ? (
+                      filteredShopifyProductReviews.map((product) => (
+                        <tr key={product.productId}>
+                          <td>
+                            <span
+                              className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ring-1 ${statusClassName(product.status)}`}
                             >
-                              <ShieldCheck className="h-4 w-4" />
-                              Review and update
-                            </button>
-                          ) : (
-                            <span className="text-sm text-slate-500">
-                              {product.status === "updated" || product.status === "already_up_to_date"
-                                ? "No action required"
-                                : "Reprocess to review"}
+                              {statusLabels[product.status] || product.status}
                             </span>
-                          )}
+                          </td>
+                          <td className="font-medium" title={product.productId}>
+                            {product.productTitle}
+                          </td>
+                          <td>
+                            {product.currentSalePrice
+                              ? `${product.currentSalePrice} ${product.currency}`.trim()
+                              : "Not set"}
+                          </td>
+                          <td className="font-semibold">
+                            {product.salePrice
+                              ? `${product.salePrice} ${product.currency}`.trim()
+                              : "—"}
+                          </td>
+                          <td className="max-w-[360px] whitespace-normal text-slate-600">
+                            <div className="font-medium text-slate-800">
+                              Row{product.sourceRowNumbers.length === 1 ? "" : "s"} {product.sourceRowNumbers.join(", ")}
+                            </div>
+                            <div className="mt-1">
+                              {product.sourceIdentifiers.length
+                                ? product.sourceIdentifiers.join(" · ")
+                                : "—"}
+                            </div>
+                          </td>
+                          <td className="max-w-[340px] whitespace-normal">
+                            {product.minimumPriceApplied && (
+                              <div className="font-medium text-amber-700">
+                                Warning: €15.00 minimum applied.
+                              </div>
+                            )}
+                            <div className={product.minimumPriceApplied ? "mt-1 text-slate-600" : "text-slate-600"}>
+                              {product.message || "—"}
+                            </div>
+                          </td>
+                          <td>
+                            {product.status === "ready" ? (
+                              <button
+                                type="button"
+                                onClick={() => openConfirmation(product.productId)}
+                                disabled={isUpdating}
+                                className="ops-button-primary whitespace-nowrap"
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                                Review and update
+                              </button>
+                            ) : (
+                              <span className="text-sm text-slate-500">
+                                {product.status === "updated" || product.status === "already_up_to_date"
+                                  ? "No action required"
+                                  : "Reprocess to review"}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                          No parent products match this search and status filter.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
