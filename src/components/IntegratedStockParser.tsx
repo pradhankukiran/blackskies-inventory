@@ -1743,7 +1743,7 @@ const IntegratedStockParser: React.FC = () => {
         </div>
       )}
 
-      <div className="container mx-auto px-4 pb-6">
+      <div className="mx-auto w-[95vw] px-4 pb-6">
         {/* Main Card */}
         <div className="overflow-hidden bg-slate-50">
           {/* Content Area */}
