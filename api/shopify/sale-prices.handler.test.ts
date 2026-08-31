@@ -48,7 +48,9 @@ const response = (): TestResponse => {
 const validRows = [
   {
     rowNumber: 1,
-    statusDetail: "ZABLO_01",
+    statusDetail: "ZABLO_646",
+    country: "de",
+    currency: "EUR",
     sku: "AK-R-PUR-03-11",
     ean: "4251812338836",
     regularPrice: 33.99,
@@ -299,7 +301,9 @@ describe("Shopify sale-price endpoint safeguards", () => {
       validRows[0],
       {
         rowNumber: 2,
-        statusDetail: "ZABLO_01",
+        statusDetail: "ZABLO_646",
+        country: "de",
+        currency: "EUR",
         sku: "AK-R-PUR-03-12",
         ean: "4251812338837",
         regularPrice: 49.99,

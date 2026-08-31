@@ -1,13 +1,20 @@
 export const SALE_PRICE_DISCOUNT = 0.8;
 export const MINIMUM_SALE_PRICE = 15;
+export const SALE_PRICE_TARGET_STATUS = 'ZABLO_646';
+export const SALE_PRICE_TARGET_COUNTRY = 'DE';
+export const SALE_PRICE_TARGET_CURRENCY = 'EUR';
 
 export type SalePriceInputRow = {
   rowNumber?: number;
   sku?: string | number | null;
   ean?: string | number | null;
   regularPrice: string | number | null;
-  /** The Zalando `status_detail` value. Only ZABLO_01 rows are eligible. */
+  /** The Zalando `status_detail` value. Only ZABLO_646 rows are eligible. */
   statusDetail?: string | null;
+  /** The Zalando market country. Only DE rows are eligible. */
+  country?: string | null;
+  /** The price currency. Only EUR rows are eligible. */
+  currency?: string | null;
 };
 
 export type ShopifySalePriceVariant = {
@@ -28,6 +35,8 @@ export type SalePriceRowStatus =
   | 'ready'
   | 'invalid_price'
   | 'outside_target_status'
+  | 'outside_target_market'
+  | 'invalid_currency'
   | 'missing_identifier'
   | 'unmatched'
   | 'ambiguous_sku'
@@ -89,6 +98,8 @@ export type SalePriceSummary = {
   readyRows: number;
   invalidPriceRows: number;
   outsideTargetStatusRows: number;
+  outsideTargetMarketRows: number;
+  invalidCurrencyRows: number;
   missingIdentifierRows: number;
   unmatchedRows: number;
   ambiguousSkuRows: number;
@@ -172,7 +183,7 @@ function containsTargetStatus(statusDetail: string): boolean {
   return statusDetail
     .split(',')
     .map((status) => status.trim().toUpperCase())
-    .includes('ZABLO_01');
+    .includes(SALE_PRICE_TARGET_STATUS);
 }
 
 function currentMetafieldValue(variant: ShopifySalePriceVariant | null): string | null {
@@ -256,6 +267,11 @@ function createSummary(
     outsideTargetStatusRows: rows.filter(
       (row) => row.status === 'outside_target_status'
     ).length,
+    outsideTargetMarketRows: rows.filter(
+      (row) => row.status === 'outside_target_market'
+    ).length,
+    invalidCurrencyRows: rows.filter((row) => row.status === 'invalid_currency')
+      .length,
     missingIdentifierRows: rows.filter((row) => row.status === 'missing_identifier')
       .length,
     unmatchedRows: rows.filter((row) => row.status === 'unmatched').length,
@@ -306,6 +322,8 @@ export function prepareSalePriceUpdate(
     const sku = normalizeSku(input.sku);
     const ean = normalizeEan(input.ean);
     const statusDetail = text(input.statusDetail).toUpperCase();
+    const country = text(input.country).toUpperCase();
+    const currency = text(input.currency).toUpperCase();
     const regularPrice = parseRegularPrice(input.regularPrice);
 
     if (!containsTargetStatus(statusDetail)) {
@@ -318,7 +336,39 @@ export function prepareSalePriceUpdate(
           regularPrice,
           null,
           'outside_target_status',
-          'Only rows whose status_detail contains ZABLO_01 are eligible for this update.'
+          `Only rows whose status_detail contains ${SALE_PRICE_TARGET_STATUS} are eligible for this update.`
+        )
+      );
+      return;
+    }
+
+    if (country !== SALE_PRICE_TARGET_COUNTRY) {
+      rows.push(
+        rowResult(
+          rowNumber,
+          statusDetail,
+          sku,
+          ean,
+          regularPrice,
+          null,
+          'outside_target_market',
+          `Only ${SALE_PRICE_TARGET_COUNTRY} market rows are eligible for this update.`
+        )
+      );
+      return;
+    }
+
+    if (currency !== SALE_PRICE_TARGET_CURRENCY) {
+      rows.push(
+        rowResult(
+          rowNumber,
+          statusDetail,
+          sku,
+          ean,
+          regularPrice,
+          null,
+          'invalid_currency',
+          `Only ${SALE_PRICE_TARGET_CURRENCY} price rows are eligible for this update.`
         )
       );
       return;

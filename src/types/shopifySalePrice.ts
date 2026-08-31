@@ -12,6 +12,8 @@ export type ShopifySalePriceRowStatus =
   | "product_price_conflict"
   | "already_up_to_date"
   | "update_conflict"
+  | "outside_target_market"
+  | "invalid_currency"
   | "outside_target_status";
 
 export interface ShopifySalePriceApiRow {
@@ -70,6 +72,8 @@ export interface ShopifySalePriceApiSummary {
   identifierConflictRows: number;
   productPriceConflictRows: number;
   outsideTargetStatusRows: number;
+  outsideTargetMarketRows: number;
+  invalidCurrencyRows: number;
   readyProducts: number;
   productPriceConflicts: number;
   minimumPriceAppliedRows: number;

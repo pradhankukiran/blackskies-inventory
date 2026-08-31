@@ -25,7 +25,7 @@ import { parseFile } from "@/utils/fileParser";
 import { processZalandoSalePrices } from "@/utils/processors/zalandoSalePriceProcessor";
 
 const ITEMS_PER_PAGE = 25;
-const TARGET_STATUS = "ZABLO_01";
+const TARGET_STATUS = "ZABLO_646";
 
 type SalePriceAction = "preview" | "update";
 
@@ -41,6 +41,8 @@ interface SalePricePayloadRow {
   sku: string;
   ean: string;
   regularPrice: number;
+  country: string;
+  currency: string;
 }
 
 interface DisplayRow {
@@ -76,6 +78,8 @@ const statusLabels: Record<string, string> = {
   update_conflict: "Shopify value changed",
   already_up_to_date: "Already up to date",
   skipped_non_zablo_01: "Skipped: other status",
+  outside_target_market: "Skipped: other market",
+  invalid_currency: "Invalid currency",
   error_missing_identifier: "Missing SKU/EAN",
   error_missing_regular_price: "Missing regular price",
   error_invalid_regular_price: "Invalid regular price",
@@ -95,7 +99,11 @@ const statusClassName = (status: string) => {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
   if (status === "ready") return "bg-blue-50 text-blue-700 ring-blue-200";
-  if (status === "skipped_non_zablo_01" || status === "outside_target_status") {
+  if (
+    status === "skipped_non_zablo_01" ||
+    status === "outside_target_status" ||
+    status === "outside_target_market"
+  ) {
     return "bg-slate-100 text-slate-600 ring-slate-200";
   }
   if (status === "awaiting_shopify_match") return "bg-amber-50 text-amber-800 ring-amber-200";
@@ -150,6 +158,8 @@ const payloadFromResult = (result: ZalandoSalePriceResult): SalePricePayloadRow[
       sku: row.sku,
       ean: row.ean,
       regularPrice: row.regularPrice,
+      country: row.country,
+      currency: row.currency,
     }));
 
 export const ZalandoSalePriceTool: React.FC = () => {
@@ -303,10 +313,12 @@ export const ZalandoSalePriceTool: React.FC = () => {
           row.source.sku,
           row.source.ean,
           row.source.articleName,
+          row.source.country,
+          row.source.currency,
           row.productTitle,
           row.status,
           row.message,
-        ].some((value) => value.toLowerCase().includes(search));
+        ].some((value) => String(value ?? "").toLowerCase().includes(search));
       const matchesStatus = statusFilter === "all" || row.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -320,6 +332,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
         SKU: row.source.sku,
         EAN: row.source.ean,
         Article: row.source.articleName,
+        Market: row.source.country,
         Currency: row.source.currency,
         "Regular price": row.source.regularPrice ?? "",
         "SKU calculated sale price": row.salePrice,
@@ -400,9 +413,14 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const hasProcessed = Boolean(localResult);
   const reviewRows = displayRows.filter(
     (row) =>
-      !["ready", "updated", "already_up_to_date", "skipped_non_zablo_01"].includes(
-        row.status
-      )
+      ![
+        "ready",
+        "updated",
+        "already_up_to_date",
+        "skipped_non_zablo_01",
+        "outside_target_status",
+        "outside_target_market",
+      ].includes(row.status)
   ).length;
   const processButtonLabel = isProcessing
     ? "Processing..."
@@ -484,7 +502,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
 
   const processAndMatch = async () => {
     if (!file) {
-      setError("Upload the Zalando Old Season Cleaning CSV first.");
+      setError("Upload the Zalando Previous Season CSV first.");
       return;
     }
 
@@ -614,7 +632,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
 
       <section className="ops-surface rounded-[8px] p-5">
         <FileUploadSection
-          title="ZABLO_01 – Old Season Cleaning CSV"
+          title="ZABLO_646 – Previous Season CSV"
           onChange={handleFileChange}
           onRemove={handleRemoveFile}
           files={file ? [file] : []}
@@ -634,7 +652,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             </div>
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
-            Contains {TARGET_STATUS}
+            {TARGET_STATUS} · DE · EUR
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
@@ -709,7 +727,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
           <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
             {[
               { label: "CSV rows", value: localResult.summary.totalRows },
-              { label: "Eligible ZABLO_01 rows", value: localResult.summary.readyRows },
+              { label: `Eligible ${TARGET_STATUS} rows`, value: localResult.summary.readyRows },
               { label: "Ready products", value: readyProducts },
               { label: "Already current", value: alreadyCurrentProducts },
               { label: "Updated products", value: updatedProducts },
@@ -862,7 +880,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             onPointerCancel={stopTableDrag}
             onPointerLeave={stopTableDrag}
           >
-            <table className="ops-table min-w-[1780px]">
+            <table className="ops-table min-w-[1840px]">
               <thead>
                 <tr>
                   <th>Row</th>
@@ -870,6 +888,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   <th>SKU</th>
                   <th>EAN</th>
                   <th>Article</th>
+                  <th>Market</th>
                   <th>Regular price</th>
                   <th>SKU calculated price</th>
                   <th>Current parent custom.attr5</th>
@@ -892,6 +911,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                       <td className="font-medium">{row.source.sku || "—"}</td>
                       <td>{row.source.ean || "—"}</td>
                       <td>{row.source.articleName || "—"}</td>
+                      <td>{row.source.country || "—"}</td>
                       <td>
                         {row.source.regularPrice === null
                           ? "—"
@@ -917,7 +937,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={12} className="px-4 py-12 text-center">
+                    <td colSpan={13} className="px-4 py-12 text-center">
                       <div className="mx-auto max-w-lg">
                         <div className="text-base font-semibold text-slate-950">No matching sale price rows</div>
                         <div className="mt-1 text-base text-slate-500">

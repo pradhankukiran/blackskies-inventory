@@ -41,13 +41,17 @@ describe('sale-price preparation', () => {
       [
         {
           rowNumber: 9,
-          statusDetail: 'ZABLO_01',
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
           sku: 'ak-r-pur-03-11',
           ean: '4251812338836',
           regularPrice: '33,99',
         },
         {
-          statusDetail: 'ZABLO_01',
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
           ean: '9999999999999',
           regularPrice: 20,
         },
@@ -69,7 +73,7 @@ describe('sale-price preparation', () => {
     });
   });
 
-  it('accepts combined ZABLO_01 statuses and skips rows without that status', () => {
+  it('accepts combined ZABLO_646 statuses and skips rows without that status', () => {
     const result = prepareSalePriceUpdate(
       [
         {
@@ -78,7 +82,9 @@ describe('sale-price preparation', () => {
           regularPrice: 33.99,
         },
         {
-          statusDetail: 'ZABLO_15, ZABLO_01, ZANOS_01',
+          statusDetail: 'ZABLO_15, ZABLO_646, ZANOS_01',
+          country: 'de',
+          currency: 'EUR',
           sku: 'AK-R-PUR-03-11',
           regularPrice: 33.99,
         },
@@ -93,9 +99,48 @@ describe('sale-price preparation', () => {
     expect(result.summary.outsideTargetStatusRows).toBe(1);
   });
 
+  it('accepts only DE market rows with EUR prices', () => {
+    const result = prepareSalePriceUpdate(
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'at',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 33.99,
+        },
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'DKK',
+          sku: 'AK-R-PUR-03-12',
+          regularPrice: 33.99,
+        },
+      ],
+      variants
+    );
+
+    expect(result.rows.map((row) => row.status)).toEqual([
+      'outside_target_market',
+      'invalid_currency',
+    ]);
+    expect(result.summary).toMatchObject({
+      outsideTargetMarketRows: 1,
+      invalidCurrencyRows: 1,
+    });
+  });
+
   it('marks rows where the €15.00 minimum was applied', () => {
     const result = prepareSalePriceUpdate(
-      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 12.57 }],
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 12.57,
+        },
+      ],
       variants
     );
 
@@ -111,8 +156,20 @@ describe('sale-price preparation', () => {
   it('uses the highest calculated sale price for SKUs sharing a parent product', () => {
     const result = prepareSalePriceUpdate(
       [
-        { statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 20 },
-        { statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-12', regularPrice: 30 },
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 20,
+        },
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-12',
+          regularPrice: 30,
+        },
       ],
       variants
     );
@@ -140,7 +197,15 @@ describe('sale-price preparation', () => {
       },
     ];
     const result = prepareSalePriceUpdate(
-      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 33.99,
+        },
+      ],
       currentVariants
     );
 
@@ -162,7 +227,15 @@ describe('sale-price preparation', () => {
 
   it('changes prepared rows and products only after a reported update outcome', () => {
     const result = prepareSalePriceUpdate(
-      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 33.99,
+        },
+      ],
       variants
     );
     const updated = applyProductUpdateResults(
@@ -177,7 +250,15 @@ describe('sale-price preparation', () => {
 
   it('marks a parent for another review when Shopify reports a concurrent change', () => {
     const result = prepareSalePriceUpdate(
-      [{ statusDetail: 'ZABLO_01', sku: 'AK-R-PUR-03-11', regularPrice: 33.99 }],
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 33.99,
+        },
+      ],
       variants
     );
     const conflicted = applyProductUpdateResults(

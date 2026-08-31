@@ -2,10 +2,14 @@ export type RawSalePriceRow = Record<string, unknown>;
 
 /**
  * A row is ready when it can be matched to Shopify. Error rows must not be
- * submitted for an update; skipped rows are outside the ZABLO_01 scope.
+ * submitted for an update; skipped rows are outside the target status or market.
  */
 export type ZalandoSalePriceRowStatus =
   | "ready"
+  | "outside_target_status"
+  | "outside_target_market"
+  | "invalid_currency"
+  /** Kept so previously stored previews still render after deployment. */
   | "skipped_non_zablo_01"
   | "error_missing_identifier"
   | "error_missing_regular_price"
@@ -21,6 +25,7 @@ export interface ZalandoSalePriceRow {
   sku: string;
   ean: string;
   articleName: string;
+  country: string;
   currency: string;
   regularPrice: number | null;
   salePrice: number | null;
@@ -34,7 +39,9 @@ export interface ZalandoSalePriceSummary {
   readyRows: number;
   skippedRows: number;
   invalidRows: number;
-  skippedNonZablo01Rows: number;
+  outsideTargetStatusRows: number;
+  outsideTargetMarketRows: number;
+  invalidCurrencyRows: number;
   missingIdentifierRows: number;
   missingRegularPriceRows: number;
   invalidRegularPriceRows: number;

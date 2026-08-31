@@ -18,7 +18,7 @@ The app has five main workflows:
 - **Amazon FBA restock recommendations**: processes Sellerboard stock and sales/returns exports, with its own FBA recommendation table.
 - **Zalando Retagging Decision Tool**: DE-only MVP that uses Zalando CSV exports and Shopify internal stock to recommend season-retagging, basics applications, discount notes, clearance, or manual review.
 - **ZFS Stock Return Tool**: DE-only workflow that identifies slow-moving ZFS overstock and suggests Return to Merchant quantities by EAN.
-- **Zalando Sale Prices**: processes `ZABLO_01` old-season rows, calculates a 20% discount, matches Shopify variants by SKU/EAN, and updates the parent product metafield `custom.attr5` after confirmation.
+- **Zalando Sale Prices**: processes German EUR rows containing `ZABLO_646`, calculates a 20% discount, matches Shopify variants by SKU/EAN, and updates the parent product metafield `custom.attr5` after confirmation.
 
 It runs fully through CSV/file uploads plus the existing Shopify Admin API sync. There is no direct Zalando API integration.
 
@@ -203,11 +203,11 @@ Local persistence:
 
 ## Zalando Sale Prices
 
-The Sale Prices module accepts the Zalando `ZABLO_01 - Old Season Cleaning` CSV. It reads each row's SKU/EAN and regular price, calculates `regular price x 0.80`, and rounds the result to two decimal places.
+The Sale Prices module accepts German-market EUR rows whose Zalando status list contains `ZABLO_646`. It reads each row's SKU/EAN and regular price, calculates `regular price x 0.80`, and rounds the result to two decimal places.
 
-The preview matches Shopify variants by SKU first and EAN second. Matches are grouped by parent product because `custom.attr5` belongs to the product, not the variant. Products with conflicting calculated prices are skipped for manual review.
+The preview matches Shopify variants by SKU first and EAN second. Matches are grouped by parent product because `custom.attr5` belongs to the product, not the variant. When multiple matched SKUs belong to one parent, the highest calculated sale price is proposed.
 
-The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. The confirmation dialog lists each ready parent product and its source CSV rows, lets the user update selected products, or explicitly update every product shown.
+The confirmed update writes only the parent product metafield `custom.attr5`. It does not change Shopify's normal product or variant prices. The confirmation dialog shows the selected parent product and its source CSV rows, and each parent is approved individually.
 
 ## Local Development
 

@@ -2,13 +2,14 @@ import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.
 import {
   applyProductUpdateResults,
   prepareSalePriceUpdate,
+  SALE_PRICE_TARGET_STATUS,
   type SalePriceInputRow,
   type ShopifySalePriceVariant,
 } from './sale-prices.logic.js';
 
 const MAX_SALE_PRICE_ROWS = 500;
 const METAFIELDS_SET_BATCH_SIZE = 25;
-const TARGET_STATUS = 'ZABLO_01';
+const TARGET_STATUS = SALE_PRICE_TARGET_STATUS;
 const METAFIELD_NAMESPACE = 'custom';
 const METAFIELD_KEY = 'attr5';
 
@@ -125,6 +126,10 @@ function stringOrNumberOrNull(value: unknown): string | number | null {
     : null;
 }
 
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
 function toInputRows(rows: RawRequestRow[]): SalePriceInputRow[] {
   return rows.map((row) => ({
     rowNumber: typeof row.rowNumber === 'number' ? row.rowNumber : undefined,
@@ -135,6 +140,8 @@ function toInputRows(rows: RawRequestRow[]): SalePriceInputRow[] {
       typeof (row.statusDetail ?? row.status_detail) === 'string'
         ? String(row.statusDetail ?? row.status_detail)
         : null,
+    country: stringOrNull(row.country),
+    currency: stringOrNull(row.currency),
   }));
 }
 

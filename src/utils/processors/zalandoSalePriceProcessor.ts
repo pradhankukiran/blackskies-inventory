@@ -6,7 +6,9 @@ import {
   ZalandoSalePriceSummary,
 } from "@/types/zalandoSalePrice";
 
-const TARGET_STATUS = "ZABLO_01";
+const TARGET_STATUS = "ZABLO_646";
+const TARGET_COUNTRY = "DE";
+const TARGET_CURRENCY = "EUR";
 const SALE_PRICE_MULTIPLIER = 0.8;
 export const MINIMUM_ZALANDO_SALE_PRICE = 15;
 
@@ -36,6 +38,7 @@ const REGULAR_PRICE_ALIASES = [
   "price",
 ];
 const CURRENCY_ALIASES = ["currency", "price_currency", "currency_code"];
+const COUNTRY_ALIASES = ["country", "market", "country_code", "market_code"];
 
 const normalizeHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -122,6 +125,7 @@ const makeRow = ({
   sku,
   ean,
   articleName,
+  country,
   currency,
   regularPrice,
   salePrice = null,
@@ -138,6 +142,7 @@ const makeRow = ({
   sku,
   ean,
   articleName,
+  country,
   currency,
   regularPrice,
   salePrice,
@@ -147,7 +152,9 @@ const makeRow = ({
 
 const createSummary = (rows: ZalandoSalePriceRow[]): ZalandoSalePriceSummary => {
   const count = (status: ZalandoSalePriceRowStatus) => rows.filter((row) => row.status === status).length;
-  const skippedNonZablo01Rows = count("skipped_non_zablo_01");
+  const outsideTargetStatusRows = count("outside_target_status");
+  const outsideTargetMarketRows = count("outside_target_market");
+  const invalidCurrencyRows = count("invalid_currency");
   const missingIdentifierRows = count("error_missing_identifier");
   const missingRegularPriceRows = count("error_missing_regular_price");
   const invalidRegularPriceRows = count("error_invalid_regular_price");
@@ -155,9 +162,12 @@ const createSummary = (rows: ZalandoSalePriceRow[]): ZalandoSalePriceSummary => 
   return {
     totalRows: rows.length,
     readyRows: count("ready"),
-    skippedRows: skippedNonZablo01Rows,
-    invalidRows: missingIdentifierRows + missingRegularPriceRows + invalidRegularPriceRows,
-    skippedNonZablo01Rows,
+    skippedRows: outsideTargetStatusRows + outsideTargetMarketRows,
+    invalidRows:
+      invalidCurrencyRows + missingIdentifierRows + missingRegularPriceRows + invalidRegularPriceRows,
+    outsideTargetStatusRows,
+    outsideTargetMarketRows,
+    invalidCurrencyRows,
     missingIdentifierRows,
     missingRegularPriceRows,
     invalidRegularPriceRows,
@@ -169,8 +179,14 @@ const createWarnings = (summary: ZalandoSalePriceSummary): string[] => {
   const warnings: string[] = [];
 
   if (summary.totalRows === 0) warnings.push("No rows were provided.");
-  if (summary.skippedNonZablo01Rows > 0) {
-    warnings.push(`${summary.skippedNonZablo01Rows} row(s) were skipped because status_detail is not ${TARGET_STATUS}.`);
+  if (summary.outsideTargetStatusRows > 0) {
+    warnings.push(`${summary.outsideTargetStatusRows} row(s) were skipped because status_detail does not contain ${TARGET_STATUS}.`);
+  }
+  if (summary.outsideTargetMarketRows > 0) {
+    warnings.push(`${summary.outsideTargetMarketRows} row(s) were skipped because country is not ${TARGET_COUNTRY.toLowerCase()}.`);
+  }
+  if (summary.invalidCurrencyRows > 0) {
+    warnings.push(`${summary.invalidCurrencyRows} German-market row(s) were blocked because currency is not ${TARGET_CURRENCY}.`);
   }
   if (summary.invalidRows > 0) {
     warnings.push(`${summary.invalidRows} ${TARGET_STATUS} row(s) need correction before Shopify matching.`);
@@ -196,6 +212,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       || normalizeZalandoSalePriceId(readValue(rawRow, SKU_ALIASES));
     const ean = normalizeZalandoSalePriceId(readValue(rawRow, EAN_ALIASES));
     const articleName = readText(rawRow, ARTICLE_NAME_ALIASES);
+    const country = readText(rawRow, COUNTRY_ALIASES).toUpperCase();
     const currency = readText(rawRow, CURRENCY_ALIASES).toUpperCase();
     const regularPriceValue = readValue(rawRow, REGULAR_PRICE_ALIASES);
     const regularPrice = parseZalandoPrice(regularPriceValue);
@@ -203,14 +220,45 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
     if (!containsTargetStatus(statusDetail)) {
       return makeRow({
         sourceRowNumber,
-        status: "skipped_non_zablo_01",
+        status: "outside_target_status",
         statusDetail,
         sku,
         ean,
         articleName,
+        country,
         currency,
         regularPrice,
         message: `Skipped: status_detail does not contain ${TARGET_STATUS}.`,
+      });
+    }
+
+    if (country !== TARGET_COUNTRY) {
+      return makeRow({
+        sourceRowNumber,
+        status: "outside_target_market",
+        statusDetail,
+        sku,
+        ean,
+        articleName,
+        country,
+        currency,
+        regularPrice,
+        message: `Skipped: country must be ${TARGET_COUNTRY.toLowerCase()} for this operation.`,
+      });
+    }
+
+    if (currency !== TARGET_CURRENCY) {
+      return makeRow({
+        sourceRowNumber,
+        status: "invalid_currency",
+        statusDetail,
+        sku,
+        ean,
+        articleName,
+        country,
+        currency,
+        regularPrice,
+        message: `Cannot calculate sale price: German-market currency must be ${TARGET_CURRENCY}.`,
       });
     }
 
@@ -222,6 +270,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
         sku,
         ean,
         articleName,
+        country,
         currency,
         regularPrice,
         message: "Cannot match Shopify: both SKU and EAN are missing.",
@@ -236,6 +285,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
         sku,
         ean,
         articleName,
+        country,
         currency,
         regularPrice: null,
         message: "Cannot calculate sale price: regular price is missing.",
@@ -250,6 +300,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
         sku,
         ean,
         articleName,
+        country,
         currency,
         regularPrice,
         message: "Cannot calculate sale price: regular price must be a positive number.",
@@ -266,6 +317,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       sku,
       ean,
       articleName,
+      country,
       currency,
       regularPrice,
       salePrice: calculateZalandoSalePrice(regularPrice),
