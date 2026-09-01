@@ -606,6 +606,61 @@ const readShopifySyncMeta = (...keys: string[]): ShopifySyncMeta | null => {
   return null;
 };
 
+const toolLinks = [
+  {
+    to: '/zfs',
+    title: 'ZFS',
+    description: 'Build Zalando stock overviews and replenishment recommendations.',
+  },
+  {
+    to: '/fba',
+    title: 'FBA',
+    description: 'Build Amazon FBA stock and replenishment recommendations.',
+  },
+  {
+    to: '/retagging',
+    title: 'Retagging',
+    description: 'Review Zalando season retagging decisions and operational notes.',
+  },
+  {
+    to: '/sale-prices',
+    title: 'Sale Prices',
+    description: 'Preview and approve Zalando sale-price updates in Shopify.',
+  },
+  {
+    to: '/stock-return',
+    title: 'Stock Return',
+    description: 'Find ZFS overstock and prepare return recommendations.',
+  },
+] as const;
+
+const ToolHome = () => (
+  <section className="mx-auto max-w-6xl space-y-5">
+    <div>
+      <h1 className="text-2xl font-semibold text-slate-950">Inventory Tools</h1>
+      <p className="mt-1 text-base text-slate-500">Choose a workflow to get started.</p>
+    </div>
+
+    <nav className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Inventory tools">
+      {toolLinks.map((tool) => (
+        <NavLink
+          key={tool.to}
+          to={tool.to}
+          className="ops-surface group flex min-h-40 flex-col justify-between p-6 transition hover:border-slate-400 hover:shadow-md"
+        >
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">{tool.title}</h2>
+            <p className="mt-2 text-base leading-6 text-slate-500">{tool.description}</p>
+          </div>
+          <span className="mt-6 text-base font-semibold text-slate-900 group-hover:text-emerald-700">
+            Open tool
+          </span>
+        </NavLink>
+      ))}
+    </nav>
+  </section>
+);
+
 function timeAgo(timestamp: string): string {
   const ms = Date.now() - new Date(timestamp).getTime();
   const sec = Math.max(0, Math.floor(ms / 1000));
@@ -620,9 +675,9 @@ function timeAgo(timestamp: string): string {
 
 const IntegratedStockParser: React.FC = () => {
   const location = useLocation();
-  const onZfsRoute = location.pathname === '/zfs' || location.pathname === '/';
+  const onHomeRoute = location.pathname === '/';
+  const onZfsRoute = location.pathname === '/zfs';
   const onRetaggingRoute = location.pathname === '/retagging';
-  const onSalePricesRoute = location.pathname === '/sale-prices';
   const onStockReturnRoute = location.pathname === '/stock-return';
   const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
   const currentShopifySyncModule: ShopifySyncModule | null = onStockReturnRoute
@@ -1557,119 +1612,54 @@ const IntegratedStockParser: React.FC = () => {
       {/* Modern Header */}
       <div className="mb-6 border-b border-slate-200 bg-white/95 py-5 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
         <div className="container mx-auto flex flex-col items-center gap-4 px-4 lg:px-10 xl:flex-row xl:justify-between">
-          <div className="flex items-center gap-4">
+          <NavLink to="/" className="flex items-center gap-4" aria-label="Open inventory tools home">
             <img
               src="/Blackskies-Logo.png"
               alt="Blackskies Logo"
               className="h-14 sm:h-16"
             />
-          </div>
+          </NavLink>
 
-          <nav className="flex flex-wrap justify-center gap-1 border border-slate-200 bg-slate-50 p-1 shadow-inner" aria-label="Primary">
-            <NavLink
-              to="/zfs"
-              className={({ isActive }) =>
-                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-                }`
-              }
-            >
-              ZFS
-            </NavLink>
-            <NavLink
-              to="/fba"
-              className={({ isActive }) =>
-                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-                }`
-              }
-            >
-              FBA
-            </NavLink>
-            <NavLink
-              to="/retagging"
-              className={({ isActive }) =>
-                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-                }`
-              }
-            >
-              Retagging
-            </NavLink>
-            <NavLink
-              to="/sale-prices"
-              className={({ isActive }) =>
-                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-                }`
-              }
-            >
-              Sale Prices
-            </NavLink>
-            <NavLink
-              to="/stock-return"
-              className={({ isActive }) =>
-                `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-                }`
-              }
-            >
-              Stock Return
-            </NavLink>
-          </nav>
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <div className="relative">
-              <button
-                onClick={canSyncShopify ? handleShopifySync : undefined}
-                disabled={isShopifySyncing || !canSyncShopify}
-                className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
-                title={
-                  canSyncShopify
-                    ? "Pull Internal Stocks and SKU/EAN data directly from Shopify"
-                    : onSalePricesRoute
-                      ? "Sale Prices connects to Shopify during Process and Match"
-                      : "Shopify sync is used by ZFS, Retagging, and Stock Return"
-                }
-              >
-                {isShopifySyncing && (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                )}
-                {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
-              </button>
+          {(onHomeRoute || canSyncShopify) && (
+            <div className="flex flex-wrap items-center justify-center gap-3">
               {canSyncShopify && (
-                <span
-                  className={`absolute right-0 top-full mt-1 whitespace-nowrap text-base ${
-                    isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
-                  }`}
+                <div className="relative">
+                  <button
+                    onClick={handleShopifySync}
+                    disabled={isShopifySyncing}
+                    className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
+                    title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                  >
+                    {isShopifySyncing && (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    )}
+                    {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
+                  </button>
+                  <span
+                    className={`absolute right-0 top-full mt-1 whitespace-nowrap text-base ${
+                      isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
+                    }`}
+                  >
+                    {isShopifySyncing
+                      ? shopifySyncStatusLabel
+                      : activeShopifySyncMeta
+                        ? `Last synced ${timeAgo(activeShopifySyncMeta.lastSyncedAt)} · ${activeShopifySyncMeta.internalCount.toLocaleString()} stock rows`
+                        : "Not synced yet"}
+                  </span>
+                </div>
+              )}
+              {onHomeRoute && (
+                <button
+                  className="whitespace-nowrap border border-slate-900 bg-slate-950 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleOpenOverlay}
+                  title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
+                  disabled={isLoadingPersistedData}
                 >
-                  {isShopifySyncing
-                    ? shopifySyncStatusLabel
-                    : activeShopifySyncMeta
-                      ? `Last synced ${timeAgo(activeShopifySyncMeta.lastSyncedAt)} · ${activeShopifySyncMeta.internalCount.toLocaleString()} stock rows`
-                      : "Not synced yet"}
-                </span>
+                  Relative Stock Export
+                </button>
               )}
             </div>
-            <button
-              className="whitespace-nowrap border border-slate-900 bg-slate-950 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={handleOpenOverlay}
-              title="Use this to export adjusted stock deductions for both ZFS & FBA shipments"
-              disabled={isLoadingPersistedData}
-            >
-              Relative Stock Export
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -1749,7 +1739,7 @@ const IntegratedStockParser: React.FC = () => {
           {/* Content Area */}
           <div className="p-4 sm:p-6">
             <Routes>
-              <Route path="/" element={<Navigate to="/zfs" replace />} />
+              <Route path="/" element={<ToolHome />} />
               <Route path="/zfs" element={
               <ZFSContent
                 files={files}
@@ -1813,7 +1803,7 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isStockReturnShopifyStockLoading}
               />
               } />
-              <Route path="*" element={<Navigate to="/zfs" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </div>
