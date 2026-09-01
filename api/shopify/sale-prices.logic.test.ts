@@ -30,10 +30,39 @@ const variants: ShopifySalePriceVariant[] = [
 ];
 
 describe('sale-price preparation', () => {
-  it('parses European prices and calculates a two-decimal 20% discount', () => {
+  it('parses European prices and applies the default 10% discount', () => {
     expect(parseRegularPrice('€ 1.234,56')).toBe(1234.56);
-    expect(calculateSalePrice(33.99)).toBe('27.19');
+    expect(calculateSalePrice(33.99)).toBe('30.59');
     expect(calculateSalePrice(12.57)).toBe('15.00');
+  });
+
+  it('supports custom discounts, rounds to two decimals, and gives the €15 floor priority', () => {
+    expect(calculateSalePrice(33.99, 25)).toBe('25.49');
+    expect(calculateSalePrice(18, 25)).toBe('15.00');
+    expect(calculateSalePrice(20, 100)).toBe('15.00');
+
+    const result = prepareSalePriceUpdate(
+      [
+        {
+          statusDetail: 'ZABLO_646',
+          country: 'de',
+          currency: 'EUR',
+          sku: 'AK-R-PUR-03-11',
+          regularPrice: 33.99,
+        },
+      ],
+      variants,
+      25
+    );
+
+    expect(result.rows[0]).toMatchObject({ salePrice: '25.49', status: 'ready' });
+  });
+
+  it('rejects discounts outside the allowed 10% to 100% range', () => {
+    expect(() => calculateSalePrice(33.99, 9)).toThrow(RangeError);
+    expect(() => calculateSalePrice(33.99, 101)).toThrow(RangeError);
+    expect(() => prepareSalePriceUpdate([], variants, 9)).toThrow(RangeError);
+    expect(() => prepareSalePriceUpdate([], variants, 101)).toThrow(RangeError);
   });
 
   it('matches SKU first and falls back to EAN', () => {
@@ -62,13 +91,13 @@ describe('sale-price preparation', () => {
     expect(result.rows[0]).toMatchObject({
       rowNumber: 9,
       status: 'ready',
-      salePrice: '27.19',
+      salePrice: '30.59',
       matchingMethod: 'sku_and_ean',
       shopifyProduct: { id: 'gid://shopify/Product/1' },
     });
     expect(result.rows[1]).toMatchObject({
       status: 'ready',
-      salePrice: '16.00',
+      salePrice: '18.00',
       matchingMethod: 'ean',
     });
   });
@@ -179,7 +208,7 @@ describe('sale-price preparation', () => {
       expect.objectContaining({
         productId: 'gid://shopify/Product/1',
         status: 'ready',
-        salePrice: '24.00',
+        salePrice: '27.00',
         message: expect.stringContaining('highest calculated sale price'),
       }),
     ]);
@@ -192,7 +221,7 @@ describe('sale-price preparation', () => {
         ...variants[0],
         product: {
           ...variants[0].product,
-          salePriceMetafield: { value: '27.190', compareDigest: 'digest-current' },
+          salePriceMetafield: { value: '30.590', compareDigest: 'digest-current' },
         },
       },
     ];
@@ -211,12 +240,12 @@ describe('sale-price preparation', () => {
 
     expect(result.rows[0]).toMatchObject({
       status: 'already_up_to_date',
-      currentSalePrice: '27.190',
+      currentSalePrice: '30.590',
     });
     expect(result.products[0]).toMatchObject({
       status: 'already_up_to_date',
-      currentSalePrice: '27.190',
-      salePrice: '27.19',
+      currentSalePrice: '30.590',
+      salePrice: '30.59',
     });
     expect(result.summary).toMatchObject({
       readyProducts: 0,

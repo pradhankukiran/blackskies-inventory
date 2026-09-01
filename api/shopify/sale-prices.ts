@@ -1,6 +1,9 @@
 import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
 import {
   applyProductUpdateResults,
+  isValidSalePriceDiscountPercentage,
+  MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE,
+  MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE,
   prepareSalePriceUpdate,
   SALE_PRICE_TARGET_STATUS,
   type SalePriceInputRow,
@@ -21,6 +24,7 @@ export type SalePriceUpdateSelection = {
   mode: 'selected';
   productId: string;
   compareDigest: string | null;
+  salePrice: string;
 };
 
 type ProductMetafieldDefinitionResponse = {
@@ -74,9 +78,22 @@ function isRequestAction(value: unknown): value is RequestAction {
   return value === 'preview' || value === 'update';
 }
 
+export function parseDiscountPercentage(
+  value: unknown
+): { discountPercentage: number } | { error: string } {
+  if (typeof value !== 'number' || !isValidSalePriceDiscountPercentage(value)) {
+    return {
+      error:
+        `Discount percentage must be a number between ${MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE} and ${MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE}.`,
+    };
+  }
+
+  return { discountPercentage: value };
+}
+
 /**
- * Validates one parent approval and the metafield digest shown in its preview.
- * The digest binds the approval to the Shopify value the user reviewed.
+ * Validates one parent approval, the metafield digest, and the proposed price.
+ * These values bind the approval to exactly what the user reviewed.
  */
 export function parseUpdateSelection(
   value: unknown
@@ -92,6 +109,7 @@ export function parseUpdateSelection(
     mode?: unknown;
     productId?: unknown;
     compareDigest?: unknown;
+    salePrice?: unknown;
   };
   if (selection.mode !== 'selected') {
     return {
@@ -111,11 +129,21 @@ export function parseUpdateSelection(
     };
   }
 
+  if (
+    typeof selection.salePrice !== 'string'
+    || !/^\d+\.\d{2}$/.test(selection.salePrice.trim())
+  ) {
+    return {
+      error: 'The selected product must include the exact proposed price from its preview.',
+    };
+  }
+
   return {
     selection: {
       mode: 'selected',
       productId: selection.productId.trim(),
       compareDigest: selection.compareDigest,
+      salePrice: selection.salePrice.trim(),
     },
   };
 }
@@ -309,10 +337,11 @@ export default async function handler(req: any, res: any) {
     return sendError(res, 400, 'invalid_body', 'Request body must be a JSON object.');
   }
 
-  const { action, rows, selection } = body as {
+  const { action, rows, selection, discountPercentage: rawDiscountPercentage } = body as {
     action?: unknown;
     rows?: unknown;
     selection?: unknown;
+    discountPercentage?: unknown;
   };
   if (!isRequestAction(action)) {
     return sendError(res, 400, 'invalid_action', 'Action must be either "preview" or "update".');
@@ -345,6 +374,17 @@ export default async function handler(req: any, res: any) {
     updateSelection = parsedSelection.selection;
   }
 
+  const parsedDiscountPercentage = parseDiscountPercentage(rawDiscountPercentage);
+  if ('error' in parsedDiscountPercentage) {
+    return sendError(
+      res,
+      400,
+      'invalid_discount_percentage',
+      parsedDiscountPercentage.error
+    );
+  }
+  const { discountPercentage } = parsedDiscountPercentage;
+
   try {
     const shopify = await getShopifyClient();
     const definition = await getProductMetafieldDefinition(shopify);
@@ -358,7 +398,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const variants = await getAllVariants(shopify);
-    const preparation = prepareSalePriceUpdate(toInputRows(rows as RawRequestRow[]), variants);
+    const preparation = prepareSalePriceUpdate(
+      toInputRows(rows as RawRequestRow[]),
+      variants,
+      discountPercentage
+    );
     const metafield = {
       namespace: METAFIELD_NAMESPACE,
       key: METAFIELD_KEY,
@@ -369,6 +413,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         action,
         targetStatus: TARGET_STATUS,
+        discountPercentage,
         metafield,
         summary: preparation.summary,
         rows: preparation.rows,
@@ -381,7 +426,8 @@ export default async function handler(req: any, res: any) {
       (product) => product.productId === updateSelection!.productId
     );
     const selectionChanged =
-      selectedProduct?.compareDigest !== updateSelection!.compareDigest;
+      selectedProduct?.compareDigest !== updateSelection!.compareDigest
+      || selectedProduct?.salePrice !== updateSelection!.salePrice;
     const staleProductIds =
       !selectedProduct || selectionChanged ? [updateSelection!.productId] : [];
 
@@ -389,10 +435,11 @@ export default async function handler(req: any, res: any) {
       return res.status(409).json({
         error: 'selection_stale',
         message:
-          'This parent product changed after it was previewed. Review its refreshed Shopify value before approving again.',
+          'This parent product or its proposed price changed after preview. Review the refreshed values before approving again.',
         invalidProductIds: staleProductIds,
         action,
         targetStatus: TARGET_STATUS,
+        discountPercentage,
         metafield,
         summary: preparation.summary,
         rows: preparation.rows,
@@ -414,6 +461,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       action,
       targetStatus: TARGET_STATUS,
+      discountPercentage,
       metafield,
       summary: {
         ...result.summary,

@@ -22,7 +22,13 @@ import {
 import { exportToCSV } from "@/utils/exporters/csvExporter";
 import { exportToXLSX } from "@/utils/exporters/xlsxExporter";
 import { parseFile } from "@/utils/fileParser";
-import { processZalandoSalePrices } from "@/utils/processors/zalandoSalePriceProcessor";
+import {
+  DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE,
+  MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE,
+  MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE,
+  isValidZalandoDiscountPercentage,
+  processZalandoSalePrices,
+} from "@/utils/processors/zalandoSalePriceProcessor";
 
 const ITEMS_PER_PAGE = 25;
 const TARGET_STATUS = "ZABLO_646";
@@ -33,6 +39,7 @@ type SalePriceUpdateSelection = {
   mode: "selected";
   productId: string;
   compareDigest: string | null;
+  salePrice: string;
 };
 
 interface SalePricePayloadRow {
@@ -119,6 +126,7 @@ const apiErrorMessage = (body: ShopifySalePriceApiError, status: number) =>
 const postShopifySalePrices = async (
   action: SalePriceAction,
   rows: SalePricePayloadRow[],
+  discountPercentage: number,
   selection?: SalePriceUpdateSelection
 ): Promise<ShopifySalePriceApiResponse> => {
   const response = await fetch("/api/shopify/sale-prices", {
@@ -126,7 +134,12 @@ const postShopifySalePrices = async (
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action, rows, ...(selection ? { selection } : {}) }),
+    body: JSON.stringify({
+      action,
+      rows,
+      discountPercentage,
+      ...(selection ? { selection } : {}),
+    }),
   });
 
   const raw = await response.text();
@@ -162,10 +175,34 @@ const payloadFromResult = (result: ZalandoSalePriceResult): SalePricePayloadRow[
       currency: row.currency,
     }));
 
+const renderSourceIdentifiers = (identifiers: string[]) =>
+  identifiers.map((identifier, index) => {
+    const isSku = identifier.startsWith("SKU:");
+    const skuValue = isSku ? identifier.slice("SKU:".length).trim() : "";
+    return (
+      <React.Fragment key={`${identifier}-${index}`}>
+        {index > 0 && <span aria-hidden="true"> · </span>}
+        {isSku ? (
+          <>
+            <span>SKU: </span>
+            <span data-selectable-text className="cursor-text select-text">
+              {skuValue}
+            </span>
+          </>
+        ) : (
+          <span>{identifier}</span>
+        )}
+      </React.Fragment>
+    );
+  });
+
 export const ZalandoSalePriceTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [localResult, setLocalResult] = useState<ZalandoSalePriceResult | null>(null);
   const [shopifyResult, setShopifyResult] = useState<ShopifySalePriceApiResponse | null>(null);
+  const [discountPercentage, setDiscountPercentage] = useState(
+    DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE
+  );
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [productStatusFilter, setProductStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -190,9 +227,22 @@ export const ZalandoSalePriceTool: React.FC = () => {
     loadZalandoSalePriceState()
       .then((persisted) => {
         if (cancelled) return;
+        const persistedDiscountPercentage = isValidZalandoDiscountPercentage(
+          persisted.discountPercentage
+        )
+          ? persisted.discountPercentage
+          : DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE;
+        const localPreviewIsCurrent =
+          !persisted.localResult
+          || persisted.localResult.discountPercentage === persistedDiscountPercentage;
+        const shopifyPreviewIsCurrent =
+          !persisted.shopifyResult
+          || persisted.shopifyResult.discountPercentage === persistedDiscountPercentage;
+
         setFile(persisted.file);
-        setLocalResult(persisted.localResult);
-        setShopifyResult(persisted.shopifyResult);
+        setDiscountPercentage(persistedDiscountPercentage);
+        setLocalResult(localPreviewIsCurrent && shopifyPreviewIsCurrent ? persisted.localResult : null);
+        setShopifyResult(localPreviewIsCurrent && shopifyPreviewIsCurrent ? persisted.shopifyResult : null);
         setProductSearchTerm(persisted.productSearchTerm);
         setProductStatusFilter(persisted.productStatusFilter);
         setSearchTerm(persisted.searchTerm);
@@ -216,6 +266,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     saveZalandoSalePriceUiState({
       localResult,
       shopifyResult,
+      discountPercentage,
       productSearchTerm,
       productStatusFilter,
       searchTerm,
@@ -226,6 +277,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
   }, [
     isLoadingPersistedState,
     localResult,
+    discountPercentage,
     productSearchTerm,
     productStatusFilter,
     searchTerm,
@@ -450,6 +502,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
   const alreadyCurrentProducts =
     shopifyResult?.products.filter((product) => product.status === "already_up_to_date").length || 0;
   const hasProcessed = Boolean(localResult);
+  const discountPercentageIsValid = isValidZalandoDiscountPercentage(discountPercentage);
   const reviewRows = displayRows.filter(
     (row) =>
       ![
@@ -465,7 +518,9 @@ export const ZalandoSalePriceTool: React.FC = () => {
     ? "Processing..."
     : !file
       ? "Upload Required CSV"
-      : "Process and Match Shopify";
+      : !discountPercentageIsValid
+        ? "Enter Valid Discount"
+        : "Process and Match Shopify";
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
@@ -489,6 +544,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setDiscountPercentage(DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE);
     setProductSearchTerm("");
     setProductStatusFilter("all");
     setSearchTerm("");
@@ -504,6 +560,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setLocalResult(null);
     setShopifyResult(null);
     setError(null);
+    setDiscountPercentage(DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE);
     setProductSearchTerm("");
     setProductStatusFilter("all");
     setSearchTerm("");
@@ -516,6 +573,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
         saveZalandoSalePriceUiState({
           localResult: null,
           shopifyResult: null,
+          discountPercentage: DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE,
           productSearchTerm: "",
           productStatusFilter: "all",
           searchTerm: "",
@@ -541,6 +599,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
       await saveZalandoSalePriceUiState({
         localResult: null,
         shopifyResult: null,
+        discountPercentage,
         productSearchTerm: "",
         productStatusFilter: "all",
         searchTerm: "",
@@ -556,6 +615,12 @@ export const ZalandoSalePriceTool: React.FC = () => {
       setError("Upload the Zalando Previous Season CSV first.");
       return;
     }
+    if (!discountPercentageIsValid) {
+      setError(
+        `Discount percentage must be between ${MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE} and ${MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE}.`
+      );
+      return;
+    }
 
     try {
       setError(null);
@@ -563,7 +628,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
       setIsProcessing(true);
       setProcessingStatus("Parsing the Zalando CSV...");
       const rawRows = await parseFile(file);
-      const processed = processZalandoSalePrices(rawRows);
+      const processed = processZalandoSalePrices(rawRows, discountPercentage);
       setLocalResult(processed);
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -572,7 +637,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
       const rows = payloadFromResult(processed);
       if (rows.length) {
         setProcessingStatus("Matching SKU and EAN values in Shopify...");
-        const preview = await postShopifySalePrices("preview", rows);
+        const preview = await postShopifySalePrices("preview", rows, discountPercentage);
         setShopifyResult(preview);
       }
 
@@ -601,16 +666,26 @@ export const ZalandoSalePriceTool: React.FC = () => {
     setError(null);
 
     try {
-      const result = await postShopifySalePrices("update", payloadRows, {
-        mode: "selected",
-        productId: product.productId,
-        compareDigest: product.compareDigest,
-      });
+      const result = await postShopifySalePrices(
+        "update",
+        payloadRows,
+        discountPercentage,
+        {
+          mode: "selected",
+          productId: product.productId,
+          compareDigest: product.compareDigest,
+          salePrice: product.salePrice,
+        }
+      );
       setShopifyResult(result);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Could not update Shopify sale prices.");
       try {
-        const refreshedPreview = await postShopifySalePrices("preview", payloadRows);
+        const refreshedPreview = await postShopifySalePrices(
+          "preview",
+          payloadRows,
+          discountPercentage
+        );
         setShopifyResult(refreshedPreview);
       } catch (refreshError) {
         console.error("Could not refresh the Shopify sale-price preview:", refreshError);
@@ -637,7 +712,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
   ) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
-    if (target.closest("button,input,select,a")) return;
+    if (target.closest("button,input,select,a,[data-selectable-text]")) return;
 
     tableDragRef.current = {
       isDragging: true,
@@ -698,7 +773,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             <div>
               <h2 className="ops-title">Sale Price Operation</h2>
               <p className="ops-muted">
-                Calculate 20% discounts and preview parent Shopify product metafield updates.
+                Set the discount, then preview parent Shopify product metafield updates.
               </p>
             </div>
           </div>
@@ -706,9 +781,51 @@ export const ZalandoSalePriceTool: React.FC = () => {
             {TARGET_STATUS} · DE · EUR
           </span>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
-          <div className="text-base text-slate-600">
-            Shopify matching happens automatically. Processing does not change Shopify data.
+        <div className="flex flex-wrap items-end justify-between gap-4 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="max-w-xl text-base text-slate-600">
+              Shopify matching happens automatically. Processing does not change Shopify data.
+            </div>
+            <label htmlFor="zalando-discount-percentage" className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Discount percentage
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  id="zalando-discount-percentage"
+                  type="number"
+                  min={MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE}
+                  max={MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE}
+                  step="0.01"
+                  value={discountPercentage}
+                  onChange={(event) => {
+                    setDiscountPercentage(
+                      Number.isNaN(event.target.valueAsNumber)
+                        ? 0
+                        : event.target.valueAsNumber
+                    );
+                    setError(null);
+                  }}
+                  disabled={hasProcessed || isProcessing || isUpdating}
+                  aria-invalid={!discountPercentageIsValid}
+                  aria-describedby="zalando-discount-help"
+                  className="ops-input w-28"
+                />
+                <span className="text-base font-medium text-slate-700">%</span>
+              </div>
+              <span
+                id="zalando-discount-help"
+                className={`mt-1 block text-sm ${
+                  discountPercentageIsValid ? "text-slate-500" : "text-red-700"
+                }`}
+              >
+                {discountPercentageIsValid
+                  ? hasProcessed
+                    ? "Clear the table to change it. €15.00 always takes priority."
+                    : `Minimum ${MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE}%. €15.00 always takes priority.`
+                  : `Enter a value from ${MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE}% to ${MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE}%.`}
+              </span>
+            </label>
           </div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={resetFiles} className="ops-button-secondary">
@@ -722,7 +839,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
             <button
               type="button"
               onClick={processAndMatch}
-              disabled={!file || isProcessing || isUpdating}
+              disabled={!file || !discountPercentageIsValid || isProcessing || isUpdating}
               className="ops-button-primary px-6"
             >
               {processButtonLabel}
@@ -882,7 +999,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                             </div>
                             <div className="mt-1">
                               {product.sourceIdentifiers.length
-                                ? product.sourceIdentifiers.join(" · ")
+                                ? renderSourceIdentifiers(product.sourceIdentifiers)
                                 : "—"}
                             </div>
                           </td>
@@ -997,7 +1114,16 @@ export const ZalandoSalePriceTool: React.FC = () => {
                           {statusLabels[row.status] || row.status}
                         </span>
                       </td>
-                      <td className="font-medium">{row.source.sku || "—"}</td>
+                      <td className="font-medium">
+                        {row.source.sku ? (
+                          <span
+                            data-selectable-text
+                            className="cursor-text select-text"
+                          >
+                            {row.source.sku}
+                          </span>
+                        ) : "—"}
+                      </td>
                       <td>{row.source.ean || "—"}</td>
                       <td>{row.source.articleName || "—"}</td>
                       <td>{row.source.country || "—"}</td>
@@ -1092,6 +1218,9 @@ export const ZalandoSalePriceTool: React.FC = () => {
                     <div className="mt-1 text-xl font-semibold text-blue-700">
                       {`${confirmationProduct.salePrice} ${confirmationProduct.currency}`.trim()}
                     </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      Calculated with a {discountPercentage}% discount.
+                    </div>
                   </div>
                 </div>
                 <div className="border-t border-slate-200 px-4 py-4">
@@ -1101,7 +1230,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
                   </div>
                   <div className="mt-1 break-words text-sm leading-6 text-slate-700">
                     {confirmationProduct.sourceIdentifiers.length
-                      ? confirmationProduct.sourceIdentifiers.join(" · ")
+                      ? renderSourceIdentifiers(confirmationProduct.sourceIdentifiers)
                       : "—"}
                   </div>
                 </div>

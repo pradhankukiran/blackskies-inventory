@@ -9,7 +9,9 @@ import {
 const TARGET_STATUS = "ZABLO_646";
 const TARGET_COUNTRY = "DE";
 const TARGET_CURRENCY = "EUR";
-const SALE_PRICE_MULTIPLIER = 0.8;
+export const DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE = 10;
+export const MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE = 10;
+export const MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE = 100;
 export const MINIMUM_ZALANDO_SALE_PRICE = 15;
 
 const STATUS_ALIASES = ["status_detail", "status detail", "status code", "zalando status code"];
@@ -104,11 +106,29 @@ export const parseZalandoPrice = (value: unknown): number | null => {
 
 const roundToTwoDecimals = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export const calculateZalandoSalePrice = (regularPrice: number) =>
-  Math.max(
+export const isValidZalandoDiscountPercentage = (discountPercentage: number) =>
+  Number.isFinite(discountPercentage)
+  && discountPercentage >= MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE
+  && discountPercentage <= MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE;
+
+const calculateDiscountedSalePrice = (regularPrice: number, discountPercentage: number) =>
+  roundToTwoDecimals(regularPrice * (1 - discountPercentage / 100));
+
+export const calculateZalandoSalePrice = (
+  regularPrice: number,
+  discountPercentage = DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE
+) => {
+  if (!isValidZalandoDiscountPercentage(discountPercentage)) {
+    throw new RangeError(
+      `Discount percentage must be between ${MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE} and ${MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE}.`
+    );
+  }
+
+  return Math.max(
     MINIMUM_ZALANDO_SALE_PRICE,
-    roundToTwoDecimals(regularPrice * SALE_PRICE_MULTIPLIER)
+    calculateDiscountedSalePrice(regularPrice, discountPercentage)
   );
+};
 
 const containsTargetStatus = (statusDetail: string) =>
   statusDetail
@@ -204,7 +224,16 @@ const createWarnings = (summary: ZalandoSalePriceSummary): string[] => {
  * Builds a complete preview from parsed Zalando CSV rows. It never matches or
  * writes Shopify data; ready rows are the only rows safe to pass to that step.
  */
-export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSalePriceResult => {
+export const processZalandoSalePrices = (
+  rawRows: RawSalePriceRow[],
+  discountPercentage = DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE
+): ZalandoSalePriceResult => {
+  if (!isValidZalandoDiscountPercentage(discountPercentage)) {
+    throw new RangeError(
+      `Discount percentage must be between ${MINIMUM_ZALANDO_DISCOUNT_PERCENTAGE} and ${MAXIMUM_ZALANDO_DISCOUNT_PERCENTAGE}.`
+    );
+  }
+
   const rows = rawRows.map((rawRow, index) => {
     const sourceRowNumber = index + 1;
     const statusDetail = readText(rawRow, STATUS_ALIASES);
@@ -307,7 +336,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       });
     }
 
-    const discountedSalePrice = roundToTwoDecimals(regularPrice * SALE_PRICE_MULTIPLIER);
+    const discountedSalePrice = calculateDiscountedSalePrice(regularPrice, discountPercentage);
     const minimumPriceApplied = discountedSalePrice < MINIMUM_ZALANDO_SALE_PRICE;
 
     return makeRow({
@@ -320,7 +349,7 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
       country,
       currency,
       regularPrice,
-      salePrice: calculateZalandoSalePrice(regularPrice),
+      salePrice: calculateZalandoSalePrice(regularPrice, discountPercentage),
       minimumPriceApplied,
       message: minimumPriceApplied
         ? `Warning: discounted price ${discountedSalePrice.toFixed(2)} was raised to the €15.00 minimum.`
@@ -329,5 +358,5 @@ export const processZalandoSalePrices = (rawRows: RawSalePriceRow[]): ZalandoSal
   });
 
   const summary = createSummary(rows);
-  return { rows, summary, warnings: createWarnings(summary) };
+  return { rows, summary, warnings: createWarnings(summary), discountPercentage };
 };

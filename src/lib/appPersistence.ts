@@ -6,6 +6,7 @@ import { RetaggingDecisionResult } from '@/types/retagging';
 import { ShopifySalePriceApiResponse } from '@/types/shopifySalePrice';
 import { StockReturnResult } from '@/types/stockReturn';
 import { ZalandoSalePriceResult } from '@/types/zalandoSalePrice';
+import { DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE } from '@/utils/processors/zalandoSalePriceProcessor';
 import { clearGenericData, getGenericData, getStoredData, storeData, storeGenericData, StoredData } from './indexedDB';
 
 export interface RecommendationSettings {
@@ -86,6 +87,7 @@ export interface StockReturnPersistedState extends StockReturnUiState {
 export interface ZalandoSalePriceUiState {
   localResult: ZalandoSalePriceResult | null;
   shopifyResult: ShopifySalePriceApiResponse | null;
+  discountPercentage: number;
   productSearchTerm: string;
   productStatusFilter: string;
   searchTerm: string;
@@ -123,6 +125,7 @@ const DEFAULT_STOCK_RETURN_STATE: StockReturnUiState = {
 const DEFAULT_ZALANDO_SALE_PRICE_STATE: ZalandoSalePriceUiState = {
   localResult: null,
   shopifyResult: null,
+  discountPercentage: DEFAULT_ZALANDO_DISCOUNT_PERCENTAGE,
   productSearchTerm: '',
   productStatusFilter: 'all',
   searchTerm: '',

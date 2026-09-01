@@ -1,4 +1,6 @@
-export const SALE_PRICE_DISCOUNT = 0.8;
+export const DEFAULT_SALE_PRICE_DISCOUNT_PERCENTAGE = 10;
+export const MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE = 10;
+export const MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE = 100;
 export const MINIMUM_SALE_PRICE = 15;
 export const SALE_PRICE_TARGET_STATUS = 'ZABLO_646';
 export const SALE_PRICE_TARGET_COUNTRY = 'DE';
@@ -170,13 +172,32 @@ export function parseRegularPrice(
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function calculateSalePrice(regularPrice: number): string {
-  const discountedPrice = calculateDiscountedSalePrice(regularPrice);
+export function isValidSalePriceDiscountPercentage(discountPercentage: number): boolean {
+  return Number.isFinite(discountPercentage)
+    && discountPercentage >= MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE
+    && discountPercentage <= MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE;
+}
+
+export function calculateSalePrice(
+  regularPrice: number,
+  discountPercentage = DEFAULT_SALE_PRICE_DISCOUNT_PERCENTAGE
+): string {
+  if (!isValidSalePriceDiscountPercentage(discountPercentage)) {
+    throw new RangeError(
+      `Discount percentage must be between ${MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE} and ${MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE}.`
+    );
+  }
+
+  const discountedPrice = calculateDiscountedSalePrice(regularPrice, discountPercentage);
   return Math.max(MINIMUM_SALE_PRICE, discountedPrice).toFixed(2);
 }
 
-function calculateDiscountedSalePrice(regularPrice: number): number {
-  return Math.round((regularPrice * SALE_PRICE_DISCOUNT + Number.EPSILON) * 100) / 100;
+function calculateDiscountedSalePrice(
+  regularPrice: number,
+  discountPercentage: number
+): number {
+  const multiplier = 1 - discountPercentage / 100;
+  return Math.round((regularPrice * multiplier + Number.EPSILON) * 100) / 100;
 }
 
 function containsTargetStatus(statusDetail: string): boolean {
@@ -227,12 +248,13 @@ function rowResult(
   status: SalePriceRowStatus,
   message: string | null,
   variant: ShopifySalePriceVariant | null = null,
-  matchingMethod: SalePriceRowResult['matchingMethod'] = null
+  matchingMethod: SalePriceRowResult['matchingMethod'] = null,
+  discountPercentage = DEFAULT_SALE_PRICE_DISCOUNT_PERCENTAGE
 ): SalePriceRowResult {
   const discountedPrice =
     regularPrice === null
       ? null
-      : calculateDiscountedSalePrice(regularPrice);
+      : calculateDiscountedSalePrice(regularPrice, discountPercentage);
 
   return {
     rowNumber,
@@ -306,8 +328,15 @@ function createSummary(
  */
 export function prepareSalePriceUpdate(
   inputRows: SalePriceInputRow[],
-  variants: ShopifySalePriceVariant[]
+  variants: ShopifySalePriceVariant[],
+  discountPercentage = DEFAULT_SALE_PRICE_DISCOUNT_PERCENTAGE
 ): SalePricePreparation {
+  if (!isValidSalePriceDiscountPercentage(discountPercentage)) {
+    throw new RangeError(
+      `Discount percentage must be between ${MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE} and ${MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE}.`
+    );
+  }
+
   const skuIndex = createIndex(variants, (variant) => normalizeSku(variant.sku));
   const eanIndex = createIndex(variants, (variant) => normalizeEan(variant.barcode));
   const rows: SalePriceRowResult[] = [];
@@ -390,7 +419,7 @@ export function prepareSalePriceUpdate(
       return;
     }
 
-    const salePrice = calculateSalePrice(regularPrice);
+    const salePrice = calculateSalePrice(regularPrice, discountPercentage);
     if (!sku && !ean) {
       rows.push(
         rowResult(
@@ -401,7 +430,10 @@ export function prepareSalePriceUpdate(
           regularPrice,
           salePrice,
           'missing_identifier',
-          'A SKU or EAN is required to match this row.'
+          'A SKU or EAN is required to match this row.',
+          null,
+          null,
+          discountPercentage
         )
       );
       return;
@@ -420,7 +452,10 @@ export function prepareSalePriceUpdate(
           regularPrice,
           salePrice,
           'ambiguous_sku',
-          `SKU "${sku}" matches ${skuMatches.length} Shopify variants.`
+          `SKU "${sku}" matches ${skuMatches.length} Shopify variants.`,
+          null,
+          null,
+          discountPercentage
         )
       );
       return;
@@ -436,7 +471,10 @@ export function prepareSalePriceUpdate(
           regularPrice,
           salePrice,
           'ambiguous_ean',
-          `EAN "${ean}" matches ${eanMatches.length} Shopify variants.`
+          `EAN "${ean}" matches ${eanMatches.length} Shopify variants.`,
+          null,
+          null,
+          discountPercentage
         )
       );
       return;
@@ -455,7 +493,10 @@ export function prepareSalePriceUpdate(
           regularPrice,
           salePrice,
           'identifier_conflict',
-          'The SKU and EAN match different Shopify variants.'
+          'The SKU and EAN match different Shopify variants.',
+          null,
+          null,
+          discountPercentage
         )
       );
       return;
@@ -472,14 +513,17 @@ export function prepareSalePriceUpdate(
           regularPrice,
           salePrice,
           'unmatched',
-          'No Shopify variant matches the supplied SKU or EAN.'
+          'No Shopify variant matches the supplied SKU or EAN.',
+          null,
+          null,
+          discountPercentage
         )
       );
       return;
     }
 
     const minimumPriceApplied =
-      calculateDiscountedSalePrice(regularPrice) < MINIMUM_SALE_PRICE;
+      calculateDiscountedSalePrice(regularPrice, discountPercentage) < MINIMUM_SALE_PRICE;
 
     rows.push(
       rowResult(
@@ -494,7 +538,8 @@ export function prepareSalePriceUpdate(
           ? `Warning: discounted price was raised to the €${MINIMUM_SALE_PRICE.toFixed(2)} minimum.`
           : null,
         variant,
-        skuMatch && eanMatch ? 'sku_and_ean' : skuMatch ? 'sku' : 'ean'
+        skuMatch && eanMatch ? 'sku_and_ean' : skuMatch ? 'sku' : 'ean',
+        discountPercentage
       )
     );
   });

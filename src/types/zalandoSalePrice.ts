@@ -52,4 +52,6 @@ export interface ZalandoSalePriceResult {
   rows: ZalandoSalePriceRow[];
   summary: ZalandoSalePriceSummary;
   warnings: string[];
+  /** The discount used to calculate every proposed price in this preview. */
+  discountPercentage: number;
 }

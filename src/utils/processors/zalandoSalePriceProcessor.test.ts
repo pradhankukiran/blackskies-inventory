@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateZalandoSalePrice,
   parseZalandoPrice,
   processZalandoSalePrices,
 } from "./zalandoSalePriceProcessor";
 
 describe("processZalandoSalePrices", () => {
-  it("processes the client example and calculates 33,99 as 27.19", () => {
+  it("uses the 10% default discount for the client example", () => {
     const result = processZalandoSalePrices([{
       status_detail: "ZABLO_646",
       partner_variant_size: "AK-R-PUR-03-11",
@@ -26,9 +27,49 @@ describe("processZalandoSalePrices", () => {
       country: "DE",
       currency: "EUR",
       regularPrice: 33.99,
-      salePrice: 27.19,
+      salePrice: 30.59,
     })]);
-    expect(result.summary).toMatchObject({ totalRows: 1, readyRows: 1, invalidRows: 0, skippedRows: 0 });
+    expect(result).toMatchObject({
+      discountPercentage: 10,
+      summary: { totalRows: 1, readyRows: 1, invalidRows: 0, skippedRows: 0 },
+    });
+  });
+
+  it("supports a custom discount and rounds before applying the €15.00 floor", () => {
+    const row = {
+      status_detail: "ZABLO_646",
+      sku: "CUSTOM-DISCOUNT",
+      regular_price: "33,99",
+      country: "de",
+      currency: "EUR",
+    };
+
+    expect(calculateZalandoSalePrice(33.99)).toBe(30.59);
+    expect(calculateZalandoSalePrice(33.99, 25)).toBe(25.49);
+    expect(calculateZalandoSalePrice(20, 100)).toBe(15);
+    expect(processZalandoSalePrices([row], 25)).toMatchObject({
+      discountPercentage: 25,
+      rows: [expect.objectContaining({ salePrice: 25.49, minimumPriceApplied: false })],
+    });
+    expect(processZalandoSalePrices([{ ...row, regular_price: "18" }], 25)).toMatchObject({
+      rows: [expect.objectContaining({ salePrice: 15, minimumPriceApplied: true })],
+      summary: { minimumPriceAppliedRows: 1 },
+    });
+  });
+
+  it("rejects discounts outside the allowed 10% to 100% range", () => {
+    const row = {
+      status_detail: "ZABLO_646",
+      sku: "INVALID-DISCOUNT",
+      regular_price: "33,99",
+      country: "de",
+      currency: "EUR",
+    };
+
+    expect(() => calculateZalandoSalePrice(33.99, 9)).toThrow(RangeError);
+    expect(() => calculateZalandoSalePrice(33.99, 101)).toThrow(RangeError);
+    expect(() => processZalandoSalePrices([row], 9)).toThrow(RangeError);
+    expect(() => processZalandoSalePrices([row], 101)).toThrow(RangeError);
   });
 
   it("prepares German EUR rows whose status list contains ZABLO_646", () => {
@@ -130,7 +171,7 @@ describe("processZalandoSalePrices", () => {
       articleName: "Purple article",
       country: "DE",
       regularPrice: 1234.56,
-      salePrice: 987.65,
+      salePrice: 1111.1,
       currency: "EUR",
     });
   });

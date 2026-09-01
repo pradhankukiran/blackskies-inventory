@@ -88,6 +88,7 @@ export interface ShopifySalePriceApiSummary {
 
 export interface ShopifySalePriceApiResponse {
   action: "preview" | "update";
+  discountPercentage: number;
   metafield: {
     namespace: "custom";
     key: "attr5";
