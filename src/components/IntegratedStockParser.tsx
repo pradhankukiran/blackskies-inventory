@@ -43,6 +43,7 @@ import BlacklistModal from "./BlacklistModal";
 import { RetaggingDecisionTool } from "./RetaggingDecisionTool";
 import { ZalandoSalePriceTool } from "./ZalandoSalePriceTool";
 import { StockReturnTool } from "./StockReturnTool";
+import { BarcodePdfTool } from "./BarcodePdfTool";
 
 interface TabContentProps {
   files: any;
@@ -631,6 +632,11 @@ const toolLinks = [
     to: '/stock-return',
     title: 'Stock Return',
     description: 'Find ZFS overstock and prepare return recommendations.',
+  },
+  {
+    to: '/barcodes',
+    title: 'Barcode PDFs',
+    description: 'Create printable EAN barcode labels from CSV or Shopify product data.',
   },
 ] as const;
 
@@ -1828,6 +1834,7 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isStockReturnShopifyStockLoading}
               />
               } />
+              <Route path="/barcodes" element={<BarcodePdfTool />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
