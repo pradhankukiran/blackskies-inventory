@@ -1611,8 +1611,12 @@ const IntegratedStockParser: React.FC = () => {
 
       {/* Modern Header */}
       <div className="mb-6 border-b border-slate-200 bg-white/95 py-5 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
-        <div className="container mx-auto flex flex-col items-center gap-4 px-4 lg:px-10 xl:flex-row xl:justify-between">
-          <NavLink to="/" className="flex items-center gap-4" aria-label="Open inventory tools home">
+        <div className="container mx-auto flex flex-col items-center gap-4 px-4 lg:px-10 xl:grid xl:grid-cols-[1fr_auto_1fr]">
+          <NavLink
+            to="/"
+            className="flex items-center gap-4 xl:justify-self-start"
+            aria-label="Open inventory tools home"
+          >
             <img
               src="/Blackskies-Logo.png"
               alt="Blackskies Logo"
@@ -1620,8 +1624,29 @@ const IntegratedStockParser: React.FC = () => {
             />
           </NavLink>
 
+          <nav
+            className="flex flex-wrap justify-center gap-1 border border-slate-200 bg-slate-50 p-1 shadow-inner xl:justify-self-center"
+            aria-label="Primary"
+          >
+            {toolLinks.map((tool) => (
+              <NavLink
+                key={tool.to}
+                to={tool.to}
+                className={({ isActive }) =>
+                  `px-4 py-2.5 text-base font-semibold transition-colors sm:px-5 ${
+                    isActive
+                      ? "bg-white text-slate-950 shadow-sm"
+                      : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                  }`
+                }
+              >
+                {tool.title}
+              </NavLink>
+            ))}
+          </nav>
+
           {(onHomeRoute || canSyncShopify) && (
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3 xl:justify-self-end">
               {canSyncShopify && (
                 <div className="relative">
                   <button
