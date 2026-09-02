@@ -11,6 +11,10 @@ type ProductVariantsResponse = {
   };
 };
 
+type StandardColorNodesResponse = {
+  nodes: Array<{ id: string; displayName: string } | null>;
+};
+
 function sendError(res: any, status: number, error: string, message: string) {
   return res.status(status).json({ error, message });
 }
@@ -32,7 +36,13 @@ async function getAllBarcodeVariants(shopify: ShopifyClient): Promise<ShopifyBar
               selectedOptions { name value }
               product {
                 title
+                colorName: metafield(namespace: "custom", key: "colorname_en") {
+                  value
+                }
                 color: metafield(namespace: "custom", key: "color") {
+                  jsonValue
+                }
+                standardColor: metafield(namespace: "shopify", key: "color-pattern") {
                   jsonValue
                 }
               }
@@ -55,6 +65,40 @@ async function getAllBarcodeVariants(shopify: ShopifyClient): Promise<ShopifyBar
   return variants;
 }
 
+async function getStandardColorNames(
+  shopify: ShopifyClient,
+  variants: ShopifyBarcodeVariant[]
+): Promise<Map<string, string>> {
+  const ids = Array.from(
+    new Set(
+      variants.flatMap((variant) => {
+        const jsonValue = variant.product?.standardColor?.jsonValue;
+        return Array.isArray(jsonValue)
+          ? jsonValue.filter((value): value is string => typeof value === 'string')
+          : [];
+      })
+    )
+  );
+  const names = new Map<string, string>();
+
+  for (let index = 0; index < ids.length; index += 250) {
+    const response = await shopify.gql<StandardColorNodesResponse>(
+      `query BarcodeStandardColors($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Metaobject { id displayName }
+        }
+      }`,
+      { ids: ids.slice(index, index + 250) }
+    );
+
+    response.nodes.forEach((node) => {
+      if (node?.displayName) names.set(node.id, node.displayName);
+    });
+  }
+
+  return names;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader?.('Cache-Control', 'no-store');
 
@@ -66,7 +110,8 @@ export default async function handler(req: any, res: any) {
   try {
     const shopify = await getShopifyClient();
     const variants = await getAllBarcodeVariants(shopify);
-    const rows = mapBarcodeVariants(variants);
+    const standardColorNames = await getStandardColorNames(shopify, variants);
+    const rows = mapBarcodeVariants(variants, standardColorNames);
 
     return res.status(200).json({
       syncedAt: new Date().toISOString(),

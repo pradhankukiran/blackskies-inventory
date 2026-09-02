@@ -55,7 +55,9 @@ const variant = (overrides: Record<string, unknown> = {}) => ({
   ],
   product: {
     title: 'The Article',
+    colorName: { value: 'Product-level color name' },
     color: { jsonValue: ['Product-level colour'] },
+    standardColor: { jsonValue: [] },
   },
   ...overrides,
 });
@@ -102,7 +104,9 @@ describe('Shopify barcode endpoint', () => {
           ],
           product: {
             title: 'The Article',
+            colorName: { value: 'Black' },
             color: { jsonValue: ['Black'] },
+            standardColor: { jsonValue: [] },
           },
         })
       )
@@ -116,14 +120,35 @@ describe('Shopify barcode endpoint', () => {
     });
   });
 
-  it('uses the product custom.color metafield list when the variant has no color option', () => {
+  it('uses custom.colorname_en when the variant has no color option', () => {
     expect(
       mapBarcodeVariant(
         variant({
           selectedOptions: [{ name: 'Size', value: 'M' }],
           product: {
             title: 'The Article',
+            colorName: { value: 'Black denim' },
             color: { jsonValue: ['multi-coloured', 'black denim'] },
+            standardColor: { jsonValue: [] },
+          },
+        })
+      )
+    ).toMatchObject({
+      color: 'Black denim',
+      size: 'M',
+    });
+  });
+
+  it('uses the product custom.color metafield list after custom.colorname_en', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [{ name: 'Size', value: 'M' }],
+          product: {
+            title: 'The Article',
+            colorName: null,
+            color: { jsonValue: ['multi-coloured', 'black denim'] },
+            standardColor: { jsonValue: [] },
           },
         })
       )
@@ -133,7 +158,7 @@ describe('Shopify barcode endpoint', () => {
     });
   });
 
-  it('keeps the more specific variant color option over the product custom.color metafield', () => {
+  it('uses the variant Color option over every product color metafield', () => {
     expect(
       mapBarcodeVariant(
         variant({
@@ -143,9 +168,12 @@ describe('Shopify barcode endpoint', () => {
           ],
           product: {
             title: 'The Article',
+            colorName: { value: 'Navy' },
             color: { jsonValue: ['Blue'] },
+            standardColor: { jsonValue: ['gid://shopify/Metaobject/100'] },
           },
-        })
+        }),
+        new Map([['gid://shopify/Metaobject/100', 'Ocean blue']])
       )
     ).toMatchObject({
       color: 'Midnight blue',
@@ -153,7 +181,47 @@ describe('Shopify barcode endpoint', () => {
     });
   });
 
-  it('maps Shopify Default Title variants to One Size but leaves non-default variants without a size empty', () => {
+  it('uses the standard Shopify color-pattern metaobject display name last', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [{ name: 'Size', value: 'M' }],
+          product: {
+            title: 'The Article',
+            colorName: null,
+            color: { jsonValue: [] },
+            standardColor: { jsonValue: ['gid://shopify/Metaobject/100'] },
+          },
+        }),
+        new Map([['gid://shopify/Metaobject/100', 'Ocean blue']])
+      )
+    ).toMatchObject({ color: 'Ocean blue', size: 'M' });
+  });
+
+  it('uses Size before other variant options, then the first meaningful option, then One Size', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [
+            { name: 'Color', value: 'Black' },
+            { name: 'Bracelet Size', value: '16 cm' },
+            { name: 'Size', value: 'M' },
+          ],
+        })
+      )
+    ).toMatchObject({ size: 'M' });
+
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [
+            { name: 'Color', value: 'Black' },
+            { name: 'Chain Length', value: '45 cm' },
+          ],
+        })
+      )
+    ).toMatchObject({ size: '45 cm' });
+
     expect(
       mapBarcodeVariant(
         variant({
@@ -220,11 +288,57 @@ describe('Shopify barcode endpoint', () => {
     expect(gql).toHaveBeenCalledTimes(2);
     expect(gql.mock.calls[0][0]).toContain('productVariants(first: 250, after: $cursor)');
     expect(gql.mock.calls[0][0]).toContain(
+      'colorName: metafield(namespace: "custom", key: "colorname_en")'
+    );
+    expect(gql.mock.calls[0][0]).toContain(
       'color: metafield(namespace: "custom", key: "color")'
+    );
+    expect(gql.mock.calls[0][0]).toContain(
+      'standardColor: metafield(namespace: "shopify", key: "color-pattern")'
     );
     expect(gql.mock.calls[0][0]).toContain('jsonValue');
     expect(gql.mock.calls[0][1]).toEqual({ cursor: null });
     expect(gql.mock.calls[1][1]).toEqual({ cursor: 'cursor-1' });
+  });
+
+  it('resolves Shopify color-pattern metaobject display names for mapped rows', async () => {
+    const colorId = 'gid://shopify/Metaobject/100';
+    const gql = vi
+      .fn()
+      .mockResolvedValueOnce(
+        productVariantsPage([
+          variant({
+            selectedOptions: [{ name: 'Bracelet Size', value: '16 cm' }],
+            product: {
+              title: 'The Article',
+              colorName: null,
+              color: { jsonValue: [] },
+              standardColor: { jsonValue: [colorId] },
+            },
+          }),
+        ])
+      )
+      .mockResolvedValueOnce({
+        nodes: [{ id: colorId, displayName: 'Ocean blue' }],
+      });
+    getShopifyClientMock.mockResolvedValue({ shop: 'test-shop', gql });
+    const res = response();
+
+    await handler({ method: 'GET' }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      count: 1,
+      rows: [
+        expect.objectContaining({
+          color: 'Ocean blue',
+          size: '16 cm',
+        }),
+      ],
+    });
+    expect(gql).toHaveBeenCalledTimes(2);
+    expect(gql.mock.calls[1][0]).toContain('nodes(ids: $ids)');
+    expect(gql.mock.calls[1][1]).toEqual({ ids: [colorId] });
   });
 
   it('returns the Shopify API status and a structured error response', async () => {
