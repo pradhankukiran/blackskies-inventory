@@ -9,6 +9,9 @@ interface FileUploadSectionProps {
   multiple?: boolean;
   additionalControls?: React.ReactNode;
   acceptedFileTypes?: string;
+  acceptedFileLabel?: string;
+  disabled?: boolean;
+  disabledMessage?: string;
   syncedFromShopify?: boolean;
 }
 
@@ -20,19 +23,33 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   multiple = false,
   additionalControls,
   acceptedFileTypes = ".csv,.tsv,.txt",
+  acceptedFileLabel = "CSV, TSV, TXT, XLSX",
+  disabled = false,
+  disabledMessage = "File upload is unavailable right now.",
   syncedFromShopify = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputKey = files.length
+    ? files.map((file) => `${file.name}-${file.size}-${file.lastModified}`).join("|")
+    : "empty";
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (disabled) {
+      setIsDragging(false);
+      return;
+    }
     setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (disabled) {
+      setIsDragging(false);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
@@ -45,6 +62,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (disabled) {
+      setIsDragging(false);
+      return;
+    }
     setIsDragging(true);
   };
 
@@ -63,6 +84,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    if (disabled) return;
 
     const droppedFiles = Array.from(e.dataTransfer.files);
     if (!droppedFiles.length) return;
@@ -88,7 +110,13 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   };
 
   return (
-    <div className="ops-surface rounded-[8px] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
+    <div
+      className={`ops-surface rounded-[8px] ${
+        disabled
+          ? ""
+          : "transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
+      }`}
+    >
       <div className="px-5 py-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -111,11 +139,14 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
         <div className="flex justify-center items-center w-full">
           <label
-            className={`flex h-36 w-full cursor-pointer flex-col items-center justify-center rounded-[8px] border transition-all duration-200 ${
-              isDragging
-                ? "border-slate-950 bg-slate-50 border-solid"
-                : "border-slate-200 bg-slate-50/80 border-dashed"
-            } hover:border-slate-300 hover:bg-slate-100/70`}
+            aria-disabled={disabled}
+            className={`flex h-36 w-full flex-col items-center justify-center rounded-[8px] border transition-all duration-200 ${
+              disabled
+                ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                : isDragging
+                  ? "cursor-pointer border-slate-950 bg-slate-50 border-solid"
+                  : "cursor-pointer border-slate-200 bg-slate-50/80 border-dashed hover:border-slate-300 hover:bg-slate-100/70"
+            }`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -124,19 +155,27 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             <div className="flex flex-col items-center justify-center">
               <Upload
                 className={`mb-3 h-9 w-9 transition-colors duration-200 ${
-                  isDragging ? "text-slate-950" : "text-slate-400"
+                  disabled ? "text-slate-300" : isDragging ? "text-slate-950" : "text-slate-400"
                 }`}
               />
               <p className="px-2 text-center text-base text-slate-600">
-                <span className="font-semibold text-slate-950">Click to upload</span> or drag and drop
+                {disabled ? (
+                  <span className="text-slate-500">{disabledMessage}</span>
+                ) : (
+                  <>
+                    <span className="font-semibold text-slate-950">Click to upload</span> or drag and drop
+                  </>
+                )}
               </p>
-              <p className="mt-1 text-sm text-slate-400">CSV, TSV, TXT, XLSX</p>
+              <p className="mt-1 text-sm text-slate-400">{acceptedFileLabel}</p>
             </div>
             <input
+              key={fileInputKey}
               type="file"
               accept={acceptedFileTypes}
               onChange={onChange}
               multiple={multiple}
+              disabled={disabled}
               className="hidden"
             />
           </label>

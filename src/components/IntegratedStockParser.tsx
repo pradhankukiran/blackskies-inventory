@@ -44,6 +44,12 @@ import { RetaggingDecisionTool } from "./RetaggingDecisionTool";
 import { ZalandoSalePriceTool } from "./ZalandoSalePriceTool";
 import { StockReturnTool } from "./StockReturnTool";
 import { BarcodePdfTool } from "./BarcodePdfTool";
+import {
+  BarcodeCsvResult,
+  ShopifyBarcodeApiError,
+  ShopifyBarcodeApiResponse,
+} from "@/types/barcode";
+import { processShopifyBarcodeRows } from "@/utils/processors/barcodeCsvProcessor";
 
 interface TabContentProps {
   files: any;
@@ -587,12 +593,13 @@ type ShopifySyncMeta = {
   locationName: string;
 };
 
-type ShopifySyncModule = 'zfs' | 'retagging' | 'stock-return';
+type ShopifySyncModule = 'zfs' | 'retagging' | 'stock-return' | 'barcodes';
 
 const shopifySyncModuleLabels: Record<ShopifySyncModule, string> = {
   zfs: 'ZFS',
   retagging: 'Retagging',
   'stock-return': 'Stock Return',
+  barcodes: 'Barcode PDFs',
 };
 
 const readShopifySyncMeta = (...keys: string[]): ShopifySyncMeta | null => {
@@ -685,8 +692,11 @@ const IntegratedStockParser: React.FC = () => {
   const onZfsRoute = location.pathname === '/zfs';
   const onRetaggingRoute = location.pathname === '/retagging';
   const onStockReturnRoute = location.pathname === '/stock-return';
-  const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
-  const currentShopifySyncModule: ShopifySyncModule | null = onStockReturnRoute
+  const onBarcodesRoute = location.pathname === '/barcodes';
+  const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute || onBarcodesRoute;
+  const currentShopifySyncModule: ShopifySyncModule | null = onBarcodesRoute
+    ? 'barcodes'
+    : onStockReturnRoute
     ? 'stock-return'
     : onRetaggingRoute
       ? 'retagging'
@@ -734,6 +744,10 @@ const IntegratedStockParser: React.FC = () => {
   const [stockReturnShopifySkuEanFile, setStockReturnShopifySkuEanFile] = useState<File | null>(null);
   const [isStockReturnShopifyStockLoading, setIsStockReturnShopifyStockLoading] = useState(true);
   const [stockReturnShopifySyncError, setStockReturnShopifySyncError] = useState<string | null>(null);
+  const [barcodeShopifyResult, setBarcodeShopifyResult] = useState<BarcodeCsvResult | null>(null);
+  const [barcodeShopifySyncedAt, setBarcodeShopifySyncedAt] = useState<string | null>(null);
+  const [barcodeShopifySyncError, setBarcodeShopifySyncError] = useState<string | null>(null);
+  const [barcodeCsvSourceActive, setBarcodeCsvSourceActive] = useState(false);
   const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
   const fbaBlacklistRef = useRef<string[]>([]);
   useEffect(() => {
@@ -800,16 +814,33 @@ const IntegratedStockParser: React.FC = () => {
   const [stockReturnShopifySyncMeta, setStockReturnShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
     readShopifySyncMeta(STOCK_RETURN_SHOPIFY_SYNC_META_KEY)
   );
-  const activeShopifySyncMeta = onStockReturnRoute
+  const activeStockShopifySyncMeta = onStockReturnRoute
     ? stockReturnShopifySyncMeta
     : onRetaggingRoute
       ? retaggingShopifySyncMeta
-      : zfsShopifySyncMeta;
-  const shopifySyncStatusLabel = syncingShopifyModule
-    ? `Fetching Shopify stock for ${shopifySyncModuleLabels[syncingShopifyModule]}`
-    : currentShopifySyncModule
-      ? `Fetching Shopify stock for ${shopifySyncModuleLabels[currentShopifySyncModule]}`
-      : "Fetching Shopify stock";
+      : onZfsRoute
+        ? zfsShopifySyncMeta
+        : null;
+  const shopifySyncStatusModule = syncingShopifyModule ?? currentShopifySyncModule;
+  const shopifySyncStatusLabel = shopifySyncStatusModule === 'barcodes'
+    ? 'Fetching Shopify barcode products'
+    : shopifySyncStatusModule
+      ? `Fetching Shopify stock for ${shopifySyncModuleLabels[shopifySyncStatusModule]}`
+      : 'Fetching Shopify stock';
+  const shopifySyncStatusText = isShopifySyncing
+    ? shopifySyncStatusLabel
+    : currentShopifySyncModule === 'barcodes'
+      ? barcodeCsvSourceActive
+        ? 'CSV source active · reset files to sync Shopify'
+        : barcodeShopifySyncedAt && barcodeShopifyResult
+          ? `Last synced ${timeAgo(barcodeShopifySyncedAt)} · ${barcodeShopifyResult.summary.readyRows.toLocaleString()} labels ready`
+          : 'Not synced yet'
+      : activeStockShopifySyncMeta
+        ? `Last synced ${timeAgo(activeStockShopifySyncMeta.lastSyncedAt)} · ${activeStockShopifySyncMeta.internalCount.toLocaleString()} stock rows`
+        : 'Not synced yet';
+  const shopifySyncDisabled =
+    isShopifySyncing ||
+    (currentShopifySyncModule === 'barcodes' && barcodeCsvSourceActive);
 
   const clearZfsShopifySyncMeta = () => {
     setZfsShopifySyncMeta(null);
@@ -827,6 +858,12 @@ const IntegratedStockParser: React.FC = () => {
     localStorage.removeItem(STOCK_RETURN_SHOPIFY_SYNC_META_KEY);
   };
 
+  const clearBarcodeShopifyData = useCallback(() => {
+    setBarcodeShopifyResult(null);
+    setBarcodeShopifySyncedAt(null);
+    setBarcodeShopifySyncError(null);
+  }, []);
+
   useEffect(() => {
     if (!filesLoaded || !zfsShopifySyncMeta) return;
     if (!files.internal || !files.skuEanMapper) {
@@ -838,8 +875,12 @@ const IntegratedStockParser: React.FC = () => {
     if (!currentShopifySyncModule) return;
 
     const syncTarget = currentShopifySyncModule;
+    if (syncTarget === 'barcodes' && barcodeCsvSourceActive) return;
+
     setSyncingShopifyModule(syncTarget);
-    if (syncTarget === 'stock-return') {
+    if (syncTarget === 'barcodes') {
+      setBarcodeShopifySyncError(null);
+    } else if (syncTarget === 'stock-return') {
       setStockReturnShopifySyncError(null);
     } else if (syncTarget === 'retagging') {
       setRetaggingShopifySyncError(null);
@@ -847,6 +888,43 @@ const IntegratedStockParser: React.FC = () => {
       setError(null);
     }
     try {
+      if (syncTarget === 'barcodes') {
+        const response = await fetch('/api/shopify/barcodes', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+        });
+        const raw = await response.text();
+        let body: ShopifyBarcodeApiResponse | ShopifyBarcodeApiError;
+
+        try {
+          body = JSON.parse(raw) as ShopifyBarcodeApiResponse | ShopifyBarcodeApiError;
+        } catch {
+          throw new Error(
+            'The Shopify API is unavailable. Run the app with Vercel development mode instead of the frontend-only Vite server.'
+          );
+        }
+
+        if (!response.ok) {
+          const apiError = body as ShopifyBarcodeApiError;
+          throw new Error(
+            apiError.message || apiError.error || `Shopify sync failed (${response.status})`
+          );
+        }
+        if (!Array.isArray((body as ShopifyBarcodeApiResponse).rows)) {
+          throw new Error('Shopify returned an invalid barcode product response.');
+        }
+
+        const barcodeResponse = body as ShopifyBarcodeApiResponse;
+        setBarcodeShopifyResult(processShopifyBarcodeRows(barcodeResponse.rows));
+        setBarcodeShopifySyncedAt(
+          typeof barcodeResponse.syncedAt === 'string'
+            ? barcodeResponse.syncedAt
+            : new Date().toISOString()
+        );
+        return;
+      }
+
       const res = await fetch('/api/shopify/sync');
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -922,7 +1000,9 @@ const IntegratedStockParser: React.FC = () => {
         }
       }
     } catch (err) {
-      if (syncTarget === 'stock-return') {
+      if (syncTarget === 'barcodes') {
+        setBarcodeShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
+      } else if (syncTarget === 'stock-return') {
         setStockReturnShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
       } else if (syncTarget === 'retagging') {
         setRetaggingShopifySyncError(err instanceof Error ? err.message : 'Shopify sync failed');
@@ -1657,9 +1737,15 @@ const IntegratedStockParser: React.FC = () => {
                 <div className="relative">
                   <button
                     onClick={handleShopifySync}
-                    disabled={isShopifySyncing}
+                    disabled={shopifySyncDisabled}
                     className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
-                    title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                    title={
+                      currentShopifySyncModule === 'barcodes'
+                        ? barcodeCsvSourceActive
+                          ? 'Reset the uploaded CSV before syncing barcode data from Shopify'
+                          : 'Pull barcode product data directly from Shopify'
+                        : 'Pull Internal Stocks and SKU/EAN data directly from Shopify'
+                    }
                   >
                     {isShopifySyncing && (
                       <Loader2 className="h-5 w-5 animate-spin" />
@@ -1671,11 +1757,7 @@ const IntegratedStockParser: React.FC = () => {
                       isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
                     }`}
                   >
-                    {isShopifySyncing
-                      ? shopifySyncStatusLabel
-                      : activeShopifySyncMeta
-                        ? `Last synced ${timeAgo(activeShopifySyncMeta.lastSyncedAt)} · ${activeShopifySyncMeta.internalCount.toLocaleString()} stock rows`
-                        : "Not synced yet"}
+                    {shopifySyncStatusText}
                   </span>
                 </div>
               )}
@@ -1834,7 +1916,15 @@ const IntegratedStockParser: React.FC = () => {
                 isShopifyStockLoading={isStockReturnShopifyStockLoading}
               />
               } />
-              <Route path="/barcodes" element={<BarcodePdfTool />} />
+              <Route path="/barcodes" element={
+              <BarcodePdfTool
+                shopifyResult={barcodeShopifyResult}
+                shopifyError={barcodeShopifySyncError}
+                isShopifySyncing={syncingShopifyModule === 'barcodes'}
+                onCsvSourceActiveChange={setBarcodeCsvSourceActive}
+                onClearShopifyData={clearBarcodeShopifyData}
+              />
+              } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
