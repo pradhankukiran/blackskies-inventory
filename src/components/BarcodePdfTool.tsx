@@ -1,45 +1,76 @@
-import React, { useState } from "react";
-import { Barcode, SlidersHorizontal } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { AlertTriangle, Barcode, Loader2, SlidersHorizontal } from "lucide-react";
 import { FileUploadSection } from "@/components/FileUploadSection";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BarcodeCsvResult } from "@/types/barcode";
+import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
 
 type DataSource = "csv" | "shopify";
 type Brand = "blackskies" | "akitsune";
 type OutputMode = "combined" | "individual";
 
-const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN"];
+const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status"];
 
 export const BarcodePdfTool: React.FC = () => {
   const [dataSource, setDataSource] = useState<DataSource>("csv");
   const [brand, setBrand] = useState<Brand>("blackskies");
   const [outputMode, setOutputMode] = useState<OutputMode>("combined");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvResult, setCsvResult] = useState<BarcodeCsvResult | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const parseRequestRef = useRef(0);
 
-  const handleCsvChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsvChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
 
+    const requestId = ++parseRequestRef.current;
     if (!selectedFile.name.toLowerCase().endsWith(".csv")) {
       setCsvFile(null);
+      setCsvResult(null);
+      setIsParsing(false);
       setUploadError("Upload a CSV file.");
       return;
     }
 
     setCsvFile(selectedFile);
+    setCsvResult(null);
     setUploadError(null);
+
+    try {
+      setIsParsing(true);
+      const result = await processBarcodeCsvFile(selectedFile);
+      if (requestId !== parseRequestRef.current) return;
+      setCsvResult(result);
+    } catch (error) {
+      if (requestId !== parseRequestRef.current) return;
+      setUploadError(error instanceof Error ? error.message : "Could not process the CSV file.");
+    } finally {
+      if (requestId === parseRequestRef.current) setIsParsing(false);
+    }
   };
 
   const handleCsvRemove = () => {
+    parseRequestRef.current += 1;
     setCsvFile(null);
+    setCsvResult(null);
+    setIsParsing(false);
     setUploadError(null);
   };
 
   const previewMessage =
     dataSource === "csv"
-      ? csvFile
-        ? "The uploaded CSV will appear here after barcode processing is added."
+      ? isParsing
+        ? "Reading and validating the CSV..."
+        : csvFile
+          ? uploadError
+            ? "Correct the CSV issue to preview its barcode labels."
+            : "No product rows are available for preview."
         : "Upload a CSV to preview its barcode labels."
       : "Shopify products will appear here after the Shopify connection is added.";
+  const previewRows = dataSource === "csv" ? csvResult?.rows ?? [] : [];
+  const readyLabelCount = dataSource === "csv" ? csvResult?.summary.readyRows ?? 0 : 0;
 
   const selectedBrand = brand === "blackskies" ? "Blackskies" : "Akitsune";
   const selectedSource = dataSource === "csv" ? "CSV upload" : "Shopify";
@@ -122,9 +153,21 @@ export const BarcodePdfTool: React.FC = () => {
           <p className="px-1 text-sm text-slate-500">
             Required columns: SKU, EAN, ARTICLE_NAME, COLOR, and SIZE.
           </p>
+          {isParsing && (
+            <p className="flex items-center gap-2 px-1 text-sm font-medium text-slate-600" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Reading and validating CSV rows...
+            </p>
+          )}
           {uploadError && (
             <p className="px-1 text-sm font-medium text-red-700" role="alert">
               {uploadError}
+            </p>
+          )}
+          {csvResult && !isParsing && (
+            <p className="px-1 text-sm font-medium text-emerald-700" role="status">
+              {csvResult.summary.totalRows.toLocaleString()} rows processed ·{" "}
+              {csvResult.summary.readyRows.toLocaleString()} labels ready
             </p>
           )}
         </div>
@@ -152,6 +195,20 @@ export const BarcodePdfTool: React.FC = () => {
         </section>
       )}
 
+      {dataSource === "csv" && csvResult?.warnings.length ? (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertTitle>CSV validation notes</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc space-y-1 pl-5">
+              {csvResult.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <section className="ops-surface rounded-[8px]" aria-labelledby="barcode-preview-title">
         <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -161,7 +218,7 @@ export const BarcodePdfTool: React.FC = () => {
             <p className="ops-muted">Review the product data before generating the labels.</p>
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-base font-medium text-blue-700">
-            0 labels ready
+            {readyLabelCount.toLocaleString()} labels ready
           </span>
         </div>
 
@@ -177,11 +234,45 @@ export const BarcodePdfTool: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={previewColumns.length} className="py-10 text-center text-slate-500">
-                  {previewMessage}
-                </td>
-              </tr>
+              {previewRows.length ? (
+                previewRows.map((row) => (
+                  <tr key={`${row.sourceRowNumber}-${row.ean}-${row.sku}`}>
+                    <td>{row.sku || "—"}</td>
+                    <td>{row.articleName || "—"}</td>
+                    <td>{row.color || "—"}</td>
+                    <td>{row.size || "—"}</td>
+                    <td className="font-medium tabular-nums">{row.ean || "—"}</td>
+                    <td>
+                      <span
+                        className={`inline-flex px-2.5 py-1 text-sm font-medium ${
+                          row.status === "ready"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : row.status === "duplicate"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {row.status === "ready"
+                          ? "Ready"
+                          : row.status === "duplicate"
+                            ? "Duplicate"
+                            : "Needs correction"}
+                      </span>
+                      {row.issues.length > 0 && (
+                        <p className="mt-1 min-w-56 text-sm text-slate-500">
+                          {row.issues.join(" ")}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={previewColumns.length} className="py-10 text-center text-slate-500">
+                    {previewMessage}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
