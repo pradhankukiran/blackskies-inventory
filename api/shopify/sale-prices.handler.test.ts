@@ -260,9 +260,13 @@ describe("Shopify sale-price endpoint safeguards", () => {
           discountPercentage: 10,
           selection: {
             mode: "selected",
-            productId: secondProductId,
-            compareDigest: null,
-            salePrice: "30.59",
+            products: [
+              {
+                productId: secondProductId,
+                compareDigest: null,
+                salePrice: "30.59",
+              },
+            ],
           },
           rows: validRows,
         },
@@ -300,9 +304,13 @@ describe("Shopify sale-price endpoint safeguards", () => {
           discountPercentage: 10,
           selection: {
             mode: "selected",
-            productId: firstProductId,
-            compareDigest: "digest-from-preview",
-            salePrice: "30.59",
+            products: [
+              {
+                productId: firstProductId,
+                compareDigest: "digest-from-preview",
+                salePrice: "30.59",
+              },
+            ],
           },
           rows: validRows,
         },
@@ -316,7 +324,7 @@ describe("Shopify sale-price endpoint safeguards", () => {
     expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
   });
 
-  it("rejects approval when the proposed price changed after preview", async () => {
+  it("uses a manually edited price instead of the calculated price", async () => {
     const gql = configureShopify([
       variant(
         "gid://shopify/ProductVariant/1",
@@ -336,9 +344,13 @@ describe("Shopify sale-price endpoint safeguards", () => {
           discountPercentage: 10,
           selection: {
             mode: "selected",
-            productId: firstProductId,
-            compareDigest: null,
-            salePrice: "27.19",
+            products: [
+              {
+                productId: firstProductId,
+                compareDigest: null,
+                salePrice: "31.00",
+              },
+            ],
           },
           rows: validRows,
         },
@@ -346,10 +358,18 @@ describe("Shopify sale-price endpoint safeguards", () => {
       res
     );
 
-    expect(res.statusCode).toBe(409);
-    expect(res.body?.error).toBe("selection_stale");
-    expect(res.body?.invalidProductIds).toEqual([firstProductId]);
-    expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
+    const mutationCall = gql.mock.calls.find(([query]) => query.includes("metafieldsSet"));
+    const mutationVariables = mutationCall?.[1] as
+      | { metafields: Array<{ ownerId: string; value: string }> }
+      | undefined;
+
+    expect(res.statusCode).toBe(200);
+    expect(mutationVariables?.metafields).toEqual([
+      expect.objectContaining({ ownerId: firstProductId, value: "31.00" }),
+    ]);
+    expect(res.body?.products).toEqual([
+      expect.objectContaining({ productId: firstProductId, salePrice: "31.00", status: "updated" }),
+    ]);
   });
 
   it("does not offer or write a parent whose metafield is already current", async () => {
@@ -415,9 +435,13 @@ describe("Shopify sale-price endpoint safeguards", () => {
           discountPercentage: 10,
           selection: {
             mode: "selected",
-            productId: secondProductId,
-            compareDigest: null,
-            salePrice: "44.99",
+            products: [
+              {
+                productId: secondProductId,
+                compareDigest: null,
+                salePrice: "44.99",
+              },
+            ],
           },
           rows,
         },
@@ -451,6 +475,172 @@ describe("Shopify sale-price endpoint safeguards", () => {
     ]);
   });
 
+  it("updates multiple selected parents in one Shopify request", async () => {
+    const rows = [
+      validRows[0],
+      {
+        rowNumber: 2,
+        statusDetail: "ZABLO_646",
+        country: "de",
+        currency: "EUR",
+        sku: "AK-R-PUR-03-12",
+        ean: "4251812338837",
+        regularPrice: 49.99,
+      },
+    ];
+    const gql = configureShopify([
+      variant("gid://shopify/ProductVariant/1", firstProductId, rows[0].sku, rows[0].ean),
+      variant("gid://shopify/ProductVariant/2", secondProductId, rows[1].sku, rows[1].ean),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          discountPercentage: 10,
+          selection: {
+            mode: "selected",
+            products: [
+              {
+                productId: firstProductId,
+                compareDigest: null,
+                salePrice: "30.59",
+              },
+              {
+                productId: secondProductId,
+                compareDigest: null,
+                salePrice: "44.99",
+              },
+            ],
+          },
+          rows,
+        },
+      },
+      res
+    );
+
+    const mutationCalls = gql.mock.calls.filter(([query]) => query.includes("metafieldsSet"));
+    const mutationVariables = mutationCalls[0]?.[1] as
+      | {
+          metafields: Array<{
+            ownerId: string;
+            value: string;
+            compareDigest: string | null;
+          }>;
+        }
+      | undefined;
+
+    expect(res.statusCode).toBe(200);
+    expect(mutationCalls).toHaveLength(1);
+    expect(mutationVariables?.metafields).toEqual([
+      expect.objectContaining({
+        ownerId: firstProductId,
+        value: "30.59",
+        compareDigest: null,
+      }),
+      expect.objectContaining({
+        ownerId: secondProductId,
+        value: "44.99",
+        compareDigest: null,
+      }),
+    ]);
+    expect(res.body?.products).toEqual([
+      expect.objectContaining({ productId: firstProductId, status: "updated" }),
+      expect.objectContaining({ productId: secondProductId, status: "updated" }),
+    ]);
+  });
+
+  it("rejects duplicate selected parents before contacting Shopify", async () => {
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          discountPercentage: 10,
+          selection: {
+            mode: "selected",
+            products: [
+              { productId: firstProductId, compareDigest: null, salePrice: "30.59" },
+              { productId: ` ${firstProductId} `, compareDigest: null, salePrice: "31.00" },
+            ],
+          },
+          rows: validRows,
+        },
+      },
+      res
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.error).toBe("invalid_selection");
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects one stale parent in a bulk approval before any metafield write", async () => {
+    const rows = [
+      validRows[0],
+      {
+        rowNumber: 2,
+        statusDetail: "ZABLO_646",
+        country: "de",
+        currency: "EUR",
+        sku: "AK-R-PUR-03-12",
+        ean: "4251812338837",
+        regularPrice: 49.99,
+      },
+    ];
+    const gql = configureShopify([
+      variant("gid://shopify/ProductVariant/1", firstProductId, rows[0].sku, rows[0].ean),
+      variant(
+        "gid://shopify/ProductVariant/2",
+        secondProductId,
+        rows[1].sku,
+        rows[1].ean,
+        "40.00",
+        "digest-after-preview"
+      ),
+    ]);
+    const res = response();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: {
+          action: "update",
+          discountPercentage: 10,
+          selection: {
+            mode: "selected",
+            products: [
+              {
+                productId: firstProductId,
+                compareDigest: null,
+                salePrice: "30.59",
+              },
+              {
+                productId: secondProductId,
+                compareDigest: "digest-from-preview",
+                salePrice: "44.99",
+              },
+            ],
+          },
+          rows,
+        },
+      },
+      res
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body?.error).toBe("selection_stale");
+    expect(res.body?.invalidProductIds).toEqual([secondProductId]);
+    expect(gql.mock.calls.some(([query]) => query.includes("metafieldsSet"))).toBe(false);
+  });
+
   it("rejects a concurrent Shopify change instead of overwriting it", async () => {
     const gql = configureShopify(
       [
@@ -482,9 +672,13 @@ describe("Shopify sale-price endpoint safeguards", () => {
           discountPercentage: 10,
           selection: {
             mode: "selected",
-            productId: firstProductId,
-            compareDigest: "digest-before-update",
-            salePrice: "30.59",
+            products: [
+              {
+                productId: firstProductId,
+                compareDigest: "digest-before-update",
+                salePrice: "30.59",
+              },
+            ],
           },
           rows: validRows,
         },
@@ -514,7 +708,43 @@ describe("Shopify sale-price endpoint safeguards", () => {
 });
 
 describe("parseUpdateSelection", () => {
-  it("accepts one parent approval and normalizes its ID", () => {
+  it("accepts multiple parent approvals and normalizes their IDs", () => {
+    expect(
+      parseUpdateSelection({
+        mode: "selected",
+        products: [
+          {
+            productId: " gid://shopify/Product/1 ",
+            compareDigest: "digest-preview",
+            salePrice: "30.59",
+          },
+          {
+            productId: "gid://shopify/Product/2",
+            compareDigest: null,
+            salePrice: "15.00",
+          },
+        ],
+      })
+    ).toEqual({
+      selection: {
+        mode: "selected",
+        products: [
+          {
+            productId: "gid://shopify/Product/1",
+            compareDigest: "digest-preview",
+            salePrice: "30.59",
+          },
+          {
+            productId: "gid://shopify/Product/2",
+            compareDigest: null,
+            salePrice: "15.00",
+          },
+        ],
+      },
+    });
+  });
+
+  it("accepts the legacy one-parent selection shape", () => {
     expect(
       parseUpdateSelection({
         mode: "selected",
@@ -525,29 +755,65 @@ describe("parseUpdateSelection", () => {
     ).toEqual({
       selection: {
         mode: "selected",
-        productId: "gid://shopify/Product/1",
-        compareDigest: "digest-preview",
-        salePrice: "30.59",
+        products: [
+          {
+            productId: "gid://shopify/Product/1",
+            compareDigest: "digest-preview",
+            salePrice: "30.59",
+          },
+        ],
       },
     });
   });
 
-  it("rejects bulk mode, missing products, preview digests, and proposed prices", () => {
+  it("rejects bulk mode, empty product lists, duplicate parents, and missing preview data", () => {
     expect(parseUpdateSelection({ mode: "all" })).toEqual(
       expect.objectContaining({ error: expect.any(String) })
     );
-    expect(parseUpdateSelection({ mode: "selected", productId: "" })).toEqual(
+    expect(parseUpdateSelection({ mode: "selected", products: [] })).toEqual(
       expect.objectContaining({ error: expect.any(String) })
     );
     expect(
-      parseUpdateSelection({ mode: "selected", productId: "one" })
+      parseUpdateSelection({ mode: "selected", products: [{ productId: "" }] })
     ).toEqual(expect.objectContaining({ error: expect.any(String) }));
     expect(
       parseUpdateSelection({
         mode: "selected",
-        productId: "one",
-        compareDigest: null,
+        products: [{ productId: "one", compareDigest: null }],
       })
     ).toEqual(expect.objectContaining({ error: expect.any(String) }));
+    expect(
+      parseUpdateSelection({
+        mode: "selected",
+        products: [
+          { productId: "one", compareDigest: null, salePrice: "15.00" },
+          { productId: " one ", compareDigest: null, salePrice: "15.00" },
+        ],
+      })
+    ).toEqual(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it("requires each manually edited price to be canonical and at least €15.00", () => {
+    for (const salePrice of ["15", "15.0", "15.000", "14.99", "14.999", "15,00"]) {
+      expect(
+        parseUpdateSelection({
+          mode: "selected",
+          products: [{ productId: "one", compareDigest: null, salePrice }],
+        })
+      ).toEqual(expect.objectContaining({ error: expect.any(String) }));
+    }
+
+    expect(
+      parseUpdateSelection({
+        mode: "selected",
+        products: [{ productId: "one", compareDigest: null, salePrice: "15.00" }],
+      })
+    ).toEqual(
+      expect.objectContaining({
+        selection: expect.objectContaining({
+          products: [expect.objectContaining({ salePrice: "15.00" })],
+        }),
+      })
+    );
   });
 });

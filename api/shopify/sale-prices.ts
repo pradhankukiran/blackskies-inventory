@@ -3,6 +3,7 @@ import {
   applyProductUpdateResults,
   isValidSalePriceDiscountPercentage,
   MAXIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE,
+  MINIMUM_SALE_PRICE,
   MINIMUM_SALE_PRICE_DISCOUNT_PERCENTAGE,
   prepareSalePriceUpdate,
   SALE_PRICE_TARGET_STATUS,
@@ -11,6 +12,7 @@ import {
 } from './sale-prices.logic.js';
 
 const MAX_SALE_PRICE_ROWS = 500;
+const MAX_SALE_PRICE_PRODUCTS = 500;
 const METAFIELDS_SET_BATCH_SIZE = 25;
 const TARGET_STATUS = SALE_PRICE_TARGET_STATUS;
 const METAFIELD_NAMESPACE = 'custom';
@@ -20,11 +22,15 @@ type RequestAction = 'preview' | 'update';
 
 type RawRequestRow = Record<string, unknown>;
 
-export type SalePriceUpdateSelection = {
-  mode: 'selected';
+export type SalePriceUpdateApproval = {
   productId: string;
   compareDigest: string | null;
   salePrice: string;
+};
+
+export type SalePriceUpdateSelection = {
+  mode: 'selected';
+  products: SalePriceUpdateApproval[];
 };
 
 type ProductMetafieldDefinitionResponse = {
@@ -107,43 +113,92 @@ export function parseUpdateSelection(
 
   const selection = value as {
     mode?: unknown;
+    products?: unknown;
+    // Kept for one-at-a-time requests from an already-open application tab.
     productId?: unknown;
     compareDigest?: unknown;
     salePrice?: unknown;
   };
   if (selection.mode !== 'selected') {
     return {
-      error: 'Only one-at-a-time parent product approval is supported.',
+      error: 'Only explicitly selected parent product approvals are supported.',
     };
   }
 
-  if (typeof selection.productId !== 'string' || !selection.productId.trim()) {
+  const rawProducts = Array.isArray(selection.products)
+    ? selection.products
+    : selection.productId !== undefined
+      ? [selection]
+      : null;
+
+  if (!rawProducts || rawProducts.length === 0) {
     return {
-      error: 'A selected Shopify parent product ID is required.',
+      error: 'Select at least one Shopify parent product.',
     };
   }
 
-  if (selection.compareDigest !== null && typeof selection.compareDigest !== 'string') {
+  if (rawProducts.length > MAX_SALE_PRICE_PRODUCTS) {
     return {
-      error: 'The selected product must include its preview compare digest.',
+      error: `At most ${MAX_SALE_PRICE_PRODUCTS} parent products can be approved at once.`,
     };
   }
 
-  if (
-    typeof selection.salePrice !== 'string'
-    || !/^\d+\.\d{2}$/.test(selection.salePrice.trim())
-  ) {
-    return {
-      error: 'The selected product must include the exact proposed price from its preview.',
+  const products: SalePriceUpdateApproval[] = [];
+  const productIds = new Set<string>();
+
+  for (const rawProduct of rawProducts) {
+    if (!rawProduct || typeof rawProduct !== 'object' || Array.isArray(rawProduct)) {
+      return { error: 'Every selected parent product must be an object.' };
+    }
+
+    const product = rawProduct as {
+      productId?: unknown;
+      compareDigest?: unknown;
+      salePrice?: unknown;
     };
+    if (typeof product.productId !== 'string' || !product.productId.trim()) {
+      return { error: 'Every selected parent product must include its Shopify product ID.' };
+    }
+
+    const productId = product.productId.trim();
+    if (productIds.has(productId)) {
+      return { error: `Shopify parent product ${productId} was selected more than once.` };
+    }
+    productIds.add(productId);
+
+    if (product.compareDigest !== null && typeof product.compareDigest !== 'string') {
+      return {
+        error: `Selected parent product ${productId} must include its preview compare digest.`,
+      };
+    }
+
+    if (
+      typeof product.salePrice !== 'string'
+      || !/^\d+\.\d{2}$/.test(product.salePrice.trim())
+    ) {
+      return {
+        error: `Selected parent product ${productId} must include a price with exactly two decimal places.`,
+      };
+    }
+
+    const salePrice = Number(product.salePrice);
+    if (!Number.isFinite(salePrice) || salePrice < MINIMUM_SALE_PRICE) {
+      return {
+        error: `Selected parent product ${productId} must have a price of at least €${MINIMUM_SALE_PRICE.toFixed(2)}.`,
+      };
+    }
+
+    products.push({
+      productId,
+      compareDigest: product.compareDigest,
+      salePrice: salePrice.toFixed(2),
+    });
   }
 
   return {
     selection: {
       mode: 'selected',
-      productId: selection.productId.trim(),
-      compareDigest: selection.compareDigest,
-      salePrice: selection.salePrice.trim(),
+      products,
     },
   };
 }
@@ -421,21 +476,23 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const readyProducts = preparation.products.filter((product) => product.status === 'ready');
-    const selectedProduct = readyProducts.find(
-      (product) => product.productId === updateSelection!.productId
+    const readyProductsById = new Map(
+      preparation.products
+        .filter((product) => product.status === 'ready')
+        .map((product) => [product.productId, product])
     );
-    const selectionChanged =
-      selectedProduct?.compareDigest !== updateSelection!.compareDigest
-      || selectedProduct?.salePrice !== updateSelection!.salePrice;
-    const staleProductIds =
-      !selectedProduct || selectionChanged ? [updateSelection!.productId] : [];
+    const staleProductIds = updateSelection!.products
+      .filter((approval) => {
+        const product = readyProductsById.get(approval.productId);
+        return !product || product.compareDigest !== approval.compareDigest;
+      })
+      .map((approval) => approval.productId);
 
     if (staleProductIds.length > 0) {
       return res.status(409).json({
         error: 'selection_stale',
         message:
-          'This parent product or its proposed price changed after preview. Review the refreshed values before approving again.',
+          'One or more selected parent products changed after preview. No products were updated. Review the refreshed values before approving again.',
         invalidProductIds: staleProductIds,
         action,
         targetStatus: TARGET_STATUS,
@@ -447,7 +504,13 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const productsToUpdate = [selectedProduct!];
+    const productsToUpdate = updateSelection!.products.map((approval) => {
+      const product = readyProductsById.get(approval.productId)!;
+      product.minimumPriceApplied =
+        product.minimumPriceApplied && approval.salePrice === product.salePrice;
+      product.salePrice = approval.salePrice;
+      return product;
+    });
     const outcomes = await updateProductMetafields(shopify, productsToUpdate);
     const result = applyProductUpdateResults(preparation, outcomes);
     const updatedProducts = result.products.filter((product) => product.status === 'updated').length;
