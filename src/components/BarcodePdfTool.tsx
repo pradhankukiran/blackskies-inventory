@@ -1,15 +1,55 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Barcode, Loader2, SlidersHorizontal } from "lucide-react";
 import { FileUploadSection } from "@/components/FileUploadSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { BarcodeCsvResult } from "@/types/barcode";
-import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/usePagination";
+import {
+  BarcodeCsvResult,
+  ShopifyBarcodeApiError,
+  ShopifyBarcodeApiResponse,
+} from "@/types/barcode";
+import {
+  processBarcodeCsvFile,
+  processShopifyBarcodeRows,
+} from "@/utils/processors/barcodeCsvProcessor";
 
 type DataSource = "csv" | "shopify";
 type Brand = "blackskies" | "akitsune";
 type OutputMode = "combined" | "individual";
 
 const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status"];
+const PREVIEW_PAGE_SIZE = 50;
+
+const shopifyApiErrorMessage = (body: ShopifyBarcodeApiError, status: number) =>
+  body.message || body.error || `Shopify request failed (${status})`;
+
+const loadShopifyBarcodeRows = async (): Promise<ShopifyBarcodeApiResponse> => {
+  const response = await fetch("/api/shopify/barcodes", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  const raw = await response.text();
+  let body: ShopifyBarcodeApiResponse | ShopifyBarcodeApiError;
+
+  try {
+    body = JSON.parse(raw) as ShopifyBarcodeApiResponse | ShopifyBarcodeApiError;
+  } catch {
+    throw new Error(
+      "The Shopify API is unavailable. Run the app with Vercel development mode instead of the frontend-only Vite server."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(shopifyApiErrorMessage(body as ShopifyBarcodeApiError, response.status));
+  }
+  if (!Array.isArray((body as ShopifyBarcodeApiResponse).rows)) {
+    throw new Error("Shopify returned an invalid barcode product response.");
+  }
+
+  return body as ShopifyBarcodeApiResponse;
+};
 
 export const BarcodePdfTool: React.FC = () => {
   const [dataSource, setDataSource] = useState<DataSource>("csv");
@@ -17,8 +57,12 @@ export const BarcodePdfTool: React.FC = () => {
   const [outputMode, setOutputMode] = useState<OutputMode>("combined");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<BarcodeCsvResult | null>(null);
+  const [shopifyResult, setShopifyResult] = useState<BarcodeCsvResult | null>(null);
+  const [shopifySyncedAt, setShopifySyncedAt] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [isSyncingShopify, setIsSyncingShopify] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [shopifyError, setShopifyError] = useState<string | null>(null);
   const parseRequestRef = useRef(0);
 
   const handleCsvChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +103,22 @@ export const BarcodePdfTool: React.FC = () => {
     setUploadError(null);
   };
 
+  const handleShopifySync = async () => {
+    try {
+      setIsSyncingShopify(true);
+      setShopifyError(null);
+      const response = await loadShopifyBarcodeRows();
+      setShopifyResult(processShopifyBarcodeRows(response.rows));
+      setShopifySyncedAt(response.syncedAt);
+    } catch (error) {
+      setShopifyError(
+        error instanceof Error ? error.message : "Could not load barcode products from Shopify."
+      );
+    } finally {
+      setIsSyncingShopify(false);
+    }
+  };
+
   const previewMessage =
     dataSource === "csv"
       ? isParsing
@@ -68,9 +128,24 @@ export const BarcodePdfTool: React.FC = () => {
             ? "Correct the CSV issue to preview its barcode labels."
             : "No product rows are available for preview."
         : "Upload a CSV to preview its barcode labels."
-      : "Shopify products will appear here after the Shopify connection is added.";
-  const previewRows = dataSource === "csv" ? csvResult?.rows ?? [] : [];
-  const readyLabelCount = dataSource === "csv" ? csvResult?.summary.readyRows ?? 0 : 0;
+      : isSyncingShopify
+        ? "Syncing and validating Shopify product variants..."
+        : shopifyError && !shopifyResult
+          ? "Resolve the Shopify issue to preview its barcode labels."
+          : shopifyResult
+            ? "No Shopify product variants are available for preview."
+            : "Load Shopify product data to preview its barcode labels.";
+  const activeResult = dataSource === "csv" ? csvResult : shopifyResult;
+  const previewRows = activeResult?.rows ?? [];
+  const readyLabelCount = activeResult?.summary.readyRows ?? 0;
+  const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
+    previewRows,
+    PREVIEW_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (previewRows.length) goToPage(1);
+  }, [activeResult, dataSource, goToPage, previewRows.length]);
 
   const selectedBrand = brand === "blackskies" ? "Blackskies" : "Akitsune";
   const selectedSource = dataSource === "csv" ? "CSV upload" : "Shopify";
@@ -183,25 +258,47 @@ export const BarcodePdfTool: React.FC = () => {
           </div>
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-base font-medium text-slate-700">No Shopify products loaded</p>
-              <p className="mt-1 text-base text-slate-500">
-                Shopify loading will be connected in a later update. No product data is loaded yet.
+              <p className="text-base font-medium text-slate-700">
+                {isSyncingShopify
+                  ? "Syncing Shopify product variants..."
+                  : shopifyResult
+                    ? `${shopifyResult.summary.totalRows.toLocaleString()} variants processed · ${shopifyResult.summary.readyRows.toLocaleString()} labels ready`
+                    : "No Shopify products loaded"}
               </p>
+              <p className="mt-1 text-base text-slate-500">
+                {shopifySyncedAt
+                  ? `Last synced ${new Date(shopifySyncedAt).toLocaleString()}.`
+                  : "SKU, product title, color, size, and barcode will be loaded from Shopify."}
+              </p>
+              {shopifyError && (
+                <p className="mt-2 text-sm font-medium text-red-700" role="alert">
+                  {shopifyError}
+                </p>
+              )}
             </div>
-            <button type="button" disabled className="ops-button-secondary whitespace-nowrap">
-              Load from Shopify
+            <button
+              type="button"
+              onClick={handleShopifySync}
+              disabled={isSyncingShopify}
+              className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
+              title="Pull barcode product data directly from Shopify"
+            >
+              {isSyncingShopify && (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              )}
+              {isSyncingShopify ? "Syncing Shopify..." : "Sync from Shopify"}
             </button>
           </div>
         </section>
       )}
 
-      {dataSource === "csv" && csvResult?.warnings.length ? (
+      {activeResult?.warnings.length ? (
         <Alert className="border-amber-200 bg-amber-50 text-amber-950">
           <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-          <AlertTitle>CSV validation notes</AlertTitle>
+          <AlertTitle>{dataSource === "csv" ? "CSV" : "Shopify"} validation notes</AlertTitle>
           <AlertDescription>
             <ul className="list-disc space-y-1 pl-5">
-              {csvResult.warnings.map((warning) => (
+              {activeResult.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
@@ -235,7 +332,7 @@ export const BarcodePdfTool: React.FC = () => {
             </thead>
             <tbody>
               {previewRows.length ? (
-                previewRows.map((row) => (
+                paginatedItems.map((row) => (
                   <tr key={`${row.sourceRowNumber}-${row.ean}-${row.sku}`}>
                     <td>{row.sku || "—"}</td>
                     <td>{row.articleName || "—"}</td>
@@ -276,6 +373,20 @@ export const BarcodePdfTool: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+            <p className="text-base text-slate-600">
+              Showing {(currentPage - 1) * PREVIEW_PAGE_SIZE + 1}–
+              {Math.min(currentPage * PREVIEW_PAGE_SIZE, previewRows.length)} of{" "}
+              {previewRows.length.toLocaleString()} rows
+            </p>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
+          </div>
+        )}
       </section>
     </div>
   );

@@ -1,5 +1,9 @@
 import Papa from "papaparse";
-import { BarcodeCsvResult, BarcodeLabelRow } from "@/types/barcode";
+import {
+  BarcodeCsvResult,
+  BarcodeLabelRow,
+  ShopifyBarcodeSourceRow,
+} from "@/types/barcode";
 
 type RawRow = Record<string, unknown>;
 
@@ -206,3 +210,22 @@ export const processBarcodeCsvText = (csvText: string): BarcodeCsvResult => {
 
 export const processBarcodeCsvFile = async (file: File): Promise<BarcodeCsvResult> =>
   processBarcodeCsvText(await file.text());
+
+const SHOPIFY_BARCODE_FIELDS = ["sku", "ean", "articleName", "color", "size"];
+
+export const processShopifyBarcodeRows = (
+  sourceRows: ShopifyBarcodeSourceRow[]
+): BarcodeCsvResult => {
+  if (!sourceRows.length) {
+    return {
+      rows: [],
+      summary: { totalRows: 0, readyRows: 0, invalidRows: 0, duplicateRows: 0 },
+      warnings: ["Shopify did not return any product variants."],
+    };
+  }
+
+  return processBarcodeCsvRows(
+    sourceRows.map((row) => ({ ...row })),
+    SHOPIFY_BARCODE_FIELDS
+  );
+};

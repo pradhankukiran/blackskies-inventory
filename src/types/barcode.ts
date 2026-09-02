@@ -23,3 +23,23 @@ export interface BarcodeCsvResult {
   summary: BarcodeCsvSummary;
   warnings: string[];
 }
+
+export interface ShopifyBarcodeSourceRow {
+  variantId: string;
+  sku: string;
+  ean: string;
+  articleName: string;
+  color: string;
+  size: string;
+}
+
+export interface ShopifyBarcodeApiResponse {
+  syncedAt: string;
+  count: number;
+  rows: ShopifyBarcodeSourceRow[];
+}
+
+export interface ShopifyBarcodeApiError {
+  error?: string;
+  message?: string;
+}

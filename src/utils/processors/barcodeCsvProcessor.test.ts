@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isValidEan13,
   processBarcodeCsvText,
+  processShopifyBarcodeRows,
 } from "./barcodeCsvProcessor";
 
 describe("processBarcodeCsvText", () => {
@@ -119,5 +120,39 @@ describe("isValidEan13", () => {
     expect(isValidEan13("4006381333930")).toBe(false);
     expect(isValidEan13("400638133393")).toBe(false);
     expect(isValidEan13("400638133393A")).toBe(false);
+  });
+});
+
+describe("processShopifyBarcodeRows", () => {
+  it("applies the same validation rules to mapped Shopify variants", () => {
+    const result = processShopifyBarcodeRows([
+      {
+        variantId: "gid://shopify/ProductVariant/1",
+        sku: "BS-CAP-276",
+        ean: "4006381333931",
+        articleName: "Athletic Cap",
+        color: "Black",
+        size: "One Size",
+      },
+      {
+        variantId: "gid://shopify/ProductVariant/2",
+        sku: "BS-CAP-277",
+        ean: "invalid",
+        articleName: "Athletic Cap",
+        color: "Blue",
+        size: "One Size",
+      },
+    ]);
+
+    expect(result.rows.map((row) => row.status)).toEqual(["ready", "invalid"]);
+    expect(result.summary).toMatchObject({ totalRows: 2, readyRows: 1, invalidRows: 1 });
+  });
+
+  it("handles an empty Shopify catalog", () => {
+    expect(processShopifyBarcodeRows([])).toEqual({
+      rows: [],
+      summary: { totalRows: 0, readyRows: 0, invalidRows: 0, duplicateRows: 0 },
+      warnings: ["Shopify did not return any product variants."],
+    });
   });
 });
