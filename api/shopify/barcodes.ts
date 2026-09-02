@@ -30,7 +30,12 @@ async function getAllBarcodeVariants(shopify: ShopifyClient): Promise<ShopifyBar
               sku
               barcode
               selectedOptions { name value }
-              product { title }
+              product {
+                title
+                color: metafield(namespace: "custom", key: "color") {
+                  jsonValue
+                }
+              }
             }
           }
         }

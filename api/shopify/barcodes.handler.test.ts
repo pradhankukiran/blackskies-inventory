@@ -53,7 +53,10 @@ const variant = (overrides: Record<string, unknown> = {}) => ({
     { name: 'Colour', value: 'Midnight blue' },
     { name: 'Größe', value: 'M' },
   ],
-  product: { title: 'The Article' },
+  product: {
+    title: 'The Article',
+    color: { jsonValue: ['Product-level colour'] },
+  },
   ...overrides,
 });
 
@@ -97,6 +100,10 @@ describe('Shopify barcode endpoint', () => {
             { name: 'Farbe', value: 'Schwarz' },
             { name: 'Groesse', value: '001' },
           ],
+          product: {
+            title: 'The Article',
+            color: { jsonValue: ['Black'] },
+          },
         })
       )
     ).toEqual({
@@ -107,6 +114,61 @@ describe('Shopify barcode endpoint', () => {
       color: 'Schwarz',
       size: '001',
     });
+  });
+
+  it('uses the product custom.color metafield list when the variant has no color option', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [{ name: 'Size', value: 'M' }],
+          product: {
+            title: 'The Article',
+            color: { jsonValue: ['multi-coloured', 'black denim'] },
+          },
+        })
+      )
+    ).toMatchObject({
+      color: 'multi-coloured / black denim',
+      size: 'M',
+    });
+  });
+
+  it('keeps the more specific variant color option over the product custom.color metafield', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [
+            { name: 'Color', value: 'Midnight blue' },
+            { name: 'Size', value: 'M' },
+          ],
+          product: {
+            title: 'The Article',
+            color: { jsonValue: ['Blue'] },
+          },
+        })
+      )
+    ).toMatchObject({
+      color: 'Midnight blue',
+      size: 'M',
+    });
+  });
+
+  it('maps Shopify Default Title variants to One Size but leaves non-default variants without a size empty', () => {
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [{ name: 'Title', value: 'Default Title' }],
+        })
+      )
+    ).toMatchObject({ size: 'One Size' });
+
+    expect(
+      mapBarcodeVariant(
+        variant({
+          selectedOptions: [{ name: 'Color', value: 'Black' }],
+        })
+      )
+    ).toMatchObject({ size: '' });
   });
 
   it('requests every product-variant page and returns mapped rows', async () => {
@@ -157,6 +219,10 @@ describe('Shopify barcode endpoint', () => {
     });
     expect(gql).toHaveBeenCalledTimes(2);
     expect(gql.mock.calls[0][0]).toContain('productVariants(first: 250, after: $cursor)');
+    expect(gql.mock.calls[0][0]).toContain(
+      'color: metafield(namespace: "custom", key: "color")'
+    );
+    expect(gql.mock.calls[0][0]).toContain('jsonValue');
     expect(gql.mock.calls[0][1]).toEqual({ cursor: null });
     expect(gql.mock.calls[1][1]).toEqual({ cursor: 'cursor-1' });
   });
