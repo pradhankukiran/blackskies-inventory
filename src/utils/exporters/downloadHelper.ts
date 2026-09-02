@@ -3,7 +3,10 @@ export const downloadFile = (
   filename: string,
   type: string
 ) => {
-  const blob = new Blob([content], { type });
+  downloadBlob(new Blob([content], { type }), filename);
+};
+
+export const downloadBlob = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

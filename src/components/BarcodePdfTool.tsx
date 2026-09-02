@@ -1,14 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Barcode, Loader2, RotateCcw, SlidersHorizontal } from "lucide-react";
+import {
+  AlertTriangle,
+  Barcode,
+  CheckCircle2,
+  Loader2,
+  RotateCcw,
+  SlidersHorizontal,
+} from "lucide-react";
 import { FileUploadSection } from "@/components/FileUploadSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { BarcodeCsvResult } from "@/types/barcode";
+import type {
+  BarcodePdfBrand,
+  BarcodePdfOutputMode,
+  BarcodePdfProgress,
+} from "@/utils/exporters/barcodePdfExporter";
+import { downloadBlob } from "@/utils/exporters/downloadHelper";
 import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
-
-type Brand = "blackskies" | "akitsune";
-type OutputMode = "combined" | "individual";
 
 const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status"];
 const PREVIEW_PAGE_SIZE = 50;
@@ -28,12 +38,16 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   onCsvSourceActiveChange,
   onClearShopifyData,
 }) => {
-  const [brand, setBrand] = useState<Brand>("blackskies");
-  const [outputMode, setOutputMode] = useState<OutputMode>("combined");
+  const [brand, setBrand] = useState<BarcodePdfBrand>("blackskies");
+  const [outputMode, setOutputMode] = useState<BarcodePdfOutputMode>("combined");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<BarcodeCsvResult | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<BarcodePdfProgress | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const parseRequestRef = useRef(0);
 
   useEffect(
@@ -116,6 +130,52 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const selectedOutput = outputMode === "combined" ? "combined PDF" : "individual PDFs";
   const shopifySourceActive = isShopifySyncing || shopifyResult !== null;
 
+  useEffect(() => {
+    setGenerationProgress(null);
+    setGenerationError(null);
+    setGenerationSuccess(null);
+  }, [activeResult, brand, outputMode]);
+
+  const handleGenerate = async () => {
+    if (!activeResult || isGenerating) return;
+
+    setIsGenerating(true);
+    setGenerationProgress(null);
+    setGenerationError(null);
+    setGenerationSuccess(null);
+
+    try {
+      const { generateBarcodePdfDownload } = await import(
+        "@/utils/exporters/barcodePdfExporter"
+      );
+      const download = await generateBarcodePdfDownload({
+        rows: activeResult.rows,
+        brand,
+        outputMode,
+        onProgress: setGenerationProgress,
+      });
+      downloadBlob(download.blob, download.filename);
+      setGenerationSuccess(
+        `${download.labelCount.toLocaleString()} ${
+          download.labelCount === 1 ? "label" : "labels"
+        } downloaded as ${outputMode === "combined" ? "one PDF" : "a ZIP file"}.`
+      );
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Could not generate the PDFs.");
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress(null);
+    }
+  };
+
+  const generationButtonLabel = isGenerating
+    ? generationProgress?.phase === "archive"
+      ? "Creating ZIP..."
+      : generationProgress
+        ? `Generating ${generationProgress.completed.toLocaleString()}/${generationProgress.total.toLocaleString()}...`
+        : "Preparing PDFs..."
+    : "Generate PDFs";
+
   return (
     <div className="space-y-5">
       <section className="ops-surface space-y-2 rounded-[8px] p-5">
@@ -126,9 +186,11 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
           onRemove={handleCsvRemove}
           acceptedFileTypes=".csv,text/csv"
           acceptedFileLabel="CSV"
-          disabled={shopifySourceActive}
+          disabled={shopifySourceActive || isGenerating}
           disabledMessage={
-            isShopifySyncing
+            isGenerating
+              ? "PDF generation is in progress."
+              : isShopifySyncing
               ? "Shopify sync is in progress."
               : "Clear the Shopify table before uploading a CSV."
           }
@@ -174,7 +236,8 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <span className="text-base font-medium text-slate-700">Brand</span>
             <select
               value={brand}
-              onChange={(event) => setBrand(event.target.value as Brand)}
+              onChange={(event) => setBrand(event.target.value as BarcodePdfBrand)}
+              disabled={isGenerating}
               className="ops-input mt-1 w-full"
             >
               <option value="blackskies">Blackskies — www.blackskies.shop</option>
@@ -186,7 +249,8 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <span className="text-base font-medium text-slate-700">PDF output</span>
             <select
               value={outputMode}
-              onChange={(event) => setOutputMode(event.target.value as OutputMode)}
+              onChange={(event) => setOutputMode(event.target.value as BarcodePdfOutputMode)}
+              disabled={isGenerating}
               className="ops-input mt-1 w-full"
             >
               <option value="combined">Combined PDF</option>
@@ -203,7 +267,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <button
               type="button"
               onClick={handleCsvRemove}
-              disabled={!csvFile}
+              disabled={!csvFile || isGenerating}
               className="ops-button-secondary"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -213,18 +277,43 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
               <button
                 type="button"
                 onClick={onClearShopifyData}
+                disabled={isGenerating}
                 className="ops-button-danger"
               >
                 Clear Table
               </button>
             )}
-            <button type="button" disabled className="ops-button-primary px-6">
-              <Barcode className="h-4 w-4" aria-hidden="true" />
-              Generate PDFs
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating || isParsing || isShopifySyncing || readyLabelCount === 0}
+              className="ops-button-primary px-6"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Barcode className="h-4 w-4" aria-hidden="true" />
+              )}
+              {generationButtonLabel}
             </button>
           </div>
         </div>
       </section>
+
+      {generationError && (
+        <Alert variant="destructive">
+          <AlertTitle>PDF generation failed</AlertTitle>
+          <AlertDescription>{generationError}</AlertDescription>
+        </Alert>
+      )}
+
+      {generationSuccess && (
+        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-950">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          <AlertTitle>Barcode labels generated</AlertTitle>
+          <AlertDescription>{generationSuccess}</AlertDescription>
+        </Alert>
+      )}
 
       {shopifyError && !csvFile && (
         <Alert variant="destructive">
