@@ -45,6 +45,7 @@ import { ZalandoSalePriceTool } from "./ZalandoSalePriceTool";
 import { StockReturnTool } from "./StockReturnTool";
 import { BarcodePdfTool } from "./BarcodePdfTool";
 import {
+  BarcodeBrand,
   BarcodeCsvResult,
   ShopifyBarcodeApiError,
   ShopifyBarcodeApiResponse,
@@ -602,6 +603,11 @@ const shopifySyncModuleLabels: Record<ShopifySyncModule, string> = {
   barcodes: 'Barcode PDFs',
 };
 
+const barcodeBrandLabels: Record<BarcodeBrand, string> = {
+  blackskies: 'Blackskies',
+  akitsune: 'Akitsune',
+};
+
 const readShopifySyncMeta = (...keys: string[]): ShopifySyncMeta | null => {
   for (const key of keys) {
     try {
@@ -745,6 +751,7 @@ const IntegratedStockParser: React.FC = () => {
   const [isStockReturnShopifyStockLoading, setIsStockReturnShopifyStockLoading] = useState(true);
   const [stockReturnShopifySyncError, setStockReturnShopifySyncError] = useState<string | null>(null);
   const [barcodeShopifyResult, setBarcodeShopifyResult] = useState<BarcodeCsvResult | null>(null);
+  const [barcodeShopifyBrand, setBarcodeShopifyBrand] = useState<BarcodeBrand | null>(null);
   const [barcodeShopifySyncedAt, setBarcodeShopifySyncedAt] = useState<string | null>(null);
   const [barcodeShopifySyncError, setBarcodeShopifySyncError] = useState<string | null>(null);
   const [barcodeCsvSourceActive, setBarcodeCsvSourceActive] = useState(false);
@@ -804,6 +811,7 @@ const IntegratedStockParser: React.FC = () => {
   const [zfsTrendFactor, setZfsTrendFactor] = useState(0);
 
   const [syncingShopifyModule, setSyncingShopifyModule] = useState<ShopifySyncModule | null>(null);
+  const [syncingBarcodeBrand, setSyncingBarcodeBrand] = useState<BarcodeBrand | null>(null);
   const isShopifySyncing = syncingShopifyModule !== null;
   const [zfsShopifySyncMeta, setZfsShopifySyncMeta] = useState<ShopifySyncMeta | null>(() =>
     readShopifySyncMeta(ZFS_SHOPIFY_SYNC_META_KEY, LEGACY_SHOPIFY_SYNC_META_KEY)
@@ -823,7 +831,9 @@ const IntegratedStockParser: React.FC = () => {
         : null;
   const shopifySyncStatusModule = syncingShopifyModule ?? currentShopifySyncModule;
   const shopifySyncStatusLabel = shopifySyncStatusModule === 'barcodes'
-    ? 'Fetching Shopify barcode products'
+    ? syncingBarcodeBrand
+      ? `Fetching ${barcodeBrandLabels[syncingBarcodeBrand]} barcode products`
+      : 'Fetching Shopify barcode products'
     : shopifySyncStatusModule
       ? `Fetching Shopify stock for ${shopifySyncModuleLabels[shopifySyncStatusModule]}`
       : 'Fetching Shopify stock';
@@ -833,7 +843,7 @@ const IntegratedStockParser: React.FC = () => {
       ? barcodeCsvSourceActive
         ? 'CSV source active · reset files to sync Shopify'
         : barcodeShopifySyncedAt && barcodeShopifyResult
-          ? `Last synced ${timeAgo(barcodeShopifySyncedAt)} · ${barcodeShopifyResult.summary.readyRows.toLocaleString()} labels ready`
+          ? `${barcodeShopifyBrand ? `${barcodeBrandLabels[barcodeShopifyBrand]} · ` : ''}Last synced ${timeAgo(barcodeShopifySyncedAt)} · ${barcodeShopifyResult.summary.readyRows.toLocaleString()} labels ready`
           : 'Not synced yet'
       : activeStockShopifySyncMeta
         ? `Last synced ${timeAgo(activeStockShopifySyncMeta.lastSyncedAt)} · ${activeStockShopifySyncMeta.internalCount.toLocaleString()} stock rows`
@@ -860,6 +870,7 @@ const IntegratedStockParser: React.FC = () => {
 
   const clearBarcodeShopifyData = useCallback(() => {
     setBarcodeShopifyResult(null);
+    setBarcodeShopifyBrand(null);
     setBarcodeShopifySyncedAt(null);
     setBarcodeShopifySyncError(null);
   }, []);
@@ -871,15 +882,16 @@ const IntegratedStockParser: React.FC = () => {
     }
   }, [files.internal, files.skuEanMapper, filesLoaded, zfsShopifySyncMeta]);
 
-  const handleShopifySync = async () => {
+  const handleShopifySync = async (barcodeBrand?: BarcodeBrand) => {
     if (!currentShopifySyncModule) return;
 
     const syncTarget = currentShopifySyncModule;
-    if (syncTarget === 'barcodes' && barcodeCsvSourceActive) return;
+    if (syncTarget === 'barcodes' && (!barcodeBrand || barcodeCsvSourceActive)) return;
 
     setSyncingShopifyModule(syncTarget);
+    setSyncingBarcodeBrand(syncTarget === 'barcodes' ? barcodeBrand ?? null : null);
     if (syncTarget === 'barcodes') {
-      setBarcodeShopifySyncError(null);
+      clearBarcodeShopifyData();
     } else if (syncTarget === 'stock-return') {
       setStockReturnShopifySyncError(null);
     } else if (syncTarget === 'retagging') {
@@ -889,7 +901,8 @@ const IntegratedStockParser: React.FC = () => {
     }
     try {
       if (syncTarget === 'barcodes') {
-        const response = await fetch('/api/shopify/barcodes', {
+        const requestedBrand = barcodeBrand!;
+        const response = await fetch(`/api/shopify/barcodes?brand=${requestedBrand}`, {
           method: 'GET',
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -916,7 +929,11 @@ const IntegratedStockParser: React.FC = () => {
         }
 
         const barcodeResponse = body as ShopifyBarcodeApiResponse;
+        if (barcodeResponse.brand !== requestedBrand) {
+          throw new Error('Shopify returned barcode products for the wrong brand.');
+        }
         setBarcodeShopifyResult(processShopifyBarcodeRows(barcodeResponse.rows));
+        setBarcodeShopifyBrand(requestedBrand);
         setBarcodeShopifySyncedAt(
           typeof barcodeResponse.syncedAt === 'string'
             ? barcodeResponse.syncedAt
@@ -1011,6 +1028,7 @@ const IntegratedStockParser: React.FC = () => {
       }
     } finally {
       setSyncingShopifyModule(null);
+      setSyncingBarcodeBrand(null);
     }
   };
 
@@ -1735,23 +1753,44 @@ const IntegratedStockParser: React.FC = () => {
             <div className="flex flex-wrap items-center justify-center gap-3 xl:justify-self-end">
               {canSyncShopify && (
                 <div className="relative">
-                  <button
-                    onClick={handleShopifySync}
-                    disabled={shopifySyncDisabled}
-                    className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
-                    title={
-                      currentShopifySyncModule === 'barcodes'
-                        ? barcodeCsvSourceActive
-                          ? 'Reset the uploaded CSV before syncing barcode data from Shopify'
-                          : 'Pull barcode product data directly from Shopify'
-                        : 'Pull Internal Stocks and SKU/EAN data directly from Shopify'
-                    }
-                  >
-                    {isShopifySyncing && (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    )}
-                    {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
-                  </button>
+                  {currentShopifySyncModule === 'barcodes' ? (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {(['blackskies', 'akitsune'] as const).map((barcodeBrand) => (
+                        <button
+                          key={barcodeBrand}
+                          type="button"
+                          onClick={() => handleShopifySync(barcodeBrand)}
+                          disabled={shopifySyncDisabled}
+                          className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
+                          title={
+                            barcodeCsvSourceActive
+                              ? 'Reset the uploaded CSV before syncing barcode data from Shopify'
+                              : `Pull only ${barcodeBrandLabels[barcodeBrand]} barcode products from Shopify`
+                          }
+                        >
+                          {syncingBarcodeBrand === barcodeBrand && (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          )}
+                          {syncingBarcodeBrand === barcodeBrand
+                            ? `Syncing ${barcodeBrandLabels[barcodeBrand]}...`
+                            : `Sync ${barcodeBrandLabels[barcodeBrand]}`}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleShopifySync()}
+                      disabled={shopifySyncDisabled}
+                      className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
+                      title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                    >
+                      {isShopifySyncing && (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      )}
+                      {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
+                    </button>
+                  )}
                   <span
                     className={`absolute right-0 top-full mt-1 whitespace-nowrap text-base ${
                       isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
@@ -1919,6 +1958,7 @@ const IntegratedStockParser: React.FC = () => {
               <Route path="/barcodes" element={
               <BarcodePdfTool
                 shopifyResult={barcodeShopifyResult}
+                shopifyBrand={barcodeShopifyBrand ?? syncingBarcodeBrand}
                 shopifyError={barcodeShopifySyncError}
                 isShopifySyncing={syncingShopifyModule === 'barcodes'}
                 onCsvSourceActiveChange={setBarcodeCsvSourceActive}

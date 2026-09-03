@@ -11,7 +11,7 @@ import { FileUploadSection } from "@/components/FileUploadSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
-import { BarcodeCsvResult } from "@/types/barcode";
+import { BarcodeBrand, BarcodeCsvResult } from "@/types/barcode";
 import type {
   BarcodePdfBrand,
   BarcodePdfOutputMode,
@@ -25,6 +25,7 @@ const PREVIEW_PAGE_SIZE = 50;
 
 interface BarcodePdfToolProps {
   shopifyResult: BarcodeCsvResult | null;
+  shopifyBrand: BarcodeBrand | null;
   shopifyError: string | null;
   isShopifySyncing: boolean;
   onCsvSourceActiveChange: (active: boolean) => void;
@@ -33,6 +34,7 @@ interface BarcodePdfToolProps {
 
 export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   shopifyResult,
+  shopifyBrand,
   shopifyError,
   isShopifySyncing,
   onCsvSourceActiveChange,
@@ -110,6 +112,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             ? "No Shopify product variants are available for preview."
             : "Upload a CSV or sync from Shopify to preview barcode labels.";
   const activeResult = csvFile ? csvResult : shopifyResult;
+  const activeBrand = csvFile || !shopifyBrand ? brand : shopifyBrand;
   const previewRows = activeResult?.rows ?? [];
   const readyLabelCount = activeResult?.summary.readyRows ?? 0;
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
@@ -121,7 +124,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     if (previewRows.length) goToPage(1);
   }, [activeResult, goToPage, previewRows.length]);
 
-  const selectedBrand = brand === "blackskies" ? "Blackskies" : "Akitsune";
+  const selectedBrand = activeBrand === "blackskies" ? "Blackskies" : "Akitsune";
   const selectedSource = csvFile
     ? "CSV upload"
     : shopifyResult || isShopifySyncing
@@ -134,7 +137,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     setGenerationProgress(null);
     setGenerationError(null);
     setGenerationSuccess(null);
-  }, [activeResult, brand, outputMode]);
+  }, [activeBrand, activeResult, outputMode]);
 
   const handleGenerate = async () => {
     if (!activeResult || isGenerating) return;
@@ -150,7 +153,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
       );
       const download = await generateBarcodePdfDownload({
         rows: activeResult.rows,
-        brand,
+        brand: activeBrand,
         outputMode,
         onProgress: setGenerationProgress,
       });
@@ -233,11 +236,13 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
 
         <div className="grid gap-4 p-5 md:grid-cols-2">
           <label className="block">
-            <span className="text-base font-medium text-slate-700">Brand</span>
+            <span className="text-base font-medium text-slate-700">
+              Brand{shopifyBrand && !csvFile ? " (from Shopify)" : ""}
+            </span>
             <select
-              value={brand}
+              value={activeBrand}
               onChange={(event) => setBrand(event.target.value as BarcodePdfBrand)}
-              disabled={isGenerating}
+              disabled={isGenerating || isShopifySyncing || Boolean(shopifyResult && !csvFile)}
               className="ops-input mt-1 w-full"
             >
               <option value="blackskies">Blackskies — www.blackskies.shop</option>

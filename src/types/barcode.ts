@@ -1,3 +1,5 @@
+export type BarcodeBrand = "blackskies" | "akitsune";
+
 export type BarcodeLabelRowStatus = "ready" | "invalid" | "duplicate";
 
 export interface BarcodeLabelRow {
@@ -34,6 +36,7 @@ export interface ShopifyBarcodeSourceRow {
 }
 
 export interface ShopifyBarcodeApiResponse {
+  brand: BarcodeBrand;
   syncedAt: string;
   count: number;
   rows: ShopifyBarcodeSourceRow[];

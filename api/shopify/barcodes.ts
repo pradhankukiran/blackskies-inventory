@@ -1,6 +1,8 @@
 import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
 import {
+  filterBarcodeVariantsByBrand,
   mapBarcodeVariants,
+  parseShopifyBarcodeBrand,
   type ShopifyBarcodeVariant,
 } from './barcodes.logic.js';
 
@@ -36,6 +38,7 @@ async function getAllBarcodeVariants(shopify: ShopifyClient): Promise<ShopifyBar
               selectedOptions { name value }
               product {
                 title
+                vendor
                 colorName: metafield(namespace: "custom", key: "colorname_en") {
                   value
                 }
@@ -107,13 +110,24 @@ export default async function handler(req: any, res: any) {
     return sendError(res, 405, 'method_not_allowed', 'Use GET for this endpoint.');
   }
 
+  const brand = parseShopifyBarcodeBrand(req.query?.brand);
+  if (!brand) {
+    return sendError(
+      res,
+      400,
+      'invalid_brand',
+      'Query parameter "brand" must be either "blackskies" or "akitsune".'
+    );
+  }
+
   try {
     const shopify = await getShopifyClient();
-    const variants = await getAllBarcodeVariants(shopify);
+    const variants = filterBarcodeVariantsByBrand(await getAllBarcodeVariants(shopify), brand);
     const standardColorNames = await getStandardColorNames(shopify, variants);
     const rows = mapBarcodeVariants(variants, standardColorNames);
 
     return res.status(200).json({
+      brand,
       syncedAt: new Date().toISOString(),
       count: rows.length,
       rows,

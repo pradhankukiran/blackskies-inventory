@@ -55,6 +55,7 @@ const variant = (overrides: Record<string, unknown> = {}) => ({
   ],
   product: {
     title: 'The Article',
+    vendor: 'Blackskies',
     colorName: { value: 'Product-level color name' },
     color: { jsonValue: ['Product-level colour'] },
     standardColor: { jsonValue: [] },
@@ -71,6 +72,11 @@ const productVariantsPage = (
     pageInfo: { hasNextPage, endCursor },
     edges: nodes.map((node) => ({ node })),
   },
+});
+
+const getRequest = (brand: string | string[] | null = 'blackskies') => ({
+  method: 'GET',
+  query: brand === null ? {} : { brand },
 });
 
 beforeEach(() => {
@@ -104,6 +110,7 @@ describe('Shopify barcode endpoint', () => {
           ],
           product: {
             title: 'The Article',
+            vendor: 'Blackskies',
             colorName: { value: 'Black' },
             color: { jsonValue: ['Black'] },
             standardColor: { jsonValue: [] },
@@ -120,6 +127,27 @@ describe('Shopify barcode endpoint', () => {
     });
   });
 
+  it('requires a supported brand before contacting Shopify', async () => {
+    const missingBrandResponse = response();
+    await handler(getRequest(null), missingBrandResponse);
+
+    expect(missingBrandResponse.statusCode).toBe(400);
+    expect(missingBrandResponse.body).toEqual({
+      error: 'invalid_brand',
+      message: 'Query parameter "brand" must be either "blackskies" or "akitsune".',
+    });
+
+    const invalidBrandResponse = response();
+    await handler(getRequest(['blackskies']), invalidBrandResponse);
+
+    expect(invalidBrandResponse.statusCode).toBe(400);
+    expect(invalidBrandResponse.body).toEqual({
+      error: 'invalid_brand',
+      message: 'Query parameter "brand" must be either "blackskies" or "akitsune".',
+    });
+    expect(getShopifyClientMock).not.toHaveBeenCalled();
+  });
+
   it('uses custom.colorname_en when the variant has no color option', () => {
     expect(
       mapBarcodeVariant(
@@ -127,6 +155,7 @@ describe('Shopify barcode endpoint', () => {
           selectedOptions: [{ name: 'Size', value: 'M' }],
           product: {
             title: 'The Article',
+            vendor: 'Blackskies',
             colorName: { value: 'Black denim' },
             color: { jsonValue: ['multi-coloured', 'black denim'] },
             standardColor: { jsonValue: [] },
@@ -146,6 +175,7 @@ describe('Shopify barcode endpoint', () => {
           selectedOptions: [{ name: 'Size', value: 'M' }],
           product: {
             title: 'The Article',
+            vendor: 'Blackskies',
             colorName: null,
             color: { jsonValue: ['multi-coloured', 'black denim'] },
             standardColor: { jsonValue: [] },
@@ -168,6 +198,7 @@ describe('Shopify barcode endpoint', () => {
           ],
           product: {
             title: 'The Article',
+            vendor: 'Blackskies',
             colorName: { value: 'Navy' },
             color: { jsonValue: ['Blue'] },
             standardColor: { jsonValue: ['gid://shopify/Metaobject/100'] },
@@ -188,6 +219,7 @@ describe('Shopify barcode endpoint', () => {
           selectedOptions: [{ name: 'Size', value: 'M' }],
           product: {
             title: 'The Article',
+            vendor: 'Blackskies',
             colorName: null,
             color: { jsonValue: [] },
             standardColor: { jsonValue: ['gid://shopify/Metaobject/100'] },
@@ -259,11 +291,12 @@ describe('Shopify barcode endpoint', () => {
     getShopifyClientMock.mockResolvedValue({ shop: 'test-shop', gql });
     const res = response();
 
-    await handler({ method: 'GET' }, res);
+    await handler(getRequest(), res);
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['Cache-Control']).toBe('no-store');
     expect(res.body).toEqual({
+      brand: 'blackskies',
       syncedAt: expect.any(String),
       count: 2,
       rows: [
@@ -287,6 +320,7 @@ describe('Shopify barcode endpoint', () => {
     });
     expect(gql).toHaveBeenCalledTimes(2);
     expect(gql.mock.calls[0][0]).toContain('productVariants(first: 250, after: $cursor)');
+    expect(gql.mock.calls[0][0]).toContain('vendor');
     expect(gql.mock.calls[0][0]).toContain(
       'colorName: metafield(namespace: "custom", key: "colorname_en")'
     );
@@ -311,6 +345,7 @@ describe('Shopify barcode endpoint', () => {
             selectedOptions: [{ name: 'Bracelet Size', value: '16 cm' }],
             product: {
               title: 'The Article',
+              vendor: 'Blackskies',
               colorName: null,
               color: { jsonValue: [] },
               standardColor: { jsonValue: [colorId] },
@@ -324,7 +359,7 @@ describe('Shopify barcode endpoint', () => {
     getShopifyClientMock.mockResolvedValue({ shop: 'test-shop', gql });
     const res = response();
 
-    await handler({ method: 'GET' }, res);
+    await handler(getRequest(), res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({
@@ -341,13 +376,38 @@ describe('Shopify barcode endpoint', () => {
     expect(gql.mock.calls[1][1]).toEqual({ ids: [colorId] });
   });
 
+  it('returns only variants whose normalized vendor matches the selected brand', async () => {
+    const gql = vi.fn().mockResolvedValue(
+      productVariantsPage([
+        variant({ sku: 'BS-001', product: { ...variant().product, vendor: ' Blackskies ' } }),
+        variant({
+          sku: 'AK-001',
+          product: { ...variant().product, vendor: 'Akitsune' },
+        }),
+        variant({ sku: 'UNKNOWN-001', product: { ...variant().product, vendor: 'Other' } }),
+        variant({ sku: 'NO-VENDOR-001', product: { ...variant().product, vendor: null } }),
+      ])
+    );
+    getShopifyClientMock.mockResolvedValue({ shop: 'test-shop', gql });
+    const res = response();
+
+    await handler(getRequest('akitsune'), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      brand: 'akitsune',
+      count: 1,
+      rows: [expect.objectContaining({ sku: 'AK-001' })],
+    });
+  });
+
   it('returns the Shopify API status and a structured error response', async () => {
     getShopifyClientMock.mockRejectedValue(
       new ShopifyApiErrorMock('Shopify access token expired.', 401)
     );
     const res = response();
 
-    await handler({ method: 'GET' }, res);
+    await handler(getRequest(), res);
 
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({
@@ -360,7 +420,7 @@ describe('Shopify barcode endpoint', () => {
     getShopifyClientMock.mockRejectedValue(new Error('Network unavailable.'));
     const res = response();
 
-    await handler({ method: 'GET' }, res);
+    await handler(getRequest(), res);
 
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({

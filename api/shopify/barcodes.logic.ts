@@ -10,10 +10,18 @@ export type ShopifyBarcodeVariant = {
   selectedOptions: ShopifyBarcodeSelectedOption[];
   product: {
     title: string | null;
+    vendor: string | null;
     colorName: { value: string | null } | null;
     color: { jsonValue: unknown } | null;
     standardColor: { jsonValue: unknown } | null;
   } | null;
+};
+
+export type ShopifyBarcodeBrand = 'blackskies' | 'akitsune';
+
+const SHOPIFY_VENDOR_BY_BARCODE_BRAND: Record<ShopifyBarcodeBrand, string> = {
+  blackskies: 'Blackskies',
+  akitsune: 'Akitsune',
 };
 
 export type ShopifyBarcodeRow = {
@@ -32,6 +40,26 @@ const DEFAULT_VARIANT_OPTION_VALUE = 'default title';
 
 function stringValue(value: string | null | undefined): string {
   return typeof value === 'string' ? value : '';
+}
+
+function normalizeVendor(value: string | null | undefined): string {
+  return stringValue(value).trim().normalize('NFC').toLocaleLowerCase('en-US');
+}
+
+export function parseShopifyBarcodeBrand(value: unknown): ShopifyBarcodeBrand | null {
+  if (value === 'blackskies' || value === 'akitsune') return value;
+  return null;
+}
+
+/** Retains only variants belonging to the selected product vendor. */
+export function filterBarcodeVariantsByBrand(
+  variants: ShopifyBarcodeVariant[],
+  brand: ShopifyBarcodeBrand
+): ShopifyBarcodeVariant[] {
+  const expectedVendor = normalizeVendor(SHOPIFY_VENDOR_BY_BARCODE_BRAND[brand]);
+  return variants.filter(
+    (variant) => normalizeVendor(variant.product?.vendor) === expectedVendor
+  );
 }
 
 function optionValue(

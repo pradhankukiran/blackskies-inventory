@@ -1,8 +1,8 @@
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
-import { BarcodeLabelRow } from "@/types/barcode";
+import type { BarcodeBrand, BarcodeLabelRow } from "@/types/barcode";
 
-export type BarcodePdfBrand = "blackskies" | "akitsune";
+export type BarcodePdfBrand = BarcodeBrand;
 export type BarcodePdfOutputMode = "combined" | "individual";
 
 export interface BarcodePdfProgress {
