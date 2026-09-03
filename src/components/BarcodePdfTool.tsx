@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Barcode,
@@ -50,6 +51,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const [generationProgress, setGenerationProgress] = useState<BarcodePdfProgress | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const parseRequestRef = useRef(0);
 
   useEffect(
@@ -115,6 +117,9 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const activeBrand = csvFile || !shopifyBrand ? brand : shopifyBrand;
   const previewRows = activeResult?.rows ?? [];
   const readyLabelCount = activeResult?.summary.readyRows ?? 0;
+  const invalidLabelCount = activeResult?.summary.invalidRows ?? 0;
+  const duplicateLabelCount = activeResult?.summary.duplicateRows ?? 0;
+  const skippedLabelCount = invalidLabelCount + duplicateLabelCount;
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
     previewRows,
     PREVIEW_PAGE_SIZE
@@ -134,14 +139,32 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const shopifySourceActive = isShopifySyncing || shopifyResult !== null;
 
   useEffect(() => {
+    setIsConfirmationOpen(false);
     setGenerationProgress(null);
     setGenerationError(null);
     setGenerationSuccess(null);
   }, [activeBrand, activeResult, outputMode]);
 
+  useEffect(() => {
+    if (!isConfirmationOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsConfirmationOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isConfirmationOpen]);
+
   const handleGenerate = async () => {
     if (!activeResult || isGenerating) return;
 
+    setIsConfirmationOpen(false);
     setIsGenerating(true);
     setGenerationProgress(null);
     setGenerationError(null);
@@ -290,7 +313,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             )}
             <button
               type="button"
-              onClick={handleGenerate}
+              onClick={() => setIsConfirmationOpen(true)}
               disabled={isGenerating || isParsing || isShopifySyncing || readyLabelCount === 0}
               className="ops-button-primary px-6"
             >
@@ -423,6 +446,105 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
           </div>
         )}
       </section>
+
+      {isConfirmationOpen && activeResult && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex h-[100dvh] w-screen overscroll-none items-center justify-center overflow-hidden bg-slate-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsConfirmationOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="barcode-pdf-confirmation-title"
+            aria-describedby="barcode-pdf-confirmation-description"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overscroll-contain border border-slate-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-slate-200 px-6 py-5">
+              <h3 id="barcode-pdf-confirmation-title" className="text-xl font-semibold text-slate-950">
+                Generate barcode PDFs?
+              </h3>
+              <p
+                id="barcode-pdf-confirmation-description"
+                className="mt-2 text-base leading-6 text-slate-600"
+              >
+                Review the selected label settings before the download starts.
+              </p>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+              <dl className="grid overflow-hidden border border-slate-200 sm:grid-cols-2">
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:border-r">
+                  <dt className="text-sm font-medium text-slate-500">Data source</dt>
+                  <dd className="mt-1 text-base font-semibold text-slate-950">{selectedSource}</dd>
+                </div>
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <dt className="text-sm font-medium text-slate-500">Brand</dt>
+                  <dd className="mt-1 text-base font-semibold text-slate-950">{selectedBrand}</dd>
+                </div>
+                <div className="border-b border-slate-200 px-4 py-3 sm:border-r">
+                  <dt className="text-sm font-medium text-slate-500">Source rows</dt>
+                  <dd className="mt-1 text-xl font-semibold text-slate-950">
+                    {activeResult.summary.totalRows.toLocaleString()}
+                  </dd>
+                </div>
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <dt className="text-sm font-medium text-slate-500">Ready labels</dt>
+                  <dd className="mt-1 text-xl font-semibold text-emerald-700">
+                    {readyLabelCount.toLocaleString()}
+                  </dd>
+                </div>
+                <div className="border-b border-slate-200 px-4 py-3 sm:border-r">
+                  <dt className="text-sm font-medium text-slate-500">PDF output</dt>
+                  <dd className="mt-1 text-base font-semibold text-slate-950">
+                    {outputMode === "combined" ? "Combined PDF" : "Individual PDFs (ZIP)"}
+                  </dd>
+                </div>
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <dt className="text-sm font-medium text-slate-500">Label format</dt>
+                  <dd className="mt-1 text-base font-semibold text-slate-950">90 × 50 mm</dd>
+                </div>
+                <div className="px-4 py-3 sm:border-r">
+                  <dt className="text-sm font-medium text-slate-500">Barcode format</dt>
+                  <dd className="mt-1 text-base font-semibold text-slate-950">EAN-13</dd>
+                </div>
+                <div className="px-4 py-3">
+                  <dt className="text-sm font-medium text-slate-500">Skipped rows</dt>
+                  <dd className={`mt-1 text-base font-semibold ${skippedLabelCount ? "text-amber-700" : "text-slate-950"}`}>
+                    {skippedLabelCount.toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+
+              {skippedLabelCount > 0 && (
+                <div className="mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+                  {invalidLabelCount.toLocaleString()} invalid {invalidLabelCount === 1 ? "row" : "rows"}
+                  {" and "}
+                  {duplicateLabelCount.toLocaleString()} duplicate {duplicateLabelCount === 1 ? "row" : "rows"}
+                  {" will be skipped."}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setIsConfirmationOpen(false)}
+                autoFocus
+                className="ops-button-secondary"
+              >
+                Cancel
+              </button>
+              <button type="button" onClick={handleGenerate} className="ops-button-primary">
+                <Barcode className="h-4 w-4" aria-hidden="true" />
+                Generate {readyLabelCount.toLocaleString()} {readyLabelCount === 1 ? "Label" : "Labels"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
