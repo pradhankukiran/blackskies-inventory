@@ -5,6 +5,7 @@ import {
   Barcode,
   CheckCircle2,
   Loader2,
+  RefreshCw,
   RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
@@ -23,12 +24,18 @@ import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
 
 const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status"];
 const PREVIEW_PAGE_SIZE = 50;
+const brandLabels: Record<BarcodeBrand, string> = {
+  blackskies: "Blackskies",
+  akitsune: "Akitsune",
+};
 
 interface BarcodePdfToolProps {
   shopifyResult: BarcodeCsvResult | null;
   shopifyBrand: BarcodeBrand | null;
   shopifyError: string | null;
   isShopifySyncing: boolean;
+  syncingShopifyBrand: BarcodeBrand | null;
+  onShopifySync: (brand: BarcodeBrand) => void;
   onCsvSourceActiveChange: (active: boolean) => void;
   onClearShopifyData: () => void;
 }
@@ -38,6 +45,8 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   shopifyBrand,
   shopifyError,
   isShopifySyncing,
+  syncingShopifyBrand,
+  onShopifySync,
   onCsvSourceActiveChange,
   onClearShopifyData,
 }) => {
@@ -201,9 +210,61 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
         ? `Generating ${generationProgress.completed.toLocaleString()}/${generationProgress.total.toLocaleString()}...`
         : "Preparing PDFs..."
     : "Generate PDFs";
+  const shopifyStatusText = csvFile
+    ? "Reset the uploaded CSV before syncing products from Shopify."
+    : isShopifySyncing && syncingShopifyBrand
+      ? `Syncing ${brandLabels[syncingShopifyBrand]} products...`
+      : shopifyResult && shopifyBrand
+        ? `${brandLabels[shopifyBrand]} synced · ${shopifyResult.summary.totalRows.toLocaleString()} variants · ${shopifyResult.summary.readyRows.toLocaleString()} labels ready`
+        : "Choose a brand to load its product variants from Shopify.";
 
   return (
     <div className="space-y-5">
+      <section className="ops-surface rounded-[8px]">
+        <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="ops-title">Shopify Products</h2>
+            <p className="ops-muted">Sync one brand at a time using its Shopify vendor.</p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-base font-medium text-emerald-700">
+            Vendor filtered
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <p
+            className={`text-base ${isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-600"}`}
+            role="status"
+          >
+            {shopifyStatusText}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {(["blackskies", "akitsune"] as const).map((shopifySyncBrand) => (
+              <button
+                key={shopifySyncBrand}
+                type="button"
+                onClick={() => onShopifySync(shopifySyncBrand)}
+                disabled={Boolean(csvFile) || isShopifySyncing || isGenerating}
+                className="ops-button-primary"
+                title={
+                  csvFile
+                    ? "Reset the uploaded CSV before syncing Shopify products"
+                    : `Pull only ${brandLabels[shopifySyncBrand]} products from Shopify`
+                }
+              >
+                {syncingShopifyBrand === shopifySyncBrand ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                )}
+                {syncingShopifyBrand === shopifySyncBrand
+                  ? `Syncing ${brandLabels[shopifySyncBrand]}...`
+                  : `Sync ${brandLabels[shopifySyncBrand]}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="ops-surface space-y-2 rounded-[8px] p-5">
         <FileUploadSection
           title="Product CSV"

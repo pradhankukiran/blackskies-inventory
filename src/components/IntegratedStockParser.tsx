@@ -699,7 +699,7 @@ const IntegratedStockParser: React.FC = () => {
   const onRetaggingRoute = location.pathname === '/retagging';
   const onStockReturnRoute = location.pathname === '/stock-return';
   const onBarcodesRoute = location.pathname === '/barcodes';
-  const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute || onBarcodesRoute;
+  const canSyncShopify = onZfsRoute || onRetaggingRoute || onStockReturnRoute;
   const currentShopifySyncModule: ShopifySyncModule | null = onBarcodesRoute
     ? 'barcodes'
     : onStockReturnRoute
@@ -1753,44 +1753,18 @@ const IntegratedStockParser: React.FC = () => {
             <div className="flex flex-wrap items-center justify-center gap-3 xl:justify-self-end">
               {canSyncShopify && (
                 <div className="relative">
-                  {currentShopifySyncModule === 'barcodes' ? (
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {(['blackskies', 'akitsune'] as const).map((barcodeBrand) => (
-                        <button
-                          key={barcodeBrand}
-                          type="button"
-                          onClick={() => handleShopifySync(barcodeBrand)}
-                          disabled={shopifySyncDisabled}
-                          className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
-                          title={
-                            barcodeCsvSourceActive
-                              ? 'Reset the uploaded CSV before syncing barcode data from Shopify'
-                              : `Pull only ${barcodeBrandLabels[barcodeBrand]} barcode products from Shopify`
-                          }
-                        >
-                          {syncingBarcodeBrand === barcodeBrand && (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          )}
-                          {syncingBarcodeBrand === barcodeBrand
-                            ? `Syncing ${barcodeBrandLabels[barcodeBrand]}...`
-                            : `Sync ${barcodeBrandLabels[barcodeBrand]}`}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleShopifySync()}
-                      disabled={shopifySyncDisabled}
-                      className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
-                      title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
-                    >
-                      {isShopifySyncing && (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      )}
-                      {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleShopifySync()}
+                    disabled={shopifySyncDisabled}
+                    className="inline-flex items-center gap-2 whitespace-nowrap bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:hover:shadow-sm"
+                    title="Pull Internal Stocks and SKU/EAN data directly from Shopify"
+                  >
+                    {isShopifySyncing && (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    )}
+                    {isShopifySyncing ? 'Syncing Shopify...' : 'Sync from Shopify'}
+                  </button>
                   <span
                     className={`absolute right-0 top-full mt-1 whitespace-nowrap text-base ${
                       isShopifySyncing ? "font-medium text-emerald-700" : "text-slate-500"
@@ -1961,6 +1935,8 @@ const IntegratedStockParser: React.FC = () => {
                 shopifyBrand={barcodeShopifyBrand ?? syncingBarcodeBrand}
                 shopifyError={barcodeShopifySyncError}
                 isShopifySyncing={syncingShopifyModule === 'barcodes'}
+                syncingShopifyBrand={syncingBarcodeBrand}
+                onShopifySync={handleShopifySync}
                 onCsvSourceActiveChange={setBarcodeCsvSourceActive}
                 onClearShopifyData={clearBarcodeShopifyData}
               />
