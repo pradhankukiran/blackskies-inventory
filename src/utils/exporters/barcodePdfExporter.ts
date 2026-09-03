@@ -1,9 +1,9 @@
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
-import type { BarcodeBrand, BarcodeLabelRow } from "@/types/barcode";
+import type { BarcodeBrand, BarcodeLabelRow, BarcodePdfOutputMode } from "@/types/barcode";
 
 export type BarcodePdfBrand = BarcodeBrand;
-export type BarcodePdfOutputMode = "combined" | "individual";
+export type { BarcodePdfOutputMode } from "@/types/barcode";
 
 export interface BarcodePdfProgress {
   completed: number;
@@ -254,6 +254,18 @@ const loadLogoDataUrl = async (brand: BarcodePdfBrand) => {
     reader.onerror = () => reject(new Error("Could not read the selected brand logo."));
     reader.readAsDataURL(logoBlob);
   });
+};
+
+export const createBarcodeLabelPreviewBlob = async (
+  row: BarcodeLabelRow,
+  brand: BarcodePdfBrand
+) => {
+  if (row.status !== "ready") {
+    throw new Error("Only labels that are ready can be previewed.");
+  }
+
+  const logoDataUrl = await loadLogoDataUrl(brand);
+  return createBarcodeLabelDocument([row], brand, logoDataUrl).output("blob");
 };
 
 export const createBarcodeLabelDocument = (

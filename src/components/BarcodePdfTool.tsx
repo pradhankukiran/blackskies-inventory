@@ -1,29 +1,43 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Barcode,
   CheckCircle2,
+  Eye,
+  Filter,
   Loader2,
   RefreshCw,
   RotateCcw,
+  Search,
   SlidersHorizontal,
 } from "lucide-react";
 import { FileUploadSection } from "@/components/FileUploadSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
-import { BarcodeBrand, BarcodeCsvResult } from "@/types/barcode";
+import {
+  loadBarcodePdfState,
+  saveBarcodePdfCsvFile,
+  saveBarcodePdfUiState,
+} from "@/lib/appPersistence";
+import {
+  BarcodeBrand,
+  BarcodeCsvResult,
+  BarcodeLabelRow,
+  BarcodeLabelStatusFilter,
+  BarcodePdfOutputMode,
+} from "@/types/barcode";
 import type {
   BarcodePdfBrand,
-  BarcodePdfOutputMode,
   BarcodePdfProgress,
 } from "@/utils/exporters/barcodePdfExporter";
 import { downloadBlob } from "@/utils/exporters/downloadHelper";
 import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
 
-const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status"];
-const PREVIEW_PAGE_SIZE = 50;
+const previewColumns = ["SKU", "Article name", "Color", "Size", "EAN", "Status", "Preview"];
+const PREVIEW_PAGE_SIZE = 25;
 const brandLabels: Record<BarcodeBrand, string> = {
   blackskies: "Blackskies",
   akitsune: "Akitsune",
@@ -32,18 +46,34 @@ const brandLabels: Record<BarcodeBrand, string> = {
 interface BarcodePdfToolProps {
   shopifyResult: BarcodeCsvResult | null;
   shopifyBrand: BarcodeBrand | null;
+  shopifySyncedAt: string | null;
   shopifyError: string | null;
+  isShopifyStateLoading: boolean;
   isShopifySyncing: boolean;
   syncingShopifyBrand: BarcodeBrand | null;
   onShopifySync: (brand: BarcodeBrand) => void;
   onCsvSourceActiveChange: (active: boolean) => void;
-  onClearShopifyData: () => void;
+  onClearShopifyData: () => void | Promise<void>;
 }
+
+const getRowKey = (row: BarcodeLabelRow) =>
+  `${row.sourceRowNumber}-${row.sku}-${row.ean}`;
+
+const formatSyncedAt = (timestamp: string) => {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "Unknown time";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
 
 export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   shopifyResult,
   shopifyBrand,
+  shopifySyncedAt,
   shopifyError,
+  isShopifyStateLoading,
   isShopifySyncing,
   syncingShopifyBrand,
   onShopifySync,
@@ -54,6 +84,9 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const [outputMode, setOutputMode] = useState<BarcodePdfOutputMode>("combined");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<BarcodeCsvResult | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BarcodeLabelStatusFilter>("all");
+  const [isLoadingPersistedState, setIsLoadingPersistedState] = useState(true);
   const [isParsing, setIsParsing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -61,7 +94,63 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [selectedPreviewRowKey, setSelectedPreviewRowKey] = useState<string | null>(null);
+  const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
+  const [isLabelPreviewLoading, setIsLabelPreviewLoading] = useState(false);
+  const [labelPreviewError, setLabelPreviewError] = useState<string | null>(null);
   const parseRequestRef = useRef(0);
+  const previewRef = useRef<HTMLElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableDragRef = useRef({ isDragging: false, startX: 0, scrollLeft: 0 });
+  const [isTableDragging, setIsTableDragging] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadState = async () => {
+      try {
+        const persisted = await loadBarcodePdfState();
+        if (cancelled) return;
+
+        setBrand(persisted.brand);
+        setOutputMode(persisted.outputMode);
+        setSearchTerm(persisted.searchTerm);
+        setStatusFilter(persisted.statusFilter);
+        if (persisted.csvFile) {
+          onCsvSourceActiveChange(true);
+          await onClearShopifyData();
+          if (cancelled) return;
+          setCsvFile(persisted.csvFile);
+          setCsvResult(
+            persisted.csvResult ?? await processBarcodeCsvFile(persisted.csvFile)
+          );
+        }
+      } catch (error) {
+        console.error("Could not load saved barcode PDF state:", error);
+        if (!cancelled) setUploadError("Could not load the saved barcode workspace.");
+      } finally {
+        if (!cancelled) setIsLoadingPersistedState(false);
+      }
+    };
+
+    void loadState();
+    return () => {
+      cancelled = true;
+    };
+  }, [onClearShopifyData, onCsvSourceActiveChange]);
+
+  useEffect(() => {
+    if (isLoadingPersistedState) return;
+    saveBarcodePdfUiState({
+      brand,
+      outputMode,
+      searchTerm,
+      statusFilter,
+      csvResult,
+    }).catch((error) => {
+      console.error("Could not save barcode PDF state:", error);
+    });
+  }, [brand, csvResult, isLoadingPersistedState, outputMode, searchTerm, statusFilter]);
 
   useEffect(
     () => () => onCsvSourceActiveChange(false),
@@ -79,10 +168,12 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
       setIsParsing(false);
       setUploadError("Upload a CSV file.");
       onCsvSourceActiveChange(false);
+      saveBarcodePdfCsvFile(null).catch((error) => {
+        console.error("Could not clear the saved barcode CSV:", error);
+      });
       return;
     }
 
-    onClearShopifyData();
     onCsvSourceActiveChange(true);
     setCsvFile(selectedFile);
     setCsvResult(null);
@@ -90,6 +181,10 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
 
     try {
       setIsParsing(true);
+      await onClearShopifyData();
+      saveBarcodePdfCsvFile(selectedFile).catch((error) => {
+        console.error("Could not save the barcode CSV:", error);
+      });
       const result = await processBarcodeCsvFile(selectedFile);
       if (requestId !== parseRequestRef.current) return;
       setCsvResult(result);
@@ -107,7 +202,27 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     setCsvResult(null);
     setIsParsing(false);
     setUploadError(null);
+    setSearchTerm("");
+    setStatusFilter("all");
+    setSelectedPreviewRowKey(null);
     onCsvSourceActiveChange(false);
+    saveBarcodePdfCsvFile(null).catch((error) => {
+      console.error("Could not clear the saved barcode CSV:", error);
+    });
+  };
+
+  const handleShopifySync = (selectedShopifyBrand: BarcodeBrand) => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setSelectedPreviewRowKey(null);
+    onShopifySync(selectedShopifyBrand);
+  };
+
+  const handleShopifyClear = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setSelectedPreviewRowKey(null);
+    void onClearShopifyData();
   };
 
   const previewMessage =
@@ -124,19 +239,92 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             : "Upload a CSV or sync from Shopify to preview barcode labels.";
   const activeResult = csvFile ? csvResult : shopifyResult;
   const activeBrand = csvFile || !shopifyBrand ? brand : shopifyBrand;
-  const previewRows = activeResult?.rows ?? [];
+  const previewRows = useMemo(() => activeResult?.rows ?? [], [activeResult]);
+  const filteredRows = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return previewRows.filter((row) => {
+      const matchesStatus = statusFilter === "all" || row.status === statusFilter;
+      if (!matchesStatus) return false;
+      if (!search) return true;
+      return [row.sku, row.articleName, row.color, row.size, row.ean, ...row.issues]
+        .some((value) => value.toLowerCase().includes(search));
+    });
+  }, [previewRows, searchTerm, statusFilter]);
+  const readyRows = useMemo(
+    () => previewRows.filter((row) => row.status === "ready"),
+    [previewRows]
+  );
+  const selectedPreviewRow = useMemo(
+    () => readyRows.find((row) => getRowKey(row) === selectedPreviewRowKey) ?? readyRows[0] ?? null,
+    [readyRows, selectedPreviewRowKey]
+  );
   const readyLabelCount = activeResult?.summary.readyRows ?? 0;
   const invalidLabelCount = activeResult?.summary.invalidRows ?? 0;
   const duplicateLabelCount = activeResult?.summary.duplicateRows ?? 0;
   const skippedLabelCount = invalidLabelCount + duplicateLabelCount;
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(
-    previewRows,
+    filteredRows,
     PREVIEW_PAGE_SIZE
   );
 
   useEffect(() => {
-    if (previewRows.length) goToPage(1);
-  }, [activeResult, goToPage, previewRows.length]);
+    if (filteredRows.length) goToPage(1);
+  }, [activeResult, filteredRows.length, goToPage, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (!activeResult || !previewRows.length) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      previewRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [activeResult, previewRows.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setLabelPreviewUrl(null);
+    setLabelPreviewError(null);
+
+    if (!selectedPreviewRow) {
+      setIsLabelPreviewLoading(false);
+      return;
+    }
+
+    setIsLabelPreviewLoading(true);
+    import("@/utils/exporters/barcodePdfExporter")
+      .then(({ createBarcodeLabelPreviewBlob }) =>
+        createBarcodeLabelPreviewBlob(selectedPreviewRow, activeBrand)
+      )
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = null;
+          return;
+        }
+        setLabelPreviewUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLabelPreviewError(
+            error instanceof Error ? error.message : "Could not render the label preview."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLabelPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [activeBrand, selectedPreviewRow]);
 
   const selectedBrand = activeBrand === "blackskies" ? "Blackskies" : "Akitsune";
   const selectedSource = csvFile
@@ -152,6 +340,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     setGenerationProgress(null);
     setGenerationError(null);
     setGenerationSuccess(null);
+    setSelectedPreviewRowKey(null);
   }, [activeBrand, activeResult, outputMode]);
 
   useEffect(() => {
@@ -210,16 +399,65 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
         ? `Generating ${generationProgress.completed.toLocaleString()}/${generationProgress.total.toLocaleString()}...`
         : "Preparing PDFs..."
     : "Generate PDFs";
+  const loadingMessage = isLoadingPersistedState || isShopifyStateLoading
+    ? "Loading the saved barcode workspace..."
+    : isParsing
+      ? "Reading and validating the CSV..."
+      : isShopifySyncing
+        ? syncingShopifyBrand
+          ? `Syncing and validating ${brandLabels[syncingShopifyBrand]} products...`
+          : "Syncing and validating Shopify products..."
+        : generationButtonLabel;
   const shopifyStatusText = csvFile
     ? "Reset the uploaded CSV before syncing products from Shopify."
     : isShopifySyncing && syncingShopifyBrand
       ? `Syncing ${brandLabels[syncingShopifyBrand]} products...`
       : shopifyResult && shopifyBrand
-        ? `${brandLabels[shopifyBrand]} synced · ${shopifyResult.summary.totalRows.toLocaleString()} variants · ${shopifyResult.summary.readyRows.toLocaleString()} labels ready`
+        ? `${brandLabels[shopifyBrand]}${shopifySyncedAt ? ` · Last synced ${formatSyncedAt(shopifySyncedAt)}` : " synced"} · ${shopifyResult.summary.totalRows.toLocaleString()} variants · ${shopifyResult.summary.readyRows.toLocaleString()} labels ready`
         : "Choose a brand to load its product variants from Shopify.";
+
+  const handleTablePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !tableScrollRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,a")) return;
+
+    tableDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      scrollLeft: tableScrollRef.current.scrollLeft,
+    };
+    setIsTableDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTablePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging || !tableScrollRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - tableDragRef.current.startX;
+    tableScrollRef.current.scrollLeft = tableDragRef.current.scrollLeft - deltaX;
+  };
+
+  const stopTableDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!tableDragRef.current.isDragging) return;
+    tableDragRef.current.isDragging = false;
+    setIsTableDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   return (
     <div className="space-y-5">
+      <LoadingOverlay
+        isLoading={
+          isLoadingPersistedState
+          || isShopifyStateLoading
+          || isParsing
+          || isShopifySyncing
+          || isGenerating
+        }
+        message={loadingMessage}
+      />
       <section className="ops-surface rounded-[8px]">
         <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -242,8 +480,14 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
               <button
                 key={shopifySyncBrand}
                 type="button"
-                onClick={() => onShopifySync(shopifySyncBrand)}
-                disabled={Boolean(csvFile) || isShopifySyncing || isGenerating}
+                onClick={() => handleShopifySync(shopifySyncBrand)}
+                disabled={
+                  Boolean(csvFile)
+                  || isLoadingPersistedState
+                  || isShopifyStateLoading
+                  || isShopifySyncing
+                  || isGenerating
+                }
                 className="ops-button-primary"
                 title={
                   csvFile
@@ -273,9 +517,16 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
           onRemove={handleCsvRemove}
           acceptedFileTypes=".csv,text/csv"
           acceptedFileLabel="CSV"
-          disabled={shopifySourceActive || isGenerating}
+          disabled={
+            isLoadingPersistedState
+            || isShopifyStateLoading
+            || shopifySourceActive
+            || isGenerating
+          }
           disabledMessage={
-            isGenerating
+            isLoadingPersistedState || isShopifyStateLoading
+              ? "Loading the saved barcode workspace."
+              : isGenerating
               ? "PDF generation is in progress."
               : isShopifySyncing
               ? "Shopify sync is in progress."
@@ -326,7 +577,13 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <select
               value={activeBrand}
               onChange={(event) => setBrand(event.target.value as BarcodePdfBrand)}
-              disabled={isGenerating || isShopifySyncing || Boolean(shopifyResult && !csvFile)}
+              disabled={
+                isLoadingPersistedState
+                || isShopifyStateLoading
+                || isGenerating
+                || isShopifySyncing
+                || Boolean(shopifyResult && !csvFile)
+              }
               className="ops-input mt-1 w-full"
             >
               <option value="blackskies">Blackskies — www.blackskies.shop</option>
@@ -339,7 +596,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <select
               value={outputMode}
               onChange={(event) => setOutputMode(event.target.value as BarcodePdfOutputMode)}
-              disabled={isGenerating}
+              disabled={isLoadingPersistedState || isShopifyStateLoading || isGenerating}
               className="ops-input mt-1 w-full"
             >
               <option value="combined">Combined PDF</option>
@@ -356,7 +613,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <button
               type="button"
               onClick={handleCsvRemove}
-              disabled={!csvFile || isGenerating}
+              disabled={!csvFile || isLoadingPersistedState || isGenerating}
               className="ops-button-secondary"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -365,7 +622,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             {shopifyResult && !isShopifySyncing && (
               <button
                 type="button"
-                onClick={onClearShopifyData}
+                onClick={handleShopifyClear}
                 disabled={isGenerating}
                 className="ops-button-danger"
               >
@@ -375,7 +632,14 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             <button
               type="button"
               onClick={() => setIsConfirmationOpen(true)}
-              disabled={isGenerating || isParsing || isShopifySyncing || readyLabelCount === 0}
+              disabled={
+                isLoadingPersistedState
+                || isShopifyStateLoading
+                || isGenerating
+                || isParsing
+                || isShopifySyncing
+                || readyLabelCount === 0
+              }
               className="ops-button-primary px-6"
             >
               {isGenerating ? (
@@ -425,7 +689,11 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
         </Alert>
       ) : null}
 
-      <section className="ops-surface rounded-[8px]" aria-labelledby="barcode-preview-title">
+      <section
+        ref={previewRef}
+        className="ops-surface rounded-[8px]"
+        aria-labelledby="barcode-preview-title"
+      >
         <div className="ops-section-header flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 id="barcode-preview-title" className="ops-title">
@@ -438,8 +706,111 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="ops-table min-w-full">
+        {activeResult && (
+          <>
+            <div className="grid gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: "Total rows", value: activeResult.summary.totalRows, color: "text-slate-950" },
+                { label: "Ready labels", value: readyLabelCount, color: "text-emerald-700" },
+                { label: "Needs correction", value: invalidLabelCount, color: "text-red-700" },
+                { label: "Duplicates", value: duplicateLabelCount, color: "text-amber-700" },
+              ].map((card) => (
+                <div key={card.label} className="ops-summary-card rounded-[8px]">
+                  <div className="ops-kicker">{card.label}</div>
+                  <div className={`mt-1 text-3xl font-semibold ${card.color}`}>
+                    {card.value.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
+              <label className="relative min-w-0 w-full flex-1 sm:min-w-[260px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search SKU, EAN, article, color, or size"
+                  className="ops-input w-full pl-10 pr-4"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                <span className="sr-only">Filter barcode rows by status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as BarcodeLabelStatusFilter)}
+                  className="ops-input min-w-[190px]"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="ready">Ready</option>
+                  <option value="invalid">Needs correction</option>
+                  <option value="duplicate">Duplicate</option>
+                </select>
+              </label>
+              <span className="text-base text-slate-500">
+                {filteredRows.length.toLocaleString()} of {previewRows.length.toLocaleString()} rows
+              </span>
+            </div>
+
+            <div className="border-b border-slate-200 px-5 py-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">PDF label preview</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    This preview uses the same renderer as the downloaded PDF.
+                  </p>
+                </div>
+                {selectedPreviewRow && (
+                  <span className="text-sm font-medium text-slate-600">
+                    {selectedPreviewRow.sku} · {selectedPreviewRow.ean}
+                  </span>
+                )}
+              </div>
+
+              <div className="mx-auto mt-4 w-full max-w-3xl overflow-hidden border border-slate-300 bg-slate-100 shadow-sm">
+                {isLabelPreviewLoading ? (
+                  <div
+                    className="flex aspect-[9/5] items-center justify-center gap-2 text-base text-slate-600"
+                    role="status"
+                  >
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    Rendering PDF label preview...
+                  </div>
+                ) : labelPreviewError ? (
+                  <div className="flex aspect-[9/5] items-center justify-center px-6 text-center text-base text-red-700" role="alert">
+                    {labelPreviewError}
+                  </div>
+                ) : labelPreviewUrl ? (
+                  <iframe
+                    src={`${labelPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    title={`Barcode PDF label preview for ${selectedPreviewRow?.sku ?? "selected product"}`}
+                    className="aspect-[9/5] w-full bg-white"
+                  />
+                ) : (
+                  <div className="flex aspect-[9/5] items-center justify-center px-6 text-center text-base text-slate-500">
+                    No valid label is available to preview.
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        <div
+          ref={tableScrollRef}
+          className={`max-h-[calc(100vh-260px)] overflow-auto ${
+            isTableDragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+          title="Drag horizontally to scroll the table"
+          onPointerDown={handleTablePointerDown}
+          onPointerMove={handleTablePointerMove}
+          onPointerUp={stopTableDrag}
+          onPointerCancel={stopTableDrag}
+          onPointerLeave={stopTableDrag}
+        >
+          <table className="ops-table min-w-[1080px]">
             <thead>
               <tr>
                 {previewColumns.map((column) => (
@@ -450,9 +821,9 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
               </tr>
             </thead>
             <tbody>
-              {previewRows.length ? (
+              {paginatedItems.length ? (
                 paginatedItems.map((row) => (
-                  <tr key={`${row.sourceRowNumber}-${row.ean}-${row.sku}`}>
+                  <tr key={getRowKey(row)}>
                     <td>{row.sku || "—"}</td>
                     <td>{row.articleName || "—"}</td>
                     <td>{row.color || "—"}</td>
@@ -480,28 +851,45 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
                         </p>
                       )}
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPreviewRowKey(getRowKey(row))}
+                        disabled={row.status !== "ready"}
+                        aria-pressed={selectedPreviewRow ? getRowKey(selectedPreviewRow) === getRowKey(row) : false}
+                        className="ops-button-secondary px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={row.status === "ready" ? "Show this label in the PDF preview" : "Only ready labels can be previewed"}
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        {selectedPreviewRow && getRowKey(selectedPreviewRow) === getRowKey(row)
+                          ? "Viewing"
+                          : "Preview"}
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={previewColumns.length} className="py-10 text-center text-slate-500">
-                    {previewMessage}
+                    {previewRows.length
+                      ? "No barcode rows match the current search and status filter."
+                      : previewMessage}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
+        {activeResult && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
             <p className="text-base text-slate-600">
-              Showing {(currentPage - 1) * PREVIEW_PAGE_SIZE + 1}–
-              {Math.min(currentPage * PREVIEW_PAGE_SIZE, previewRows.length)} of{" "}
-              {previewRows.length.toLocaleString()} rows
+              Showing {filteredRows.length ? (currentPage - 1) * PREVIEW_PAGE_SIZE + 1 : 0}–
+              {Math.min(currentPage * PREVIEW_PAGE_SIZE, filteredRows.length)} of{" "}
+              {filteredRows.length.toLocaleString()} rows
             </p>
             <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
+              currentPage={Math.max(1, currentPage)}
+              totalPages={Math.max(1, totalPages)}
               onPageChange={goToPage}
             />
           </div>

@@ -2,6 +2,10 @@ export type BarcodeBrand = "blackskies" | "akitsune";
 
 export type BarcodeLabelRowStatus = "ready" | "invalid" | "duplicate";
 
+export type BarcodeLabelStatusFilter = "all" | BarcodeLabelRowStatus;
+
+export type BarcodePdfOutputMode = "combined" | "individual";
+
 export interface BarcodeLabelRow {
   sourceRowNumber: number;
   sku: string;

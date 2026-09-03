@@ -1,4 +1,10 @@
 import { TimelineType } from '@/types/common';
+import {
+  BarcodeBrand,
+  BarcodeCsvResult,
+  BarcodeLabelStatusFilter,
+  BarcodePdfOutputMode,
+} from '@/types/barcode';
 import { ParsedData } from '@/types/stock';
 import { ArticleRecommendation } from '@/types/sales';
 import { ProcessedSellerboardStock } from '@/types/processors';
@@ -44,6 +50,9 @@ const STOCK_RETURN_SHOPIFY_SKU_EAN_FILE_KEY = 'stockReturnShopifySkuEanFile';
 const STOCK_RETURN_STATE_KEY = 'stockReturnState';
 const ZALANDO_SALE_PRICE_FILE_KEY = 'zalandoSalePriceFile';
 const ZALANDO_SALE_PRICE_STATE_KEY = 'zalandoSalePriceState';
+const BARCODE_PDF_FILE_KEY = 'barcodePdfCsvFile';
+const BARCODE_PDF_STATE_KEY = 'barcodePdfState';
+const BARCODE_SHOPIFY_STATE_KEY = 'barcodeShopifyState';
 
 export interface RetaggingUiState {
   sarThreshold: number;
@@ -98,6 +107,24 @@ export interface ZalandoSalePricePersistedState extends ZalandoSalePriceUiState 
   file: File | null;
 }
 
+export interface BarcodePdfUiState {
+  brand: BarcodeBrand;
+  outputMode: BarcodePdfOutputMode;
+  searchTerm: string;
+  statusFilter: BarcodeLabelStatusFilter;
+  csvResult: BarcodeCsvResult | null;
+}
+
+export interface BarcodePdfPersistedState extends BarcodePdfUiState {
+  csvFile: File | null;
+}
+
+export interface BarcodeShopifyPersistedState {
+  result: BarcodeCsvResult;
+  brand: BarcodeBrand;
+  syncedAt: string;
+}
+
 const DEFAULT_RETAGGING_STATE: RetaggingUiState = {
   sarThreshold: 85,
   nmvThreshold: 1000,
@@ -130,6 +157,52 @@ const DEFAULT_ZALANDO_SALE_PRICE_STATE: ZalandoSalePriceUiState = {
   productStatusFilter: 'all',
   searchTerm: '',
   statusFilter: 'all',
+};
+
+const DEFAULT_BARCODE_PDF_STATE: BarcodePdfUiState = {
+  brand: 'blackskies',
+  outputMode: 'combined',
+  searchTerm: '',
+  statusFilter: 'all',
+  csvResult: null,
+};
+
+const isBarcodeBrand = (value: unknown): value is BarcodeBrand =>
+  value === 'blackskies' || value === 'akitsune';
+
+const isBarcodeOutputMode = (value: unknown): value is BarcodePdfOutputMode =>
+  value === 'combined' || value === 'individual';
+
+const isBarcodeStatusFilter = (value: unknown): value is BarcodeLabelStatusFilter =>
+  value === 'all' || value === 'ready' || value === 'invalid' || value === 'duplicate';
+
+const isBarcodeLabelRow = (value: unknown) => {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.sourceRowNumber === 'number'
+    && typeof row.sku === 'string'
+    && typeof row.articleName === 'string'
+    && typeof row.color === 'string'
+    && typeof row.size === 'string'
+    && typeof row.ean === 'string'
+    && (row.status === 'ready' || row.status === 'invalid' || row.status === 'duplicate')
+    && Array.isArray(row.issues)
+    && row.issues.every((issue) => typeof issue === 'string');
+};
+
+const isBarcodeCsvResult = (value: unknown): value is BarcodeCsvResult => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<BarcodeCsvResult>;
+  const summary = candidate.summary as Record<string, unknown> | undefined;
+  return Array.isArray(candidate.rows)
+    && candidate.rows.every(isBarcodeLabelRow)
+    && Array.isArray(candidate.warnings)
+    && candidate.warnings.every((warning) => typeof warning === 'string')
+    && Boolean(summary)
+    && typeof summary?.totalRows === 'number'
+    && typeof summary?.readyRows === 'number'
+    && typeof summary?.invalidRows === 'number'
+    && typeof summary?.duplicateRows === 'number';
 };
 
 const createEmptyParsedData = (): ParsedData => ({
@@ -527,4 +600,66 @@ export const saveZalandoSalePriceUiState = async (
   state: ZalandoSalePriceUiState
 ) => {
   await storeGenericData(ZALANDO_SALE_PRICE_STATE_KEY, state);
+};
+
+export const loadBarcodePdfState = async (): Promise<BarcodePdfPersistedState> => {
+  const [csvFile, storedState] = await Promise.all([
+    getGenericData(BARCODE_PDF_FILE_KEY),
+    getGenericData(BARCODE_PDF_STATE_KEY),
+  ]);
+  const state = storedState && typeof storedState === 'object'
+    ? storedState as Partial<BarcodePdfUiState>
+    : {};
+
+  return {
+    brand: isBarcodeBrand(state.brand) ? state.brand : DEFAULT_BARCODE_PDF_STATE.brand,
+    outputMode: isBarcodeOutputMode(state.outputMode)
+      ? state.outputMode
+      : DEFAULT_BARCODE_PDF_STATE.outputMode,
+    searchTerm: typeof state.searchTerm === 'string' ? state.searchTerm : '',
+    statusFilter: isBarcodeStatusFilter(state.statusFilter) ? state.statusFilter : 'all',
+    csvResult: isBarcodeCsvResult(state.csvResult) ? state.csvResult : null,
+    csvFile: csvFile instanceof File ? csvFile : null,
+  };
+};
+
+export const saveBarcodePdfCsvFile = async (file: File | null) => {
+  if (file) {
+    await storeGenericData(BARCODE_PDF_FILE_KEY, file);
+    return;
+  }
+  await clearGenericData(BARCODE_PDF_FILE_KEY);
+};
+
+export const saveBarcodePdfUiState = async (state: BarcodePdfUiState) => {
+  await storeGenericData(BARCODE_PDF_STATE_KEY, state);
+};
+
+export const loadBarcodeShopifyState = async (): Promise<BarcodeShopifyPersistedState | null> => {
+  const storedState = await getGenericData(BARCODE_SHOPIFY_STATE_KEY);
+  if (!storedState || typeof storedState !== 'object') return null;
+
+  const candidate = storedState as Partial<BarcodeShopifyPersistedState>;
+  if (
+    !isBarcodeCsvResult(candidate.result)
+    || !isBarcodeBrand(candidate.brand)
+    || typeof candidate.syncedAt !== 'string'
+    || !Number.isFinite(Date.parse(candidate.syncedAt))
+  ) {
+    return null;
+  }
+
+  return {
+    result: candidate.result,
+    brand: candidate.brand,
+    syncedAt: candidate.syncedAt,
+  };
+};
+
+export const saveBarcodeShopifyState = async (state: BarcodeShopifyPersistedState) => {
+  await storeGenericData(BARCODE_SHOPIFY_STATE_KEY, state);
+};
+
+export const clearBarcodeShopifyState = async () => {
+  await clearGenericData(BARCODE_SHOPIFY_STATE_KEY);
 };

@@ -32,6 +32,9 @@ import {
   saveStockReturnShopifyStockFile,
   saveStockReturnShopifySkuEanFile,
   clearStockReturnResult,
+  clearBarcodeShopifyState,
+  loadBarcodeShopifyState,
+  saveBarcodeShopifyState,
   saveFbaProcessedData,
   saveZfsCoverageDays,
   saveZfsSafetyFactor,
@@ -753,8 +756,14 @@ const IntegratedStockParser: React.FC = () => {
   const [barcodeShopifyResult, setBarcodeShopifyResult] = useState<BarcodeCsvResult | null>(null);
   const [barcodeShopifyBrand, setBarcodeShopifyBrand] = useState<BarcodeBrand | null>(null);
   const [barcodeShopifySyncedAt, setBarcodeShopifySyncedAt] = useState<string | null>(null);
+  const [isBarcodeShopifyStateLoading, setIsBarcodeShopifyStateLoading] = useState(true);
   const [barcodeShopifySyncError, setBarcodeShopifySyncError] = useState<string | null>(null);
   const [barcodeCsvSourceActive, setBarcodeCsvSourceActive] = useState(false);
+  const barcodeCsvSourceActiveRef = useRef(false);
+  const handleBarcodeCsvSourceActiveChange = useCallback((active: boolean) => {
+    barcodeCsvSourceActiveRef.current = active;
+    setBarcodeCsvSourceActive(active);
+  }, []);
   const [fbaBlacklist, setFbaBlacklist] = useState<string[]>([]);
   const fbaBlacklistRef = useRef<string[]>([]);
   useEffect(() => {
@@ -868,11 +877,38 @@ const IntegratedStockParser: React.FC = () => {
     localStorage.removeItem(STOCK_RETURN_SHOPIFY_SYNC_META_KEY);
   };
 
-  const clearBarcodeShopifyData = useCallback(() => {
+  const clearBarcodeShopifyData = useCallback(async () => {
     setBarcodeShopifyResult(null);
     setBarcodeShopifyBrand(null);
     setBarcodeShopifySyncedAt(null);
     setBarcodeShopifySyncError(null);
+    try {
+      await clearBarcodeShopifyState();
+    } catch (err) {
+      console.error('Could not clear saved Shopify barcode data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadBarcodeShopifyState()
+      .then((persisted) => {
+        if (cancelled || !persisted || barcodeCsvSourceActiveRef.current) return;
+        setBarcodeShopifyResult(persisted.result);
+        setBarcodeShopifyBrand(persisted.brand);
+        setBarcodeShopifySyncedAt(persisted.syncedAt);
+      })
+      .catch((err) => {
+        console.error('Could not load saved Shopify barcode data:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setIsBarcodeShopifyStateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -891,7 +927,7 @@ const IntegratedStockParser: React.FC = () => {
     setSyncingShopifyModule(syncTarget);
     setSyncingBarcodeBrand(syncTarget === 'barcodes' ? barcodeBrand ?? null : null);
     if (syncTarget === 'barcodes') {
-      clearBarcodeShopifyData();
+      await clearBarcodeShopifyData();
     } else if (syncTarget === 'stock-return') {
       setStockReturnShopifySyncError(null);
     } else if (syncTarget === 'retagging') {
@@ -932,13 +968,22 @@ const IntegratedStockParser: React.FC = () => {
         if (barcodeResponse.brand !== requestedBrand) {
           throw new Error('Shopify returned barcode products for the wrong brand.');
         }
-        setBarcodeShopifyResult(processShopifyBarcodeRows(barcodeResponse.rows));
+        const processedResult = processShopifyBarcodeRows(barcodeResponse.rows);
+        const syncedAt = typeof barcodeResponse.syncedAt === 'string'
+          ? barcodeResponse.syncedAt
+          : new Date().toISOString();
+        setBarcodeShopifyResult(processedResult);
         setBarcodeShopifyBrand(requestedBrand);
-        setBarcodeShopifySyncedAt(
-          typeof barcodeResponse.syncedAt === 'string'
-            ? barcodeResponse.syncedAt
-            : new Date().toISOString()
-        );
+        setBarcodeShopifySyncedAt(syncedAt);
+        try {
+          await saveBarcodeShopifyState({
+            result: processedResult,
+            brand: requestedBrand,
+            syncedAt,
+          });
+        } catch (err) {
+          console.error('Could not save Shopify barcode data:', err);
+        }
         return;
       }
 
@@ -1933,11 +1978,13 @@ const IntegratedStockParser: React.FC = () => {
               <BarcodePdfTool
                 shopifyResult={barcodeShopifyResult}
                 shopifyBrand={barcodeShopifyBrand ?? syncingBarcodeBrand}
+                shopifySyncedAt={barcodeShopifySyncedAt}
                 shopifyError={barcodeShopifySyncError}
+                isShopifyStateLoading={isBarcodeShopifyStateLoading}
                 isShopifySyncing={syncingShopifyModule === 'barcodes'}
                 syncingShopifyBrand={syncingBarcodeBrand}
                 onShopifySync={handleShopifySync}
-                onCsvSourceActiveChange={setBarcodeCsvSourceActive}
+                onCsvSourceActiveChange={handleBarcodeCsvSourceActiveChange}
                 onClearShopifyData={clearBarcodeShopifyData}
               />
               } />
