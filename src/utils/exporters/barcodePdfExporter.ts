@@ -325,10 +325,21 @@ export const generateBarcodePdfDownload = async ({
   }
 
   const archive = new JSZip();
+  const filenameCounts = new Map<string, number>();
+  const usedFilenames = new Set<string>();
   for (let index = 0; index < readyRows.length; index += 1) {
     const row = readyRows[index];
     const document = createBarcodeLabelDocument([row], brand, logoDataUrl);
-    const filename = `${safeFilenamePart(row.sku)}_${row.ean}.pdf`;
+    const sanitizedSku = safeFilenamePart(row.sku);
+    const normalizedSku = sanitizedSku.toLowerCase();
+    let filenameCount = (filenameCounts.get(normalizedSku) ?? 0) + 1;
+    let filename = `${sanitizedSku}${filenameCount === 1 ? "" : `-${filenameCount}`}.pdf`;
+    while (usedFilenames.has(filename.toLowerCase())) {
+      filenameCount += 1;
+      filename = `${sanitizedSku}-${filenameCount}.pdf`;
+    }
+    filenameCounts.set(normalizedSku, filenameCount);
+    usedFilenames.add(filename.toLowerCase());
     archive.file(filename, document.output("arraybuffer"));
     onProgress?.({ completed: index + 1, total: readyRows.length, phase: "labels" });
     if ((index + 1) % 25 === 0) await yieldToBrowser();

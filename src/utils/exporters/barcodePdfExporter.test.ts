@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import JSZip from "jszip";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BarcodeLabelRow } from "@/types/barcode";
-import { createBarcodeLabelDocument, encodeEan13 } from "./barcodePdfExporter";
+import {
+  createBarcodeLabelDocument,
+  encodeEan13,
+  generateBarcodePdfDownload,
+} from "./barcodePdfExporter";
 
 const readyRow: BarcodeLabelRow = {
   sourceRowNumber: 2,
@@ -52,5 +57,55 @@ describe("createBarcodeLabelDocument", () => {
     expect(document.internal.pageSize.getHeight()).toBeCloseTo(50, 2);
     const signature = new TextDecoder().decode(document.output("arraybuffer").slice(0, 5));
     expect(signature).toBe("%PDF-");
+  });
+});
+
+describe("generateBarcodePdfDownload", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("names individual PDFs from sanitized SKUs and suffixes collisions", async () => {
+    const logo = readFileSync(
+      new URL("../../../public/Blackskies-Barcode-Logo.png", import.meta.url)
+    ).toString("base64");
+    class TestFileReader {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      readAsDataURL() {
+        this.result = `data:image/png;base64,${logo}`;
+        this.onload?.();
+      }
+    }
+
+    vi.stubGlobal("FileReader", TestFileReader);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => new Blob(["logo"]),
+      })
+    );
+
+    const { blob } = await generateBarcodePdfDownload({
+      rows: [
+        { ...readyRow, sku: "BS/CAP" },
+        { ...readyRow, sourceRowNumber: 3, sku: "BS-CAP-2", ean: "4006381333931" },
+        { ...readyRow, sourceRowNumber: 4, sku: "BS:CAP", ean: "4006381333931" },
+        { ...readyRow, sourceRowNumber: 5, sku: "bs/cap", ean: "0123456789012" },
+      ],
+      brand: "blackskies",
+      outputMode: "individual",
+    });
+
+    const archive = await JSZip.loadAsync(await blob.arrayBuffer());
+    expect(Object.keys(archive.files)).toEqual([
+      "BS-CAP.pdf",
+      "BS-CAP-2.pdf",
+      "BS-CAP-3.pdf",
+      "bs-cap-4.pdf",
+    ]);
   });
 });

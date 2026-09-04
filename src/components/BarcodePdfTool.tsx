@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Barcode,
   CheckCircle2,
+  Download,
   Eye,
   Filter,
   Loader2,
@@ -33,6 +34,7 @@ import type {
   BarcodePdfBrand,
   BarcodePdfProgress,
 } from "@/utils/exporters/barcodePdfExporter";
+import { exportToCSV } from "@/utils/exporters/csvExporter";
 import { downloadBlob } from "@/utils/exporters/downloadHelper";
 import { processBarcodeCsvFile } from "@/utils/processors/barcodeCsvProcessor";
 
@@ -225,6 +227,21 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     void onClearShopifyData();
   };
 
+  const handleShopifyCsvExport = () => {
+    if (!shopifyResult || !shopifyBrand) return;
+
+    exportToCSV(
+      shopifyResult.rows.map((row) => ({
+        SKU: row.sku,
+        ARTICLE_NAME: row.articleName,
+        COLOR: row.color,
+        SIZE: row.size,
+        EAN: row.ean,
+      })),
+      `${shopifyBrand}-shopify-barcode-products-${new Date().toISOString().slice(0, 10)}`
+    );
+  };
+
   const previewMessage =
     isParsing
       ? "Reading and validating the CSV..."
@@ -332,7 +349,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
     : shopifyResult || isShopifySyncing
       ? "Shopify"
       : "no data source";
-  const selectedOutput = outputMode === "combined" ? "combined PDF" : "individual PDFs";
+  const selectedOutput = outputMode === "combined" ? "combined PDF" : "individual SKU PDFs";
   const shopifySourceActive = isShopifySyncing || shopifyResult !== null;
 
   useEffect(() => {
@@ -476,6 +493,18 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
             {shopifyStatusText}
           </p>
           <div className="flex flex-wrap gap-3">
+            {shopifyResult && shopifyBrand && (
+              <button
+                type="button"
+                onClick={handleShopifyCsvExport}
+                disabled={isShopifySyncing || isGenerating || shopifyResult.rows.length === 0}
+                className="ops-button-secondary"
+                title="Export Shopify products in the same format accepted by the CSV upload"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export Shopify CSV
+              </button>
+            )}
             {(["blackskies", "akitsune"] as const).map((shopifySyncBrand) => (
               <button
                 key={shopifySyncBrand}
@@ -600,7 +629,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
               className="ops-input mt-1 w-full"
             >
               <option value="combined">Combined PDF</option>
-              <option value="individual">Individual PDFs (ZIP)</option>
+              <option value="individual">Individual PDFs by SKU (ZIP)</option>
             </select>
           </label>
         </div>
@@ -947,7 +976,7 @@ export const BarcodePdfTool: React.FC<BarcodePdfToolProps> = ({
                 <div className="border-b border-slate-200 px-4 py-3 sm:border-r">
                   <dt className="text-sm font-medium text-slate-500">PDF output</dt>
                   <dd className="mt-1 text-base font-semibold text-slate-950">
-                    {outputMode === "combined" ? "Combined PDF" : "Individual PDFs (ZIP)"}
+                    {outputMode === "combined" ? "Combined PDF" : "Individual PDFs by SKU (ZIP)"}
                   </dd>
                 </div>
                 <div className="border-b border-slate-200 px-4 py-3">
