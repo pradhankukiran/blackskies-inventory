@@ -1,4 +1,5 @@
 import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
+import { requireClerkAuth } from './auth.js';
 import {
   applyProductUpdateResults,
   isValidSalePriceDiscountPercentage,
@@ -386,6 +387,8 @@ export default async function handler(req: any, res: any) {
     res.setHeader?.('Allow', 'POST');
     return sendError(res, 405, 'method_not_allowed', 'Use POST for this endpoint.');
   }
+
+  if (!(await requireClerkAuth(req, res))) return;
 
   const body = parseBody(req.body);
   if (!body || typeof body !== 'object' || Array.isArray(body)) {

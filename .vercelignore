@@ -1,0 +1,3 @@
+.codegraph/
+**/*.test.ts
+**/*.test.tsx

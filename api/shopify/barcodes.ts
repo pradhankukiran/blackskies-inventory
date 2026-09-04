@@ -1,4 +1,5 @@
 import { getShopifyClient, ShopifyApiError, type ShopifyClient } from './client.js';
+import { requireClerkAuth } from './auth.js';
 import {
   filterBarcodeVariantsByBrand,
   mapBarcodeVariants,
@@ -109,6 +110,8 @@ export default async function handler(req: any, res: any) {
     res.setHeader?.('Allow', 'GET');
     return sendError(res, 405, 'method_not_allowed', 'Use GET for this endpoint.');
   }
+
+  if (!(await requireClerkAuth(req, res))) return;
 
   const brand = parseShopifyBarcodeBrand(req.query?.brand);
   if (!brand) {

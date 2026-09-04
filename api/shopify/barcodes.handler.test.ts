@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getShopifyClientMock, ShopifyApiErrorMock } = vi.hoisted(() => {
+const { getShopifyClientMock, ShopifyApiErrorMock, requireClerkAuthMock } = vi.hoisted(() => {
   class ShopifyApiErrorMock extends Error {
     constructor(message: string, public readonly status?: number) {
       super(message);
@@ -8,12 +8,16 @@ const { getShopifyClientMock, ShopifyApiErrorMock } = vi.hoisted(() => {
     }
   }
 
-  return { getShopifyClientMock: vi.fn(), ShopifyApiErrorMock };
+  return { getShopifyClientMock: vi.fn(), ShopifyApiErrorMock, requireClerkAuthMock: vi.fn() };
 });
 
 vi.mock('./client.js', () => ({
   getShopifyClient: getShopifyClientMock,
   ShopifyApiError: ShopifyApiErrorMock,
+}));
+
+vi.mock('./auth.js', () => ({
+  requireClerkAuth: requireClerkAuthMock,
 }));
 
 import handler from './barcodes';
@@ -81,6 +85,7 @@ const getRequest = (brand: string | string[] | null = 'blackskies') => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  requireClerkAuthMock.mockResolvedValue(true);
 });
 
 describe('Shopify barcode endpoint', () => {

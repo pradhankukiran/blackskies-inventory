@@ -3,10 +3,13 @@
 // internalStockProcessor and skuEanProcessor in the React app.
 
 import { getShopifyClient } from './client.js';
+import { requireClerkAuth } from './auth.js';
 
 const DEFAULT_LOCATION_NAME = 'Lager';
 
-export default async function handler(_req: any, res: any) {
+export default async function handler(req: any, res: any) {
+  if (!(await requireClerkAuth(req, res))) return;
+
   const locationName = process.env.SHOPIFY_LOCATION_NAME || DEFAULT_LOCATION_NAME;
 
   try {

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getShopifyClientMock } = vi.hoisted(() => ({
+const { getShopifyClientMock, requireClerkAuthMock } = vi.hoisted(() => ({
   getShopifyClientMock: vi.fn(),
+  requireClerkAuthMock: vi.fn(),
 }));
 
 vi.mock("./client.js", () => ({
@@ -12,6 +13,10 @@ vi.mock("./client.js", () => ({
       this.name = "ShopifyApiError";
     }
   },
+}));
+
+vi.mock("./auth.js", () => ({
+  requireClerkAuth: requireClerkAuthMock,
 }));
 
 import handler, { parseUpdateSelection } from "./sale-prices";
@@ -128,6 +133,7 @@ const variant = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  requireClerkAuthMock.mockResolvedValue(true);
 });
 
 describe("Shopify sale-price endpoint safeguards", () => {

@@ -54,6 +54,7 @@ import {
   ShopifyBarcodeApiResponse,
 } from "@/types/barcode";
 import { processShopifyBarcodeRows } from "@/utils/processors/barcodeCsvProcessor";
+import { useAuthenticatedFetch } from "@/hooks/useAuthenticatedFetch";
 
 interface TabContentProps {
   files: any;
@@ -696,6 +697,7 @@ function timeAgo(timestamp: string): string {
 }
 
 const IntegratedStockParser: React.FC = () => {
+  const authenticatedFetch = useAuthenticatedFetch();
   const location = useLocation();
   const onHomeRoute = location.pathname === '/';
   const onZfsRoute = location.pathname === '/zfs';
@@ -938,7 +940,7 @@ const IntegratedStockParser: React.FC = () => {
     try {
       if (syncTarget === 'barcodes') {
         const requestedBrand = barcodeBrand!;
-        const response = await fetch(`/api/shopify/barcodes?brand=${requestedBrand}`, {
+        const response = await authenticatedFetch(`/api/shopify/barcodes?brand=${requestedBrand}`, {
           method: 'GET',
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -987,7 +989,7 @@ const IntegratedStockParser: React.FC = () => {
         return;
       }
 
-      const res = await fetch('/api/shopify/sync');
+      const res = await authenticatedFetch('/api/shopify/sync');
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || `Sync failed (${res.status})`);

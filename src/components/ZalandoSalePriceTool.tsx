@@ -7,6 +7,10 @@ import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/usePagination";
 import {
+  AuthenticatedFetch,
+  useAuthenticatedFetch,
+} from "@/hooks/useAuthenticatedFetch";
+import {
   loadZalandoSalePriceState,
   saveZalandoSalePriceFile,
   saveZalandoSalePriceUiState,
@@ -157,12 +161,13 @@ const apiErrorMessage = (body: ShopifySalePriceApiError, status: number) =>
   body.message || body.error || `Shopify request failed (${status})`;
 
 const postShopifySalePrices = async (
+  authenticatedFetch: AuthenticatedFetch,
   action: SalePriceAction,
   rows: SalePricePayloadRow[],
   discountPercentage: number,
   selection?: SalePriceUpdateSelection
 ): Promise<ShopifySalePriceApiResponse> => {
-  const response = await fetch("/api/shopify/sale-prices", {
+  const response = await authenticatedFetch("/api/shopify/sale-prices", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -230,6 +235,7 @@ const renderSourceIdentifiers = (identifiers: string[]) =>
   });
 
 export const ZalandoSalePriceTool: React.FC = () => {
+  const authenticatedFetch = useAuthenticatedFetch();
   const [file, setFile] = useState<File | null>(null);
   const [localResult, setLocalResult] = useState<ZalandoSalePriceResult | null>(null);
   const [shopifyResult, setShopifyResult] = useState<ShopifySalePriceApiResponse | null>(null);
@@ -728,7 +734,12 @@ export const ZalandoSalePriceTool: React.FC = () => {
       const rows = payloadFromResult(processed);
       if (rows.length) {
         setProcessingStatus("Matching SKU and EAN values in Shopify...");
-        const preview = await postShopifySalePrices("preview", rows, discountPercentage);
+        const preview = await postShopifySalePrices(
+          authenticatedFetch,
+          "preview",
+          rows,
+          discountPercentage
+        );
         setShopifyResult(preview);
       }
 
@@ -832,6 +843,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
 
     try {
       const result = await postShopifySalePrices(
+        authenticatedFetch,
         "update",
         payloadRows,
         discountPercentage,
@@ -845,6 +857,7 @@ export const ZalandoSalePriceTool: React.FC = () => {
       setError(updateError instanceof Error ? updateError.message : "Could not update Shopify sale prices.");
       try {
         const refreshedPreview = await postShopifySalePrices(
+          authenticatedFetch,
           "preview",
           payloadRows,
           discountPercentage
